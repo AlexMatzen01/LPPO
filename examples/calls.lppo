@@ -1,0 +1,9 @@
+proc greet {
+    out "greet: Hello from called proc";
+}
+
+proc main {
+    out "Before call";
+    call greet;
+    out "After call";
+}

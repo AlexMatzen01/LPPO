@@ -1,0 +1,63 @@
+// Advanced loop examples with break and continue
+
+proc main {
+    out "=== While Loop with Break ===";
+    let i = 0;
+    while i < 10 {
+        if i == 5 {
+            out "Breaking at", i;
+            break;
+        }
+        out "i =", i;
+        let i = i + 1;
+    }
+    
+    out "";
+    out "=== While Loop with Continue ===";
+    let j = 0;
+    while j < 5 {
+        let j = j + 1;
+        if j == 3 {
+            out "Skipping", j;
+            continue;
+        }
+        out "j =", j;
+    }
+    
+    out "";
+    out "=== For Loop with Array ===";
+    let nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    for n in nums {
+        if n % 2 == 0 {
+            continue;
+        }
+        out "Odd number:", n;
+        if n > 7 {
+            break;
+        }
+    }
+    
+    out "";
+    out "=== Infinite Loop (with break) ===";
+    let count = 0;
+    loop {
+        out "Count:", count;
+        let count = count + 1;
+        if count >= 3 {
+            out "Exiting loop!";
+            break;
+        }
+    }
+    
+    out "";
+    out "=== Nested Loops ===";
+    let i = 0;
+    while i < 3 {
+        let j = 0;
+        while j < 3 {
+            out "i =", i, "j =", j;
+            let j = j + 1;
+        }
+        let i = i + 1;
+    }
+}

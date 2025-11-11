@@ -1,0 +1,10 @@
+proc main {
+    out "Hello from LPPO!";
+    out "Outputs stream sequential statements.";
+    parallel {
+        out "Parallel branch one.";
+        out "Parallel branch two.";
+        out "Parallel branch three.";
+    }
+    out "Main procedure resumed after parallel block.";
+}

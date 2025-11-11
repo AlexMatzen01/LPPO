@@ -1,0 +1,50 @@
+// Array operations demonstration
+
+proc main {
+    out "=== Array Basics ===";
+    let arr = [1, 2, 3, 4, 5];
+    out "Array:", arr;
+    out "Length:", arr.len();
+    out "First:", arr[0];
+    out "Last:", arr[-1];
+    
+    out "";
+    out "=== String Operations ===";
+    let msg = "Hello LPPO";
+    out "String:", msg;
+    out "Length:", msg.len();
+    out "Uppercase:", msg.upper();
+    out "Lowercase:", msg.lower();
+    
+    let text = "one,two,three";
+    let parts = text.split(",");
+    out "Split result:", parts;
+    
+    out "";
+    out "=== Operators ===";
+    out "Modulo: 17 % 5 =", 17 % 5;
+    out "Power: 2 ** 10 =", 2 ** 10;
+    out "Bitwise AND: 12 & 10 =", 12 & 10;
+    out "Bitwise OR: 12 | 10 =", 12 | 10;
+    out "Bitwise XOR: 12 ^ 10 =", 12 ^ 10;
+    out "Bitwise NOT: ~5 =", ~5;
+    
+    out "";
+    out "=== Unary Operators ===";
+    let x = 42;
+    out "Negation: -x =", -x;
+    let flag = true;
+    out "Logical NOT: !flag =", not flag;
+    
+    out "";
+    out "=== Array Concatenation ===";
+    let a1 = [1, 2, 3];
+    let a2 = [4, 5, 6];
+    out "a1 + a2 =", a1 + a2;
+    
+    out "";
+    out "=== String Concatenation ===";
+    let s1 = "Hello";
+    let s2 = "World";
+    out "s1 + s2 =", s1 + " " + s2;
+}

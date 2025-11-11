@@ -1,0 +1,54 @@
+// Comprehensive LPPO feature test
+proc main {
+    // Variables and math
+    let x = 5;
+    let y = 3;
+    out "Math:", x + y, x - y, x * y, x / y, x % y;
+    out "Power:", 2 ** 8;
+    
+    // Booleans
+    let t = true;
+    let f = false;
+    out "Bool:", t, f, t and f, t or f, not f;
+    
+    // Comparisons
+    out "Compare:", x > y, x < y, x == y, x != y;
+    
+    // Arrays
+    let arr = [1, 2, 3, 4, 5];
+    out "Array:", arr;
+    out "Index:", arr[0], arr[2], arr[-1];
+    out "Len:", arr.len();
+    
+    // String operations
+    let s = "hello";
+    out "String:", s, s.len(), s.upper();
+    
+    // Loops
+    let i = 0;
+    while i < 3 {
+        out "While:", i;
+        let i = i + 1;
+    }
+    
+    let nums = [10, 20, 30];
+    for n in nums {
+        out "For:", n;
+    }
+    
+    // Conditionals
+    if x > y {
+        out "x is greater";
+    } elif x == y {
+        out "x equals y";
+    } else {
+        out "x is less";
+    }
+    
+    // Call with args
+    call greet("World", 42);
+}
+
+proc greet(name, num) {
+    out "Hello", name, "!", "Number:", num;
+}
