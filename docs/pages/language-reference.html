@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language Reference - LPPO Documentation</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <span class="logo">LPPO</span>
+                <span class="tagline">Lightweight Procedural & Parallel Output</span>
+            </div>
+            <div class="nav-menu">
+                <a href="../index.html" class="nav-link">Home</a>
+                <a href="getting-started.html" class="nav-link">Getting Started</a>
+                <a href="language-reference.html" class="nav-link active">Language Reference</a>
+                <a href="examples.html" class="nav-link">Examples</a>
+                <a href="api.html" class="nav-link">API</a>
+                <a href="faq.html" class="nav-link">FAQ</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="doc-page">
+        <div class="container">
+            <div class="doc-header">
+                <h1>Language Reference</h1>
+                <p>Complete reference for LPPO syntax, data types, operators, and features</p>
+            </div>
+
+            <div class="doc-content">
+                <h2>Table of Contents</h2>
+                <ul>
+                    <li><a href="#data-types">Data Types</a></li>
+                    <li><a href="#variables">Variables</a></li>
+                    <li><a href="#operators">Operators</a></li>
+                    <li><a href="#control-flow">Control Flow</a></li>
+                    <li><a href="#loops">Loops</a></li>
+                    <li><a href="#arrays">Arrays</a></li>
+                    <li><a href="#strings">Strings</a></li>
+                    <li><a href="#procedures">Procedures</a></li>
+                    <li><a href="#parallel">Parallel Execution</a></li>
+                    <li><a href="#comments">Comments</a></li>
+                </ul>
+
+                <h2 id="data-types">Data Types</h2>
+                <p>LPPO supports four fundamental data types:</p>
+
+                <h3>Integer</h3>
+                <p>Whole numbers, positive or negative:</p>
+                <pre><code class="language-lppo">let x = 42;
+let y = -17;
+let z = 0;</code></pre>
+
+                <h3>Boolean</h3>
+                <p>Logical true/false values:</p>
+                <pre><code class="language-lppo">let is_valid = true;
+let is_empty = false;</code></pre>
+
+                <h3>String</h3>
+                <p>Text enclosed in double quotes:</p>
+                <pre><code class="language-lppo">let name = "Alice";
+let message = "Hello, World!";
+let multiline = "Line 1\nLine 2";</code></pre>
+
+                <h4>Escape Sequences</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Sequence</th>
+                            <th>Meaning</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>\n</code></td>
+                            <td>Newline</td>
+                        </tr>
+                        <tr>
+                            <td><code>\r</code></td>
+                            <td>Carriage return</td>
+                        </tr>
+                        <tr>
+                            <td><code>\t</code></td>
+                            <td>Tab</td>
+                        </tr>
+                        <tr>
+                            <td><code>\\</code></td>
+                            <td>Backslash</td>
+                        </tr>
+                        <tr>
+                            <td><code>\"</code></td>
+                            <td>Double quote</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Array</h3>
+                <p>Ordered collections of values:</p>
+                <pre><code class="language-lppo">let numbers = [1, 2, 3, 4, 5];
+let names = ["Alice", "Bob", "Charlie"];
+let mixed = [1, "two", 3, "four"];</code></pre>
+
+                <h2 id="variables">Variables</h2>
+                <p>Variables are declared using the <code>let</code> keyword:</p>
+                <pre><code class="language-lppo">let x = 10;
+let name = "LPPO";
+let items = [1, 2, 3];</code></pre>
+
+                <div class="info-box">
+                    <h4>📝 Variable Assignment</h4>
+                    <p>Variables in LPPO are reassignable. You can change their value by using another <code>let</code> statement with the same name.</p>
+                </div>
+
+                <pre><code class="language-lppo">let count = 0;
+let count = count + 1;  // count is now 1
+let count = count + 1;  // count is now 2</code></pre>
+
+                <h2 id="operators">Operators</h2>
+
+                <h3>Arithmetic Operators</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Operator</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>+</code></td>
+                            <td>Addition</td>
+                            <td><code>5 + 3</code> → 8</td>
+                        </tr>
+                        <tr>
+                            <td><code>-</code></td>
+                            <td>Subtraction</td>
+                            <td><code>5 - 3</code> → 2</td>
+                        </tr>
+                        <tr>
+                            <td><code>*</code></td>
+                            <td>Multiplication</td>
+                            <td><code>5 * 3</code> → 15</td>
+                        </tr>
+                        <tr>
+                            <td><code>/</code></td>
+                            <td>Division</td>
+                            <td><code>6 / 3</code> → 2</td>
+                        </tr>
+                        <tr>
+                            <td><code>%</code></td>
+                            <td>Modulo (remainder)</td>
+                            <td><code>5 % 3</code> → 2</td>
+                        </tr>
+                        <tr>
+                            <td><code>**</code></td>
+                            <td>Power</td>
+                            <td><code>2 ** 8</code> → 256</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Comparison Operators</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Operator</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>==</code></td>
+                            <td>Equal to</td>
+                            <td><code>5 == 5</code> → true</td>
+                        </tr>
+                        <tr>
+                            <td><code>!=</code></td>
+                            <td>Not equal to</td>
+                            <td><code>5 != 3</code> → true</td>
+                        </tr>
+                        <tr>
+                            <td><code>&lt;</code></td>
+                            <td>Less than</td>
+                            <td><code>3 &lt; 5</code> → true</td>
+                        </tr>
+                        <tr>
+                            <td><code>&gt;</code></td>
+                            <td>Greater than</td>
+                            <td><code>5 &gt; 3</code> → true</td>
+                        </tr>
+                        <tr>
+                            <td><code>&lt;=</code></td>
+                            <td>Less than or equal</td>
+                            <td><code>3 &lt;= 5</code> → true</td>
+                        </tr>
+                        <tr>
+                            <td><code>&gt;=</code></td>
+                            <td>Greater than or equal</td>
+                            <td><code>5 &gt;= 5</code> → true</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Logical Operators</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Operator</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>and</code></td>
+                            <td>Logical AND</td>
+                            <td><code>true and false</code> → false</td>
+                        </tr>
+                        <tr>
+                            <td><code>or</code></td>
+                            <td>Logical OR</td>
+                            <td><code>true or false</code> → true</td>
+                        </tr>
+                        <tr>
+                            <td><code>not</code></td>
+                            <td>Logical NOT</td>
+                            <td><code>not true</code> → false</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Bitwise Operators</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Operator</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>&amp;</code></td>
+                            <td>Bitwise AND</td>
+                            <td><code>5 &amp; 3</code> → 1</td>
+                        </tr>
+                        <tr>
+                            <td><code>|</code></td>
+                            <td>Bitwise OR</td>
+                            <td><code>5 | 3</code> → 7</td>
+                        </tr>
+                        <tr>
+                            <td><code>^</code></td>
+                            <td>Bitwise XOR</td>
+                            <td><code>5 ^ 3</code> → 6</td>
+                        </tr>
+                        <tr>
+                            <td><code>~</code></td>
+                            <td>Bitwise NOT</td>
+                            <td><code>~5</code> → -6</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Operator Precedence</h3>
+                <p>Operators are evaluated in the following order (highest to lowest):</p>
+                <ol>
+                    <li>Unary operators: <code>-</code>, <code>!</code>, <code>~</code></li>
+                    <li>Power: <code>**</code></li>
+                    <li>Multiplicative: <code>*</code>, <code>/</code>, <code>%</code></li>
+                    <li>Additive: <code>+</code>, <code>-</code></li>
+                    <li>Bitwise: <code>&amp;</code>, <code>|</code>, <code>^</code></li>
+                    <li>Comparison: <code>==</code>, <code>!=</code>, <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></li>
+                    <li>Logical AND: <code>and</code></li>
+                    <li>Logical OR: <code>or</code></li>
+                </ol>
+
+                <p>Use parentheses <code>()</code> to override precedence:</p>
+                <pre><code class="language-lppo">let result = (5 + 3) * 2;  // 16, not 11</code></pre>
+
+                <h2 id="control-flow">Control Flow</h2>
+
+                <h3>If Statement</h3>
+                <pre><code class="language-lppo">if condition {
+    // code executed if condition is true
+}</code></pre>
+
+                <h3>If-Else Statement</h3>
+                <pre><code class="language-lppo">if condition {
+    // code executed if condition is true
+} else {
+    // code executed if condition is false
+}</code></pre>
+
+                <h3>If-Elif-Else Chain</h3>
+                <pre><code class="language-lppo">if condition1 {
+    // executed if condition1 is true
+} elif condition2 {
+    // executed if condition1 is false and condition2 is true
+} elif condition3 {
+    // executed if condition1 and condition2 are false and condition3 is true
+} else {
+    // executed if all conditions are false
+}</code></pre>
+
+                <h3>Example</h3>
+                <pre><code class="language-lppo">let score = 85;
+
+if score >= 90 {
+    out "Excellent!";
+} elif score >= 80 {
+    out "Very Good!";
+} elif score >= 70 {
+    out "Good!";
+} else {
+    out "Keep trying!";
+}</code></pre>
+
+                <h2 id="loops">Loops</h2>
+
+                <h3>While Loop</h3>
+                <p>Executes while a condition is true:</p>
+                <pre><code class="language-lppo">let i = 0;
+while i < 5 {
+    out "Count:", i;
+    let i = i + 1;
+}</code></pre>
+
+                <h3>For-In Loop</h3>
+                <p>Iterates over elements in an array:</p>
+                <pre><code class="language-lppo">let items = [10, 20, 30, 40, 50];
+for item in items {
+    out "Item:", item;
+}</code></pre>
+
+                <h3>Infinite Loop</h3>
+                <p>Loops forever until explicitly broken:</p>
+                <pre><code class="language-lppo">let count = 0;
+loop {
+    out "Iteration:", count;
+    let count = count + 1;
+    if count >= 5 {
+        break;
+    }
+}</code></pre>
+
+                <h3>Loop Control</h3>
+
+                <h4>Break</h4>
+                <p>Exits the current loop immediately:</p>
+                <pre><code class="language-lppo">let i = 0;
+while i < 10 {
+    if i == 5 {
+        break;  // exits loop when i is 5
+    }
+    out i;
+    let i = i + 1;
+}</code></pre>
+
+                <h4>Continue</h4>
+                <p>Skips the rest of the current iteration and continues with the next:</p>
+                <pre><code class="language-lppo">let i = 0;
+while i < 10 {
+    let i = i + 1;
+    if i % 2 == 0 {
+        continue;  // skips even numbers
+    }
+    out "Odd:", i;
+}</code></pre>
+
+                <h2 id="arrays">Arrays</h2>
+
+                <h3>Creating Arrays</h3>
+                <pre><code class="language-lppo">let empty = [];
+let numbers = [1, 2, 3, 4, 5];
+let mixed = [1, "two", 3, "four"];</code></pre>
+
+                <h3>Array Indexing</h3>
+                <p>Access elements using square brackets:</p>
+                <pre><code class="language-lppo">let arr = [10, 20, 30, 40, 50];
+
+out arr[0];   // First element: 10
+out arr[2];   // Third element: 30
+out arr[4];   // Last element: 50</code></pre>
+
+                <h3>Negative Indexing</h3>
+                <p>Access elements from the end of the array:</p>
+                <pre><code class="language-lppo">let arr = [10, 20, 30, 40, 50];
+
+out arr[-1];  // Last element: 50
+out arr[-2];  // Second-to-last: 40
+out arr[-5];  // First element: 10</code></pre>
+
+                <h3>Array Methods</h3>
+
+                <h4>.len()</h4>
+                <p>Returns the number of elements:</p>
+                <pre><code class="language-lppo">let arr = [1, 2, 3, 4, 5];
+out arr.len();  // Output: 5</code></pre>
+
+                <h3>Array Concatenation</h3>
+                <p>Combine arrays using the <code>+</code> operator:</p>
+                <pre><code class="language-lppo">let arr1 = [1, 2, 3];
+let arr2 = [4, 5, 6];
+let combined = arr1 + arr2;
+out combined;  // [1, 2, 3, 4, 5, 6]</code></pre>
+
+                <h2 id="strings">Strings</h2>
+
+                <h3>Creating Strings</h3>
+                <pre><code class="language-lppo">let greeting = "Hello, World!";
+let name = "LPPO";
+let multiline = "Line 1\nLine 2\nLine 3";</code></pre>
+
+                <h3>String Indexing</h3>
+                <p>Access individual characters:</p>
+                <pre><code class="language-lppo">let text = "Hello";
+out text[0];   // "H"
+out text[4];   // "o"
+out text[-1];  // "o" (last character)</code></pre>
+
+                <h3>String Methods</h3>
+
+                <h4>.len()</h4>
+                <p>Returns the string length:</p>
+                <pre><code class="language-lppo">let text = "Hello";
+out text.len();  // Output: 5</code></pre>
+
+                <h4>.upper()</h4>
+                <p>Converts to uppercase:</p>
+                <pre><code class="language-lppo">let text = "hello";
+out text.upper();  // Output: HELLO</code></pre>
+
+                <h4>.lower()</h4>
+                <p>Converts to lowercase:</p>
+                <pre><code class="language-lppo">let text = "HELLO";
+out text.lower();  // Output: hello</code></pre>
+
+                <h4>.split(separator)</h4>
+                <p>Splits string into an array:</p>
+                <pre><code class="language-lppo">let csv = "apple,banana,cherry";
+let fruits = csv.split(",");
+out fruits;  // ["apple", "banana", "cherry"]</code></pre>
+
+                <h3>String Concatenation</h3>
+                <p>Combine strings using the <code>+</code> operator:</p>
+                <pre><code class="language-lppo">let first = "Hello";
+let second = "World";
+let combined = first + " " + second;
+out combined;  // "Hello World"</code></pre>
+
+                <h2 id="procedures">Procedures</h2>
+
+                <h3>Defining Procedures</h3>
+                <pre><code class="language-lppo">proc procedure_name {
+    // procedure body
+}</code></pre>
+
+                <h3>Procedures with Parameters</h3>
+                <pre><code class="language-lppo">proc greet(name, age) {
+    out "Hello,", name;
+    out "You are", age, "years old";
+}</code></pre>
+
+                <h3>Calling Procedures</h3>
+                <pre><code class="language-lppo">call procedure_name;
+call greet("Alice", 25);</code></pre>
+
+                <h3>The Main Procedure</h3>
+                <p>Every LPPO program must have a <code>main</code> procedure as the entry point:</p>
+                <pre><code class="language-lppo">proc main {
+    out "Program starts here";
+    call other_procedure;
+}
+
+proc other_procedure {
+    out "This is another procedure";
+}</code></pre>
+
+                <h3>Complete Example</h3>
+                <pre><code class="language-lppo">proc calculate(a, b) {
+    let sum = a + b;
+    let product = a * b;
+    let difference = a - b;
+    
+    out "Sum:", sum;
+    out "Product:", product;
+    out "Difference:", difference;
+}
+
+proc main {
+    call calculate(10, 5);
+    call calculate(20, 8);
+}</code></pre>
+
+                <h2 id="parallel">Parallel Execution</h2>
+                <p>LPPO supports native parallel execution using <code>parallel</code> blocks:</p>
+
+                <pre><code class="language-lppo">proc main {
+    out "Starting parallel tasks...";
+    
+    parallel {
+        out "Task 1 executing";
+        out "Task 2 executing";
+        out "Task 3 executing";
+    }
+    
+    out "All parallel tasks complete!";
+}</code></pre>
+
+                <div class="info-box">
+                    <h4>⚡ Parallel Execution</h4>
+                    <p>Statements inside a <code>parallel</code> block execute concurrently using threads. The order of execution is not guaranteed. The program waits for all parallel tasks to complete before continuing.</p>
+                </div>
+
+                <h3>Practical Example</h3>
+                <pre><code class="language-lppo">proc process(id) {
+    out "Processing task", id;
+}
+
+proc main {
+    parallel {
+        call process(1);
+        call process(2);
+        call process(3);
+        call process(4);
+    }
+    out "All processing complete";
+}</code></pre>
+
+                <h2 id="comments">Comments</h2>
+
+                <h3>Line Comments</h3>
+                <p>Start with <code>//</code> and continue to the end of the line:</p>
+                <pre><code class="language-lppo">// This is a single-line comment
+let x = 10;  // Comment at end of line</code></pre>
+
+                <h3>Block Comments</h3>
+                <p>Enclosed between <code>/*</code> and <code>*/</code>:</p>
+                <pre><code class="language-lppo">/*
+   This is a multi-line comment
+   It can span multiple lines
+   Useful for documentation
+*/
+
+let x = 10;</code></pre>
+
+                <h2>Output Statement</h2>
+                <p>The <code>out</code> statement prints values to stdout:</p>
+
+                <h3>Single Value</h3>
+                <pre><code class="language-lppo">out "Hello";</code></pre>
+
+                <h3>Multiple Values</h3>
+                <p>Separate values with commas:</p>
+                <pre><code class="language-lppo">out "x =", x, "y =", y;</code></pre>
+
+                <h3>Arrays and Complex Values</h3>
+                <pre><code class="language-lppo">let arr = [1, 2, 3];
+out "Array:", arr;  // Output: Array: [1, 2, 3]</code></pre>
+
+                <div class="info-box success">
+                    <h4>📚 Reference Complete</h4>
+                    <p>You now have a complete reference for LPPO syntax and features. Check out the <a href="examples.html">Examples</a> page for more practical code samples!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Documentation</h4>
+                    <ul>
+                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="language-reference.html">Language Reference</a></li>
+                        <li><a href="examples.html">Examples</a></li>
+                        <li><a href="api.html">API Documentation</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="https://github.com/BobReed24/LPPO">GitHub Repository</a></li>
+                        <li><a href="https://github.com/BobReed24/LPPO/issues">Report Issues</a></li>
+                        <li><a href="faq.html">FAQ</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>About</h4>
+                    <p>LPPO is an open-source programming language written in Rust. Version 1.0 - Feature Complete.</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 LPPO. Open source project.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/highlight.js"></script>
+</body>
+</html>

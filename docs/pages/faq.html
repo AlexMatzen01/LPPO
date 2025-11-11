@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ - LPPO Documentation</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <span class="logo">LPPO</span>
+                <span class="tagline">Lightweight Procedural & Parallel Output</span>
+            </div>
+            <div class="nav-menu">
+                <a href="../index.html" class="nav-link">Home</a>
+                <a href="getting-started.html" class="nav-link">Getting Started</a>
+                <a href="language-reference.html" class="nav-link">Language Reference</a>
+                <a href="examples.html" class="nav-link">Examples</a>
+                <a href="api.html" class="nav-link">API</a>
+                <a href="faq.html" class="nav-link active">FAQ</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="doc-page">
+        <div class="container">
+            <div class="doc-header">
+                <h1>Frequently Asked Questions</h1>
+                <p>Common questions and troubleshooting for LPPO</p>
+            </div>
+
+            <div class="doc-content">
+                <h2>General Questions</h2>
+
+                <h3>What is LPPO?</h3>
+                <p>LPPO (Lightweight Procedural & Parallel Output) is a feature-rich programming language that combines procedural structure with parallel execution capabilities. It's designed to be easy to learn while providing powerful features like arrays, control flow, operators, and native parallel execution.</p>
+
+                <h3>Who created LPPO?</h3>
+                <p>LPPO is an open-source project developed as a demonstration of modern language implementation techniques using Rust.</p>
+
+                <h3>Why was LPPO created?</h3>
+                <p>LPPO was created to explore:</p>
+                <ul>
+                    <li>Clean procedural programming design</li>
+                    <li>Native parallel execution features</li>
+                    <li>Modern compiler/interpreter architecture</li>
+                    <li>Memory-safe language implementation using Rust</li>
+                </ul>
+
+                <h3>Is LPPO production-ready?</h3>
+                <p>LPPO v1.0 is feature-complete and stable for its intended use cases. However, it's primarily an educational and experimental language. For production systems, consider established languages with larger ecosystems and community support.</p>
+
+                <h2>Installation & Setup</h2>
+
+                <h3>What are the system requirements?</h3>
+                <ul>
+                    <li>Rust 1.80 or higher</li>
+                    <li>Cargo (comes with Rust)</li>
+                    <li>Any operating system supported by Rust (Windows, Linux, macOS)</li>
+                </ul>
+
+                <h3>How do I install Rust?</h3>
+                <p>Visit <a href="https://rustup.rs/" target="_blank">rustup.rs</a> and follow the installation instructions for your operating system.</p>
+
+                <h3>The build is failing. What should I do?</h3>
+                <p>Common solutions:</p>
+                <ul>
+                    <li>Ensure Rust is up to date: <code>rustup update</code></li>
+                    <li>Clean the build: <code>cargo clean</code> then rebuild</li>
+                    <li>Check that you're using Rust 1.80 or higher: <code>rustc --version</code></li>
+                    <li>Report the issue on GitHub with error details</li>
+                </ul>
+
+                <h2>Language Features</h2>
+
+                <h3>Does LPPO support return values from procedures?</h3>
+                <p>Currently, LPPO procedures do not return values. Data sharing between procedures is done through the shared environment. Future versions may add return value support.</p>
+
+                <h3>Can I use LPPO for file I/O?</h3>
+                <p>LPPO v1.0 does not include file I/O operations. The language focuses on computation and output. File I/O is planned for future versions.</p>
+
+                <h3>Does LPPO have a module/import system?</h3>
+                <p>Not currently. All procedures must be defined in a single file. A module system is planned for future releases.</p>
+
+                <h3>What about error handling?</h3>
+                <p>LPPO provides basic error reporting for runtime errors like division by zero and type mismatches. There are no user-facing error handling constructs (try/catch) in v1.0.</p>
+
+                <h3>Can procedures be recursive?</h3>
+                <p>Yes! You can write recursive procedures:</p>
+                <pre><code class="language-lppo">proc factorial(n) {
+    if n <= 1 {
+        out 1;
+    } else {
+        let prev = n - 1;
+        call factorial(prev);
+    }
+}</code></pre>
+                <p>However, without return values, you'll need to manage results through the environment or output.</p>
+
+                <h3>Are there functions/lambdas?</h3>
+                <p>No, LPPO only supports procedures. First-class functions and lambdas are not currently supported but are planned for future versions.</p>
+
+                <h2>Syntax Questions</h2>
+
+                <h3>Do I need semicolons?</h3>
+                <p>Yes, every statement must end with a semicolon:</p>
+                <pre><code class="language-lppo">let x = 10;
+out "Hello";
+call myproc;</code></pre>
+
+                <h3>Are variables mutable?</h3>
+                <p>Variables can be reassigned by using another <code>let</code> statement:</p>
+                <pre><code class="language-lppo">let x = 10;
+let x = x + 1;  // x is now 11</code></pre>
+
+                <h3>What's the difference between <code>not</code> and <code>!</code>?</h3>
+                <p>They're the same - both perform logical NOT. Use <code>not</code> as a keyword or <code>!</code> as an operator:</p>
+                <pre><code class="language-lppo">let flag = true;
+out not flag;  // false
+out !flag;     // false</code></pre>
+
+                <h3>How do I create multi-line strings?</h3>
+                <p>Use escape sequences like <code>\n</code>:</p>
+                <pre><code class="language-lppo">let text = "Line 1\nLine 2\nLine 3";
+out text;</code></pre>
+
+                <h3>Can I compare strings?</h3>
+                <p>Yes, strings can be compared using <code>==</code> and <code>!=</code>:</p>
+                <pre><code class="language-lppo">let a = "hello";
+let b = "world";
+if a == b {
+    out "Same";
+} else {
+    out "Different";
+}</code></pre>
+
+                <h2>Arrays and Strings</h2>
+
+                <h3>Can arrays contain mixed types?</h3>
+                <p>Yes! Arrays can contain any combination of integers, strings, booleans, and even other arrays:</p>
+                <pre><code class="language-lppo">let mixed = [1, "two", true, [4, 5]];
+out mixed;</code></pre>
+
+                <h3>How do I get array length?</h3>
+                <p>Use the <code>.len()</code> method:</p>
+                <pre><code class="language-lppo">let arr = [1, 2, 3, 4, 5];
+out arr.len();  // 5</code></pre>
+
+                <h3>Can I modify arrays after creation?</h3>
+                <p>Arrays are immutable once created. To "modify" an array, you would need to create a new one:</p>
+                <pre><code class="language-lppo">let arr = [1, 2, 3];
+let arr = arr + [4, 5];  // [1, 2, 3, 4, 5]</code></pre>
+
+                <h3>What happens if I access an invalid index?</h3>
+                <p>Accessing an out-of-bounds index will cause a runtime error:</p>
+                <pre><code class="language-lppo">let arr = [1, 2, 3];
+out arr[10];  // Runtime error!</code></pre>
+
+                <h3>Can I slice arrays?</h3>
+                <p>Not in v1.0. You can only access individual elements. Array slicing is planned for future versions.</p>
+
+                <h2>Parallel Execution</h2>
+
+                <h3>How does parallel execution work?</h3>
+                <p>Statements in a <code>parallel</code> block execute concurrently in separate threads. The program waits for all threads to complete before continuing.</p>
+
+                <h3>Is execution order guaranteed in parallel blocks?</h3>
+                <p>No! The order of execution is non-deterministic. Each statement runs in its own thread.</p>
+
+                <h3>Can parallel blocks be nested?</h3>
+                <p>Yes, you can nest parallel blocks:</p>
+                <pre><code class="language-lppo">parallel {
+    out "Outer 1";
+    parallel {
+        out "Inner 1";
+        out "Inner 2";
+    }
+    out "Outer 2";
+}</code></pre>
+
+                <h3>Are there race conditions?</h3>
+                <p>Each thread in a parallel block has its own copy of the environment at that point. Variables modified in one thread don't affect others, preventing traditional race conditions.</p>
+
+                <h3>How many threads are created?</h3>
+                <p>One thread per statement in the parallel block. Each thread is automatically joined before the program continues.</p>
+
+                <h2>Performance</h2>
+
+                <h3>How fast is LPPO?</h3>
+                <p>LPPO is an interpreted language using a tree-walking interpreter. It's fast enough for scripting and educational purposes but not optimized for high-performance computing.</p>
+
+                <h3>Can I compile LPPO programs?</h3>
+                <p>Yes! Use the <code>--compile-out</code> flag to create standalone executables:</p>
+                <pre><code class="language-bash">cargo run -- --compile-out myapp.exe program.lppo</code></pre>
+                <p>Note: This bundles the interpreter with your program; it's not native code compilation.</p>
+
+                <h3>Are there optimization flags?</h3>
+                <p>The LPPO runtime doesn't have optimization flags. Use <code>cargo build --release</code> for an optimized LPPO interpreter.</p>
+
+                <h2>Troubleshooting</h2>
+
+                <h3>My program runs but produces no output</h3>
+                <p>Common causes:</p>
+                <ul>
+                    <li>Missing <code>proc main</code> - Every program needs a main procedure</li>
+                    <li>No <code>out</code> statements in your code</li>
+                    <li>Logic errors preventing code execution</li>
+                </ul>
+
+                <h3>"Procedure not found" error</h3>
+                <p>Ensure:</p>
+                <ul>
+                    <li>The procedure is defined before being called</li>
+                    <li>The procedure name matches exactly (case-sensitive)</li>
+                    <li>You're using <code>call procedure_name</code> syntax</li>
+                </ul>
+
+                <h3>"Unexpected token" error</h3>
+                <p>Check:</p>
+                <ul>
+                    <li>All statements end with semicolons</li>
+                    <li>Braces are balanced <code>{}</code></li>
+                    <li>Strings are properly closed with quotes</li>
+                    <li>No reserved keywords used as identifiers</li>
+                </ul>
+
+                <h3>Division by zero</h3>
+                <p>LPPO checks for division by zero at runtime and produces an error. Always validate divisors:</p>
+                <pre><code class="language-lppo">if divisor != 0 {
+    let result = numerator / divisor;
+    out result;
+} else {
+    out "Cannot divide by zero!";
+}</code></pre>
+
+                <h3>Type mismatch errors</h3>
+                <p>Operations require compatible types. For example:</p>
+                <pre><code class="language-lppo">// Error: can't add string to integer
+let result = 5 + "hello";
+
+// Correct: concatenate strings
+let greeting = "Hello " + "World";</code></pre>
+
+                <h2>Development</h2>
+
+                <h3>How can I contribute?</h3>
+                <p>Visit the <a href="https://github.com/BobReed24/LPPO">GitHub repository</a> and:</p>
+                <ul>
+                    <li>Report bugs via issues</li>
+                    <li>Suggest new features</li>
+                    <li>Submit pull requests</li>
+                    <li>Improve documentation</li>
+                </ul>
+
+                <h3>Where are the tests?</h3>
+                <p>Run tests with:</p>
+                <pre><code class="language-bash">cargo test</code></pre>
+                <p>Example programs in <code>examples/</code> serve as integration tests.</p>
+
+                <h3>How do I debug my LPPO program?</h3>
+                <p>Use debug mode to see compilation and execution details:</p>
+                <pre><code class="language-bash">cargo run -- --debug program.lppo</code></pre>
+
+                <h3>Can I embed LPPO in my application?</h3>
+                <p>Yes! LPPO is written as a Rust library. You can use it programmatically:</p>
+                <pre><code class="language-rust">use lppo::{lexer, parser, compiler, runtime};
+
+let source = "proc main { out \"Hello\"; }";
+let tokens = lexer::tokenize(source)?;
+let ast = parser::parse(tokens)?;
+let ops = compiler::compile(ast)?;
+runtime::execute(ops)?;</code></pre>
+
+                <h2>Future Plans</h2>
+
+                <h3>What features are planned?</h3>
+                <p>Potential future enhancements include:</p>
+                <ul>
+                    <li>Return values from procedures</li>
+                    <li>Structs and custom types</li>
+                    <li>First-class functions and lambdas</li>
+                    <li>Module/import system</li>
+                    <li>File I/O operations</li>
+                    <li>Error handling constructs</li>
+                    <li>More collection types (maps, sets)</li>
+                    <li>Standard library</li>
+                    <li>Language server protocol support</li>
+                </ul>
+
+                <h3>Will LPPO get a JIT compiler?</h3>
+                <p>Possibly! A JIT compiler could significantly improve performance, but it's not currently planned for the near future.</p>
+
+                <h3>Are there plans for a package manager?</h3>
+                <p>A package manager would require a module system first. Both are under consideration for future versions.</p>
+
+                <h2>Community</h2>
+
+                <h3>Where can I get help?</h3>
+                <ul>
+                    <li>GitHub Issues - <a href="https://github.com/BobReed24/LPPO/issues">Report bugs or ask questions</a></li>
+                    <li>Documentation - You're reading it!</li>
+                    <li>Examples - Check the <code>examples/</code> directory</li>
+                </ul>
+
+                <h3>How do I report a bug?</h3>
+                <p>Create an issue on GitHub with:</p>
+                <ul>
+                    <li>LPPO version</li>
+                    <li>Operating system</li>
+                    <li>Minimal code example that reproduces the bug</li>
+                    <li>Expected vs actual behavior</li>
+                    <li>Error messages or output</li>
+                </ul>
+
+                <h3>Can I use LPPO in my project?</h3>
+                <p>Yes! LPPO is open source. Check the license file in the repository for details.</p>
+
+                <div class="info-box success">
+                    <h4>📚 Still have questions?</h4>
+                    <p>If your question isn't answered here, please <a href="https://github.com/BobReed24/LPPO/issues">open an issue on GitHub</a> and we'll be happy to help!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Documentation</h4>
+                    <ul>
+                        <li><a href="getting-started.html">Getting Started</a></li>
+                        <li><a href="language-reference.html">Language Reference</a></li>
+                        <li><a href="examples.html">Examples</a></li>
+                        <li><a href="api.html">API Documentation</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="https://github.com/BobReed24/LPPO">GitHub Repository</a></li>
+                        <li><a href="https://github.com/BobReed24/LPPO/issues">Report Issues</a></li>
+                        <li><a href="faq.html">FAQ</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>About</h4>
+                    <p>LPPO is an open-source programming language written in Rust. Version 1.0 - Feature Complete.</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 LPPO. Open source project.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="../js/highlight.js"></script>
+</body>
+</html>
