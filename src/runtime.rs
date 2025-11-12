@@ -87,7 +87,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         Expr::Var(name) => env
             .get(name)
             .cloned()
-            .ok_or_else(|| LppoError::UnknownVariable(name.clone())),
+            .ok_or_else(|| LppoError::unknown_variable(name.clone())),
         Expr::QualifiedVar(qn) => {
             // For now, treat qualified variables as simple variables
             // Full namespace support would require a more sophisticated environment
@@ -99,7 +99,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
             env.get(&full_name)
                 .or_else(|| env.get(&qn.name))
                 .cloned()
-                .ok_or_else(|| LppoError::UnknownVariable(full_name))
+                .ok_or_else(|| LppoError::unknown_variable(full_name))
         }
         Expr::BinaryOp { left, op, right } => {
             let l = eval_expr(left, env)?;
@@ -110,7 +110,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                     (Value::Int(a), Value::Int(b), BinaryOp::Mul) => Ok(Value::Int(a * b)),
                     (Value::Int(a), Value::Int(b), BinaryOp::Div) => {
                         if b == 0 {
-                            Err(LppoError::TypeError("division by zero".into()))
+                            Err(LppoError::type_error("division by zero".into()))
                         } else {
                             Ok(Value::Int(a / b))
                         }
@@ -140,7 +140,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                         a.extend(b);
                         Ok(Value::Array(a))
                     }
-                    _ => Err(LppoError::TypeError("type mismatch in binary operation".into())),
+                    _ => Err(LppoError::type_error("type mismatch in binary operation".into())),
                 }
         }
         Expr::UnaryOp { op, operand } => {
@@ -149,7 +149,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 (UnaryOp::Neg, Value::Int(i)) => Ok(Value::Int(-i)),
                 (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
                 (UnaryOp::BitNot, Value::Int(i)) => Ok(Value::Int(!i)),
-                _ => Err(LppoError::TypeError("type mismatch in unary operation".into())),
+                _ => Err(LppoError::type_error("type mismatch in unary operation".into())),
             }
         }
         Expr::Array(elements) => {
@@ -171,7 +171,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                     };
                     arr.get(i)
                         .cloned()
-                        .ok_or_else(|| LppoError::TypeError(format!("index {} out of bounds", idx)))
+                        .ok_or_else(|| LppoError::type_error(format!("index {} out of bounds", idx)))
                 }
                 (Value::Str(s), Value::Int(idx)) => {
                     let i = if idx < 0 {
@@ -182,9 +182,9 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                     s.chars()
                         .nth(i)
                         .map(|c| Value::Str(c.to_string()))
-                        .ok_or_else(|| LppoError::TypeError(format!("index {} out of bounds", idx)))
+                        .ok_or_else(|| LppoError::type_error(format!("index {} out of bounds", idx)))
                 }
-                _ => Err(LppoError::TypeError("indexing requires array/string and integer".into())),
+                _ => Err(LppoError::type_error("indexing requires array/string and integer".into())),
             }
         }
         Expr::MethodCall { target, method, args } => {
@@ -198,7 +198,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 }
                 (Value::Array(mut arr), "pop") => {
                     arr.pop()
-                        .ok_or_else(|| LppoError::TypeError("pop on empty array".into()))
+                        .ok_or_else(|| LppoError::type_error("pop on empty array".into()))
                 }
                 (Value::Array(arr), "len") => Ok(Value::Int(arr.len() as i64)),
                 (Value::Str(s), "len") => Ok(Value::Int(s.len() as i64)),
@@ -206,7 +206,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 (Value::Str(s), "lower") => Ok(Value::Str(s.to_lowercase())),
                 (Value::Str(s), "split") => {
                     if args.len() != 1 {
-                        return Err(LppoError::TypeError("split requires 1 argument".into()));
+                        return Err(LppoError::type_error("split requires 1 argument".into()));
                     }
                     let sep = eval_expr(&args[0], env)?;
                     if let Value::Str(sep_str) = sep {
@@ -216,15 +216,15 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                             .collect();
                         Ok(Value::Array(parts))
                     } else {
-                        Err(LppoError::TypeError("split separator must be string".into()))
+                        Err(LppoError::type_error("split separator must be string".into()))
                     }
                 }
-                _ => Err(LppoError::TypeError(format!("unknown method: {}", method))),
+                _ => Err(LppoError::type_error(format!("unknown method: {}", method))),
             }
         }
         Expr::FieldAccess { target, field } => {
             // For now, we don't have structs, so this is an error
-            Err(LppoError::TypeError(format!("field access not yet implemented: {}", field)))
+            Err(LppoError::type_error(format!("field access not yet implemented: {}", field)))
         }
         Expr::Ref { target, lifetime, is_mut } => {
             // In our simplified runtime, references are just the value itself
@@ -266,7 +266,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 (Value::Str(s), crate::ast::TypeAnnotation::Int64) => {
                     s.parse::<i64>()
                         .map(Value::Int)
-                        .map_err(|_| LppoError::TypeError("cannot cast string to Int64".into()))
+                        .map_err(|_| LppoError::type_error("cannot cast string to Int64".into()))
                 }
                 (v, _) => Ok(v), // passthrough for same type
             }
@@ -295,7 +295,7 @@ impl Executor {
         let procedure = self
             .procedures
             .get(entry)
-            .ok_or_else(|| LppoError::UnknownProcedure(entry.to_string()))?;
+            .ok_or_else(|| LppoError::unknown_procedure(entry.to_string()))?;
         let mut env = HashMap::new();
         self.execute_procedure_with_env(procedure, &mut env)
     }
@@ -341,11 +341,11 @@ impl Executor {
                     let proc = self
                         .procedures
                         .get(name)
-                        .ok_or_else(|| LppoError::UnknownProcedure(name.clone()))?;
+                        .ok_or_else(|| LppoError::unknown_procedure(name.clone()))?;
 
                     // check arity
                     if proc.params.len() != arg_vals.len() {
-                        return Err(LppoError::TypeError(format!("argument count mismatch for '{}': expected {} got {}", name, proc.params.len(), arg_vals.len())));
+                        return Err(LppoError::type_error(format!("argument count mismatch for '{}': expected {} got {}", name, proc.params.len(), arg_vals.len())));
                     }
 
                     // bind parameters in a fresh env and execute
@@ -409,7 +409,7 @@ impl Executor {
                     let iter_v = eval_expr(iterable, env)?;
                     let items = match iter_v {
                         Value::Array(ref arr) => arr.clone(),
-                        _ => return Err(LppoError::TypeError("for loop requires an array".to_string())),
+                        _ => return Err(LppoError::type_error("for loop requires an array".to_string())),
                     };
                     for item in items {
                         env.insert(var.clone(), item);
@@ -499,13 +499,13 @@ fn is_truthy(v: &Value) -> bool {
 pub fn serialize_procedures(
     procedures: &HashMap<String, ProcedureBody>,
 ) -> LppoResult<Vec<u8>> {
-    serde_json::to_vec(procedures).map_err(|e| LppoError::UnknownProcedure(e.to_string()))
+    serde_json::to_vec(procedures).map_err(|e| LppoError::type_error(e.to_string()))
 }
 
 /// Deserialize procedures from JSON bytes and return an Executor.
 pub fn executor_from_bytes(bytes: &[u8]) -> LppoResult<Executor> {
     let map: HashMap<String, ProcedureBody> = serde_json::from_slice(bytes)
-        .map_err(|e| LppoError::UnknownProcedure(e.to_string()))?;
+        .map_err(|e| LppoError::type_error(e.to_string()))?;
     Ok(Executor::new(map))
 }
 

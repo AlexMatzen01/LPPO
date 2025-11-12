@@ -175,8 +175,8 @@ impl<'a> Lexer<'a> {
                     return Ok(value);
                 }
                 b'\\' => {
-                    let escaped = self.bump().ok_or(LppoError::UnterminatedString {
-                        position: self.current,
+                    let escaped = self.bump().ok_or_else(|| {
+                        LppoError::unterminated_string(self.current)
                     })?;
                     let esc_char = match escaped {
                         b'n' => '\n',
@@ -191,9 +191,7 @@ impl<'a> Lexer<'a> {
                 other => value.push(other as char),
             }
         }
-        Err(LppoError::UnterminatedString {
-            position: self.current,
-        })
+        Err(LppoError::unterminated_string(self.current))
     }
 
     /// Returns the next token in the input stream.
@@ -239,7 +237,7 @@ impl<'a> Lexer<'a> {
                         self.bump();
                         Token::NotEq
                     } else {
-                        return Err(LppoError::UnexpectedCharacter { ch: '!' , position: self.position });
+                        return Err(LppoError::unexpected_char('!', self.position));
                     }
                 }
                 b',' => Token::Comma,
@@ -259,7 +257,7 @@ impl<'a> Lexer<'a> {
                         lifetime.push(self.bump().unwrap() as char);
                     }
                     if lifetime.is_empty() {
-                        return Err(LppoError::UnexpectedCharacter { ch: '\'', position: self.position });
+                        return Err(LppoError::unexpected_char('\'', self.position));
                     }
                     Token::Lifetime(lifetime)
                 }
@@ -356,10 +354,7 @@ impl<'a> Lexer<'a> {
                 }
             }
             other => {
-                return Err(LppoError::UnexpectedCharacter {
-                    ch: other as char,
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_char(other as char, self.position))
             }
         };
         Ok(token)

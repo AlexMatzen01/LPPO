@@ -13,7 +13,7 @@ pub fn compile_program(program: Program) -> LppoResult<HashMap<String, Procedure
         for proc in module.procedures {
             let qualified_name = format!("{}::{}", module.name, proc.name);
             if procedures.contains_key(&qualified_name) {
-                return Err(LppoError::DuplicateProcedure(qualified_name));
+                return Err(LppoError::duplicate_procedure(qualified_name));
             }
             procedures.insert(qualified_name, compile_procedure(proc));
         }
@@ -22,7 +22,7 @@ pub fn compile_program(program: Program) -> LppoResult<HashMap<String, Procedure
     // Compile top-level procedures
     for proc in program.procedures {
         if procedures.contains_key(&proc.name) {
-            return Err(LppoError::DuplicateProcedure(proc.name));
+            return Err(LppoError::duplicate_procedure(proc.name));
         }
         procedures.insert(proc.name.clone(), compile_procedure(proc));
     }
