@@ -139,12 +139,10 @@ impl<'a> Lexer<'a> {
                 self.bump();
                 self.bump();
                 // scan until '*/' or EOF
-                let mut found_end = false;
                 while let Some(ch) = self.bump() {
                     if ch == b'*' && self.peek() == Some(b'/') {
                         // consume '/'
                         self.bump();
-                        found_end = true;
                         break;
                     }
                 }
@@ -217,7 +215,7 @@ impl<'a> Lexer<'a> {
                     // read number (integer)
                     let mut num = (ch - b'0') as i64;
                     while let Some(d) = self.peek() {
-                        if (b'0'..=b'9').contains(&d) {
+                        if d.is_ascii_digit() {
                             self.bump();
                             num = num * 10 + (d - b'0') as i64;
                         } else {

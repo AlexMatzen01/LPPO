@@ -99,7 +99,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
             env.get(&full_name)
                 .or_else(|| env.get(&qn.name))
                 .cloned()
-                .ok_or_else(|| LppoError::UnknownVariable(full_name))
+                .ok_or(LppoError::UnknownVariable(full_name))
         }
         Expr::BinaryOp { left, op, right } => {
             let l = eval_expr(left, env)?;
@@ -222,11 +222,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 _ => Err(LppoError::TypeError(format!("unknown method: {}", method))),
             }
         }
-        Expr::FieldAccess { target, field } => {
+        Expr::FieldAccess { target: _, field } => {
             // For now, we don't have structs, so this is an error
             Err(LppoError::TypeError(format!("field access not yet implemented: {}", field)))
         }
-        Expr::Ref { target, lifetime, is_mut } => {
+        Expr::Ref { target, lifetime: _, is_mut: _ } => {
             // In our simplified runtime, references are just the value itself
             // Full reference semantics would require borrow checking
             eval_expr(target, env)
@@ -271,7 +271,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 (v, _) => Ok(v), // passthrough for same type
             }
         }
-        Expr::Borrow { target, lifetime } => {
+        Expr::Borrow { target, lifetime: _ } => {
             // Simplified: borrow is just like a reference
             eval_expr(target, env)
         }
