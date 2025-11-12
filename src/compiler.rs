@@ -1,12 +1,25 @@
 use std::collections::HashMap;
 
-use crate::ast::{Procedure, Program, Statement, Expr};
+use crate::ast::{Procedure, Program, Statement, Expr, QualifiedName};
 use crate::error::{LppoError, LppoResult};
 use crate::runtime::{Operation, ProcedureBody};
 
 /// Converts an LPPO program into an executable representation.
 pub fn compile_program(program: Program) -> LppoResult<HashMap<String, ProcedureBody>> {
     let mut procedures = HashMap::new();
+    
+    // Compile module procedures with qualified names
+    for module in program.modules {
+        for proc in module.procedures {
+            let qualified_name = format!("{}::{}", module.name, proc.name);
+            if procedures.contains_key(&qualified_name) {
+                return Err(LppoError::DuplicateProcedure(qualified_name));
+            }
+            procedures.insert(qualified_name, compile_procedure(proc));
+        }
+    }
+    
+    // Compile top-level procedures
     for proc in program.procedures {
         if procedures.contains_key(&proc.name) {
             return Err(LppoError::DuplicateProcedure(proc.name));
@@ -22,14 +35,27 @@ fn compile_procedure(procedure: Procedure) -> ProcedureBody {
         .into_iter()
         .map(compile_statement)
         .collect();
-    ProcedureBody { params: procedure.params.clone(), operations }
+    // Convert Parameters to just their names for runtime (types are compile-time only)
+    let param_names: Vec<String> = procedure.params.into_iter().map(|p| p.name).collect();
+    ProcedureBody { params: param_names, operations }
+}
+
+fn qualified_name_to_string(qn: &QualifiedName) -> String {
+    if qn.path.is_empty() {
+        qn.name.clone()
+    } else {
+        format!("{}::{}", qn.path.join("::"), qn.name)
+    }
 }
 
 fn compile_statement(statement: Statement) -> Operation {
     match statement {
         Statement::Emit(exprs) => Operation::Emit(exprs),
         Statement::Parallel(branches) => Operation::Parallel(branches),
-        Statement::Call(name, args) => Operation::Call(name, args),
+        Statement::Call(qualified_name, args) => {
+            let name = qualified_name_to_string(&qualified_name);
+            Operation::Call(name, args)
+        }
         Statement::If { cond, then_branch, elifs, else_branch } => {
             // compile nested statements into operations
             let then_ops = then_branch.into_iter().map(compile_statement).collect();
@@ -41,7 +67,8 @@ fn compile_statement(statement: Statement) -> Operation {
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::While { cond, ops }
         }
-        Statement::For { var, iterable, body } => {
+        Statement::For { var, typ, iterable, body } => {
+            // Type annotation is compile-time only, runtime doesn't track it
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::For { var, iterable, ops }
         }
@@ -52,23 +79,61 @@ fn compile_statement(statement: Statement) -> Operation {
         Statement::Break => Operation::Break,
         Statement::Continue => Operation::Continue,
         Statement::Return(expr) => Operation::Return(expr),
-        Statement::Let(name, expr) => Operation::Let(name, expr),
+        Statement::Let { name, typ, expr, is_mut, ownership } => {
+            // Type, mutability, and ownership are compile-time only
+            // At runtime we just bind the value to the name
+            Operation::Let(name, expr)
+        }
+        Statement::Alloc { var, typ, location, size } => {
+            // For now, treat alloc as creating an array of the specified size
+            // This is a simplified implementation
+            Operation::Let(var, Expr::Array(vec![]))
+        }
+        Statement::Dealloc(var) => {
+            // Dealloc is a no-op in our simplified runtime (we rely on Rust's GC)
+            // But we can remove the variable from scope
+            Operation::Let(var, Expr::Int(0)) // placeholder
+        }
+        Statement::Move { source, target } => {
+            // Move is semantically like let target = source
+            Operation::Let(target, Expr::Var(source))
+        }
+        Statement::Copy { source, target } => {
+            // Copy is also like let target = source (values are copied)
+            Operation::Let(target, Expr::Var(source))
+        }
+        Statement::Scope { name, body } => {
+            // Scope blocks just execute their body
+            let ops = body.into_iter().map(compile_statement).collect();
+            Operation::Scope { ops }
+        }
+        Statement::Unsafe { body } => {
+            // Unsafe blocks are treated as normal blocks at runtime
+            let ops = body.into_iter().map(compile_statement).collect();
+            Operation::Unsafe { ops }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::TypeAnnotation;
 
     #[test]
     fn compiles_emit_and_parallel() {
         let program = Program {
+            modules: vec![],
             procedures: vec![Procedure {
-        name: "main".to_string(),
-        params: vec![],
-        statements: vec![
-                        Statement::Emit(vec![Expr::Str("hello".into())]),
-                        Statement::Parallel(vec![Expr::Str("one".into()), Expr::Str("two".into())]),
+                name: "main".to_string(),
+                params: vec![],
+                return_type: TypeAnnotation::Void,
+                lifetimes: vec![],
+                is_public: false,
+                is_unsafe: false,
+                statements: vec![
+                    Statement::Emit(vec![Expr::Str("hello".into())]),
+                    Statement::Parallel(vec![Expr::Str("one".into()), Expr::Str("two".into())]),
                 ],
             }],
         };

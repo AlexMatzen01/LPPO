@@ -60,6 +60,14 @@ pub enum Operation {
     Continue,
     /// Return from procedure
     Return(Option<Expr>),
+    /// Explicit scope block
+    Scope {
+        ops: Vec<Operation>,
+    },
+    /// Unsafe block (treated same as scope at runtime)
+    Unsafe {
+        ops: Vec<Operation>,
+    },
 }
 
 /// Runtime value types used during evaluation.
@@ -80,6 +88,19 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
             .get(name)
             .cloned()
             .ok_or_else(|| LppoError::UnknownVariable(name.clone())),
+        Expr::QualifiedVar(qn) => {
+            // For now, treat qualified variables as simple variables
+            // Full namespace support would require a more sophisticated environment
+            let full_name = if qn.path.is_empty() {
+                qn.name.clone()
+            } else {
+                format!("{}::{}", qn.path.join("::"), qn.name)
+            };
+            env.get(&full_name)
+                .or_else(|| env.get(&qn.name))
+                .cloned()
+                .ok_or_else(|| LppoError::UnknownVariable(full_name))
+        }
         Expr::BinaryOp { left, op, right } => {
             let l = eval_expr(left, env)?;
             let r = eval_expr(right, env)?;
@@ -204,6 +225,55 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         Expr::FieldAccess { target, field } => {
             // For now, we don't have structs, so this is an error
             Err(LppoError::TypeError(format!("field access not yet implemented: {}", field)))
+        }
+        Expr::Ref { target, lifetime, is_mut } => {
+            // In our simplified runtime, references are just the value itself
+            // Full reference semantics would require borrow checking
+            eval_expr(target, env)
+        }
+        Expr::Deref(target) => {
+            // Dereference is also just evaluating the target
+            eval_expr(target, env)
+        }
+        Expr::SizeOf(typ) => {
+            // Return a placeholder size based on type
+            let size = match typ {
+                crate::ast::TypeAnnotation::Int64 => 8,
+                crate::ast::TypeAnnotation::Bool => 1,
+                crate::ast::TypeAnnotation::Str => 16, // pointer size
+                crate::ast::TypeAnnotation::Arr(_) => 24, // vector size
+                crate::ast::TypeAnnotation::Void => 0,
+                _ => 8, // default
+            };
+            Ok(Value::Int(size))
+        }
+        Expr::AlignOf(typ) => {
+            // Return a placeholder alignment based on type
+            let align = match typ {
+                crate::ast::TypeAnnotation::Int64 => 8,
+                crate::ast::TypeAnnotation::Bool => 1,
+                _ => 8,
+            };
+            Ok(Value::Int(align))
+        }
+        Expr::Cast { expr, to_type } => {
+            // Simple type casting
+            let val = eval_expr(expr, env)?;
+            match (val, to_type) {
+                (Value::Int(i), crate::ast::TypeAnnotation::Bool) => Ok(Value::Bool(i != 0)),
+                (Value::Int(i), crate::ast::TypeAnnotation::Str) => Ok(Value::Str(i.to_string())),
+                (Value::Bool(b), crate::ast::TypeAnnotation::Int64) => Ok(Value::Int(if b { 1 } else { 0 })),
+                (Value::Str(s), crate::ast::TypeAnnotation::Int64) => {
+                    s.parse::<i64>()
+                        .map(Value::Int)
+                        .map_err(|_| LppoError::TypeError("cannot cast string to Int64".into()))
+                }
+                (v, _) => Ok(v), // passthrough for same type
+            }
+        }
+        Expr::Borrow { target, lifetime } => {
+            // Simplified: borrow is just like a reference
+            eval_expr(target, env)
         }
     }
 }
@@ -376,6 +446,20 @@ impl Executor {
                         None
                     };
                     return Ok(ControlFlow::Return(v));
+                }
+                Operation::Scope { ops } => {
+                    // Execute operations in the scope
+                    let cf = self.execute_ops(ops, env)?;
+                    if cf != ControlFlow::None {
+                        return Ok(cf);
+                    }
+                }
+                Operation::Unsafe { ops } => {
+                    // Unsafe blocks are treated the same as scope at runtime
+                    let cf = self.execute_ops(ops, env)?;
+                    if cf != ControlFlow::None {
+                        return Ok(cf);
+                    }
                 }
             }
         }

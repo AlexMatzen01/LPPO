@@ -41,6 +41,41 @@ pub enum Token {
     Caret,
     Tilde,
     Arrow,
+    // Type system tokens
+    Colon,
+    DoubleColon,
+    TypeInt64,
+    TypeBool,
+    TypeStr,
+    TypeArr,
+    TypeVoid,
+    // Memory management tokens
+    Alloc,
+    Dealloc,
+    Ref,
+    Deref,
+    Move,
+    Copy,
+    Borrow,
+    Mut,
+    Own,
+    // Lifetime tokens
+    Lifetime(String), // 'a, 'b, etc.
+    // Namespace tokens
+    Module,
+    Use,
+    Pub,
+    // Explicit scope tokens
+    Scope,
+    End,
+    // Advanced memory
+    Heap,
+    Stack,
+    SizeOf,
+    AlignOf,
+    Cast,
+    Unsafe,
+    On, // for "on heap" or "on stack"
     Number(i64),
     Plus,
     Minus,
@@ -209,6 +244,25 @@ impl<'a> Lexer<'a> {
                 }
                 b',' => Token::Comma,
                 b'.' => Token::Dot,
+                b':' => {
+                    if self.peek() == Some(b':') {
+                        self.bump();
+                        Token::DoubleColon
+                    } else {
+                        Token::Colon
+                    }
+                }
+                b'\'' => {
+                    // Lifetime annotation like 'a or 'static
+                    let mut lifetime = String::new();
+                    while matches!(self.peek(), Some(b'a'..=b'z' | b'A'..=b'Z' | b'_')) {
+                        lifetime.push(self.bump().unwrap() as char);
+                    }
+                    if lifetime.is_empty() {
+                        return Err(LppoError::UnexpectedCharacter { ch: '\'', position: self.position });
+                    }
+                    Token::Lifetime(lifetime)
+                }
                 b'[' => Token::LBracket,
                 b']' => Token::RBracket,
                 b'%' => Token::Modulo,
@@ -267,6 +321,37 @@ impl<'a> Lexer<'a> {
                             "or" => Token::Or,
                             "not" => Token::Not,
                     "call" => Token::Call,
+                    // Type keywords
+                    "Int64" => Token::TypeInt64,
+                    "Bool" => Token::TypeBool,
+                    "Str" => Token::TypeStr,
+                    "Arr" => Token::TypeArr,
+                    "Void" => Token::TypeVoid,
+                    // Memory management keywords
+                    "alloc" => Token::Alloc,
+                    "dealloc" => Token::Dealloc,
+                    "ref" => Token::Ref,
+                    "deref" => Token::Deref,
+                    "move" => Token::Move,
+                    "copy" => Token::Copy,
+                    "borrow" => Token::Borrow,
+                    "mut" => Token::Mut,
+                    "own" => Token::Own,
+                    // Namespace keywords
+                    "module" => Token::Module,
+                    "use" => Token::Use,
+                    "pub" => Token::Pub,
+                    // Scope keywords
+                    "scope" => Token::Scope,
+                    "end" => Token::End,
+                    // Advanced memory
+                    "heap" => Token::Heap,
+                    "stack" => Token::Stack,
+                    "sizeof" => Token::SizeOf,
+                    "alignof" => Token::AlignOf,
+                    "cast" => Token::Cast,
+                    "unsafe" => Token::Unsafe,
+                    "on" => Token::On,
                     _ => Token::Identifier(ident),
                 }
             }

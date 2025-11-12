@@ -1,4 +1,4 @@
-use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp};
+use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp, TypeAnnotation, Parameter, QualifiedName, MemoryLocation, OwnershipKind, Module};
 use crate::error::{LppoError, LppoResult};
 use crate::lexer::{Lexer, Token};
 
@@ -27,14 +27,69 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_program(&mut self) -> LppoResult<Program> {
+        let mut modules = Vec::new();
         let mut procedures = Vec::new();
+        
         while self.lookahead != Token::Eof {
+            match &self.lookahead {
+                Token::Module => {
+                    modules.push(self.parse_module()?);
+                }
+                Token::Proc | Token::Pub | Token::Unsafe => {
+                    procedures.push(self.parse_procedure()?);
+                }
+                _ => {
+                    return Err(LppoError::UnexpectedToken {
+                        expected: "module or procedure",
+                        position: self.position,
+                    });
+                }
+            }
+        }
+        Ok(Program { modules, procedures })
+    }
+    
+    fn parse_module(&mut self) -> LppoResult<Module> {
+        self.expect(Token::Module)?;
+        let name = match self.lookahead.clone() {
+            Token::Identifier(name) => {
+                self.advance()?;
+                name
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "module name",
+                    position: self.position,
+                })
+            }
+        };
+        
+        self.expect(Token::LBrace)?;
+        let mut procedures = Vec::new();
+        while self.lookahead != Token::RBrace {
             procedures.push(self.parse_procedure()?);
         }
-        Ok(Program { procedures })
+        self.expect(Token::RBrace)?;
+        
+        Ok(Module { name, procedures })
     }
 
     fn parse_procedure(&mut self) -> LppoResult<Procedure> {
+        // Check for pub and unsafe modifiers
+        let is_public = if self.lookahead == Token::Pub {
+            self.advance()?;
+            true
+        } else {
+            false
+        };
+        
+        let is_unsafe = if self.lookahead == Token::Unsafe {
+            self.advance()?;
+            true
+        } else {
+            false
+        };
+        
         self.expect(Token::Proc)?;
         let name = match self.lookahead.clone() {
             Token::Identifier(name) => {
@@ -48,33 +103,78 @@ impl<'a> Parser<'a> {
                 })
             }
         };
-        // optional parameter list
-        let mut params = Vec::new();
-        if self.lookahead == Token::LParen {
-            self.advance()?; // consume '('
-            if self.lookahead != Token::RParen {
-                loop {
-                    match self.lookahead.clone() {
-                        Token::Identifier(name) => {
-                            params.push(name);
-                            self.advance()?;
-                        }
-                        _ => {
-                            return Err(LppoError::UnexpectedToken {
-                                expected: "parameter name",
-                                position: self.position,
-                            })
-                        }
-                    }
-                    if self.lookahead == Token::Comma {
+        
+        // Parse lifetime parameters <'a, 'b>
+        let mut lifetimes = Vec::new();
+        if self.lookahead == Token::Less {
+            self.advance()?;
+            loop {
+                match self.lookahead.clone() {
+                    Token::Lifetime(lt) => {
+                        lifetimes.push(lt);
                         self.advance()?;
-                        continue;
                     }
-                    break;
+                    _ => {
+                        return Err(LppoError::UnexpectedToken {
+                            expected: "lifetime annotation",
+                            position: self.position,
+                        })
+                    }
                 }
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                    continue;
+                }
+                break;
             }
-            self.expect(Token::RParen)?;
+            self.expect(Token::Greater)?;
         }
+        
+        // REQUIRED parameter list with EXPLICIT TYPES
+        self.expect(Token::LParen)?;
+        let mut params = Vec::new();
+        if self.lookahead != Token::RParen {
+            loop {
+                let name = match self.lookahead.clone() {
+                    Token::Identifier(name) => {
+                        self.advance()?;
+                        name
+                    }
+                    _ => {
+                        return Err(LppoError::UnexpectedToken {
+                            expected: "parameter name",
+                            position: self.position,
+                        })
+                    }
+                };
+                
+                // REQUIRE colon and type
+                self.expect(Token::Colon)?;
+                let typ = self.parse_type()?;
+                
+                // Optional lifetime
+                let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
+                    let lt = lt.clone();
+                    self.advance()?;
+                    Some(lt)
+                } else {
+                    None
+                };
+                
+                params.push(Parameter { name, typ, lifetime });
+                
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect(Token::RParen)?;
+        
+        // REQUIRE return type annotation
+        self.expect(Token::Arrow)?;
+        let return_type = self.parse_type()?;
 
         self.expect(Token::LBrace)?;
         let mut statements = Vec::new();
@@ -82,7 +182,77 @@ impl<'a> Parser<'a> {
             statements.push(self.parse_statement()?);
         }
         self.expect(Token::RBrace)?;
-        Ok(Procedure { name, params, statements })
+        Ok(Procedure { 
+            name, 
+            params, 
+            return_type,
+            lifetimes,
+            statements,
+            is_public,
+            is_unsafe,
+        })
+    }
+    
+    fn parse_type(&mut self) -> LppoResult<TypeAnnotation> {
+        match &self.lookahead {
+            Token::TypeInt64 => {
+                self.advance()?;
+                Ok(TypeAnnotation::Int64)
+            }
+            Token::TypeBool => {
+                self.advance()?;
+                Ok(TypeAnnotation::Bool)
+            }
+            Token::TypeStr => {
+                self.advance()?;
+                Ok(TypeAnnotation::Str)
+            }
+            Token::TypeVoid => {
+                self.advance()?;
+                Ok(TypeAnnotation::Void)
+            }
+            Token::TypeArr => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Arr(Box::new(inner)))
+            }
+            Token::Ref => {
+                self.advance()?;
+                let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
+                    let lt = lt.clone();
+                    self.advance()?;
+                    Some(lt)
+                } else {
+                    None
+                };
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Ref(Box::new(inner), lifetime))
+            }
+            Token::Mut => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Mut(Box::new(inner)))
+            }
+            Token::Own => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Own(Box::new(inner)))
+            }
+            _ => {
+                Err(LppoError::UnexpectedToken {
+                    expected: "type annotation",
+                    position: self.position,
+                })
+            }
+        }
     }
 
     fn parse_statement(&mut self) -> LppoResult<Statement> {
@@ -106,12 +276,176 @@ impl<'a> Parser<'a> {
             }
             Token::Return => self.parse_return(),
             Token::Parallel => self.parse_parallel(),
+            Token::Alloc => self.parse_alloc(),
+            Token::Dealloc => self.parse_dealloc(),
+            Token::Move => self.parse_move(),
+            Token::Copy => self.parse_copy(),
+            Token::Scope => self.parse_scope(),
+            Token::Unsafe => self.parse_unsafe_block(),
             Token::Eof | Token::RBrace => Err(LppoError::UnexpectedEndOfInput),
             _ => Err(LppoError::UnexpectedToken {
                 expected: "statement",
                 position: self.position,
             }),
         }
+    }
+    
+    fn parse_alloc(&mut self) -> LppoResult<Statement> {
+        self.expect(Token::Alloc)?;
+        self.expect(Token::Less)?;
+        let typ = self.parse_type()?;
+        self.expect(Token::Greater)?;
+        
+        let var = match self.lookahead.clone() {
+            Token::Identifier(n) => {
+                self.advance()?;
+                n
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "variable name",
+                    position: self.position,
+                })
+            }
+        };
+        
+        // Parse on heap or stack
+        self.expect(Token::On)?;
+        let location = match &self.lookahead {
+            Token::Heap => {
+                self.advance()?;
+                MemoryLocation::Heap
+            }
+            Token::Stack => {
+                self.advance()?;
+                MemoryLocation::Stack
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "heap or stack",
+                    position: self.position,
+                })
+            }
+        };
+        
+        // Parse size expression
+        self.expect(Token::LBracket)?;
+        let size = self.parse_expression()?;
+        self.expect(Token::RBracket)?;
+        self.expect(Token::Semicolon)?;
+        
+        Ok(Statement::Alloc { var, typ, location, size })
+    }
+    
+    fn parse_dealloc(&mut self) -> LppoResult<Statement> {
+        self.expect(Token::Dealloc)?;
+        let var = match self.lookahead.clone() {
+            Token::Identifier(n) => {
+                self.advance()?;
+                n
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "variable name",
+                    position: self.position,
+                })
+            }
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(Statement::Dealloc(var))
+    }
+    
+    fn parse_move(&mut self) -> LppoResult<Statement> {
+        self.expect(Token::Move)?;
+        let source = match self.lookahead.clone() {
+            Token::Identifier(n) => {
+                self.advance()?;
+                n
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "source variable",
+                    position: self.position,
+                })
+            }
+        };
+        self.expect(Token::Arrow)?; // ->
+        let target = match self.lookahead.clone() {
+            Token::Identifier(n) => {
+                self.advance()?;
+                n
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "target variable",
+                    position: self.position,
+                })
+            }
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(Statement::Move { source, target })
+    }
+    
+    fn parse_copy(&mut self) -> LppoResult<Statement> {
+        self.expect(Token::Copy)?;
+        let source = match self.lookahead.clone() {
+            Token::Identifier(n) => {
+                self.advance()?;
+                n
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "source variable",
+                    position: self.position,
+                })
+            }
+        };
+        self.expect(Token::Arrow)?;
+        let target = match self.lookahead.clone() {
+            Token::Identifier(n) => {
+                self.advance()?;
+                n
+            }
+            _ => {
+                return Err(LppoError::UnexpectedToken {
+                    expected: "target variable",
+                    position: self.position,
+                })
+            }
+        };
+        self.expect(Token::Semicolon)?;
+        Ok(Statement::Copy { source, target })
+    }
+    
+    fn parse_scope(&mut self) -> LppoResult<Statement> {
+        self.expect(Token::Scope)?;
+        let name = if let Token::Identifier(n) = &self.lookahead {
+            let n = n.clone();
+            self.advance()?;
+            Some(n)
+        } else {
+            None
+        };
+        
+        self.expect(Token::LBrace)?;
+        let mut body = Vec::new();
+        while self.lookahead != Token::RBrace {
+            body.push(self.parse_statement()?);
+        }
+        self.expect(Token::RBrace)?;
+        
+        Ok(Statement::Scope { name, body })
+    }
+    
+    fn parse_unsafe_block(&mut self) -> LppoResult<Statement> {
+        self.expect(Token::Unsafe)?;
+        self.expect(Token::LBrace)?;
+        let mut body = Vec::new();
+        while self.lookahead != Token::RBrace {
+            body.push(self.parse_statement()?);
+        }
+        self.expect(Token::RBrace)?;
+        Ok(Statement::Unsafe { body })
     }
 
     fn parse_if(&mut self) -> LppoResult<Statement> {
@@ -178,6 +512,11 @@ impl<'a> Parser<'a> {
                 })
             }
         };
+        
+        // REQUIRE explicit type for loop variable
+        self.expect(Token::Colon)?;
+        let typ = self.parse_type()?;
+        
         self.expect(Token::In)?;
         let iterable = self.parse_expression()?;
         self.expect(Token::LBrace)?;
@@ -186,7 +525,7 @@ impl<'a> Parser<'a> {
             body.push(self.parse_statement()?);
         }
         self.expect(Token::RBrace)?;
-        Ok(Statement::For { var, iterable, body })
+        Ok(Statement::For { var, typ, iterable, body })
     }
 
     fn parse_loop(&mut self) -> LppoResult<Statement> {
@@ -226,6 +565,32 @@ impl<'a> Parser<'a> {
 
     fn parse_let(&mut self) -> LppoResult<Statement> {
         self.expect(Token::Let)?;
+        
+        // Check for mut keyword
+        let is_mut = if self.lookahead == Token::Mut {
+            self.advance()?;
+            true
+        } else {
+            false
+        };
+        
+        // Check for ownership qualifier (own, ref, borrow)
+        let ownership = match &self.lookahead {
+            Token::Own => {
+                self.advance()?;
+                OwnershipKind::Own
+            }
+            Token::Ref => {
+                self.advance()?;
+                OwnershipKind::Ref
+            }
+            Token::Borrow => {
+                self.advance()?;
+                OwnershipKind::Borrow
+            }
+            _ => OwnershipKind::Own, // default
+        };
+        
         let name = match self.lookahead.clone() {
             Token::Identifier(n) => {
                 self.advance()?;
@@ -238,11 +603,16 @@ impl<'a> Parser<'a> {
                 })
             }
         };
+        
+        // REQUIRE explicit type annotation
+        self.expect(Token::Colon)?;
+        let typ = self.parse_type()?;
+        
         // expect an equals token
         self.expect(Token::Equals)?;
         let expr = self.parse_expression()?;
         self.expect(Token::Semicolon)?;
-        Ok(Statement::Let(name, expr))
+        Ok(Statement::Let { name, typ, expr, is_mut, ownership })
     }
 
     fn parse_expression(&mut self) -> LppoResult<Expr> {
@@ -396,6 +766,75 @@ impl<'a> Parser<'a> {
                 let operand = self.parse_unary()?;
                 Ok(Expr::UnaryOp { op: UnaryOp::BitNot, operand: Box::new(operand) })
             }
+            Token::Ref => {
+                self.advance()?;
+                let is_mut = if self.lookahead == Token::Mut {
+                    self.advance()?;
+                    true
+                } else {
+                    false
+                };
+                let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
+                    let lt = lt.clone();
+                    self.advance()?;
+                    Some(lt)
+                } else {
+                    None
+                };
+                let target = self.parse_unary()?;
+                Ok(Expr::Ref {
+                    target: Box::new(target),
+                    lifetime,
+                    is_mut,
+                })
+            }
+            Token::Deref => {
+                self.advance()?;
+                let operand = self.parse_unary()?;
+                Ok(Expr::Deref(Box::new(operand)))
+            }
+            Token::Borrow => {
+                self.advance()?;
+                let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
+                    let lt = lt.clone();
+                    self.advance()?;
+                    Some(lt)
+                } else {
+                    None
+                };
+                let target = self.parse_unary()?;
+                Ok(Expr::Borrow {
+                    target: Box::new(target),
+                    lifetime,
+                })
+            }
+            Token::SizeOf => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let typ = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(Expr::SizeOf(typ))
+            }
+            Token::AlignOf => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let typ = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(Expr::AlignOf(typ))
+            }
+            Token::Cast => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let to_type = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                self.expect(Token::LParen)?;
+                let expr = self.parse_expression()?;
+                self.expect(Token::RParen)?;
+                Ok(Expr::Cast {
+                    expr: Box::new(expr),
+                    to_type,
+                })
+            }
             _ => self.parse_postfix(),
         }
     }
@@ -468,9 +907,16 @@ impl<'a> Parser<'a> {
                 self.advance()?; 
                 Ok(Expr::Bool(false)) 
             }
-            Token::Identifier(name) => { 
-                self.advance()?; 
-                Ok(Expr::Var(name)) 
+            Token::Identifier(_) => {
+                // Check if this is a qualified name
+                let qualified = self.parse_qualified_name()?;
+                
+                // If it's just a simple name, return Var, otherwise QualifiedVar
+                if qualified.path.is_empty() {
+                    Ok(Expr::Var(qualified.name))
+                } else {
+                    Ok(Expr::QualifiedVar(qualified))
+                }
             }
             Token::LParen => { 
                 self.advance()?; 
@@ -500,38 +946,63 @@ impl<'a> Parser<'a> {
 
     fn parse_call(&mut self) -> LppoResult<Statement> {
         self.expect(Token::Call)?;
-        let name = match self.lookahead.clone() {
-            Token::Identifier(name) => {
+        
+        // Parse qualified name (module::submodule::procedure)
+        let qualified_name = self.parse_qualified_name()?;
+
+        // REQUIRE argument list with parentheses
+        self.expect(Token::LParen)?;
+        let mut args = Vec::new();
+        if self.lookahead != Token::RParen {
+            loop {
+                args.push(self.parse_expression()?);
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect(Token::RParen)?;
+
+        self.expect(Token::Semicolon)?;
+        Ok(Statement::Call(qualified_name, args))
+    }
+    
+    fn parse_qualified_name(&mut self) -> LppoResult<QualifiedName> {
+        let mut path = Vec::new();
+        let mut name = match self.lookahead.clone() {
+            Token::Identifier(n) => {
                 self.advance()?;
-                name
+                n
             }
             _ => {
                 return Err(LppoError::UnexpectedToken {
-                    expected: "procedure name",
+                    expected: "identifier",
                     position: self.position,
                 })
             }
         };
-
-        // optional argument list: call name(arg, ...);
-        let mut args = Vec::new();
-        if self.lookahead == Token::LParen {
-            self.advance()?; // consume '('
-            if self.lookahead != Token::RParen {
-                loop {
-                    args.push(self.parse_expression()?);
-                    if self.lookahead == Token::Comma {
-                        self.advance()?;
-                        continue;
-                    }
-                    break;
+        
+        // Parse qualified path separators
+        while self.lookahead == Token::DoubleColon {
+            self.advance()?;
+            path.push(name);
+            name = match self.lookahead.clone() {
+                Token::Identifier(n) => {
+                    self.advance()?;
+                    n
                 }
-            }
-            self.expect(Token::RParen)?;
+                _ => {
+                    return Err(LppoError::UnexpectedToken {
+                        expected: "identifier after ::",
+                        position: self.position,
+                    })
+                }
+            };
         }
-
-        self.expect(Token::Semicolon)?;
-        Ok(Statement::Call(name, args))
+        
+        Ok(QualifiedName { path, name })
     }
 
     fn parse_parallel(&mut self) -> LppoResult<Statement> {

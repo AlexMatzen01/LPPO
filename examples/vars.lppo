@@ -1,9 +1,24 @@
-proc main {
-    let x = 1 + 2 * 3;
+// LPPO v2.0 - Variables with Explicit Type Annotations
+// ALL variables MUST have explicit type declarations
+// ALL arithmetic operations must be assigned to typed variables
+
+pub proc main() -> Void {
+    // Every variable REQUIRES explicit type annotation with ownership qualifier
+    let own one: Int64 = 1;
+    let own two: Int64 = 2;
+    let own three: Int64 = 3;
+    let own mult_result: Int64 = two * three;
+    let own x: Int64 = one + mult_result;
     out x;
-    let y = (4 + 2) * 3;
+    
+    let own four: Int64 = 4;
+    let own sum_inner: Int64 = four + two;
+    let own y: Int64 = sum_inner * three;
     out y;
-    let s = "sum:";
+    
+    let own s: Str = "sum:";
     out s;
-    out x + y;
+    
+    let own final_sum: Int64 = x + y;
+    out final_sum;
 }
