@@ -49,7 +49,7 @@
 
                 <h4>Key Types</h4>
                 <pre><code class="language-rust">pub struct Lexer {
-    input: Vec&lt;char&gt;,
+    input: Vec<char>,
     position: usize,
 }
 
@@ -73,8 +73,8 @@ pub enum Token {
                 <h4>Key Functions</h4>
                 <ul>
                     <li><code>new(input: String) -> Lexer</code> - Creates a new lexer</li>
-                    <li><code>tokenize() -> Result&lt;Vec&lt;Token&gt;&gt;</code> - Tokenizes the input</li>
-                    <li><code>next_token() -> Option&lt;Token&gt;</code> - Returns the next token</li>
+                    <li><code>tokenize() -> Result<Vec<Token>></code> - Tokenizes the input</li>
+                    <li><code>next_token() -> Option<Token></code> - Returns the next token</li>
                 </ul>
 
                 <h3>ast.rs - Abstract Syntax Tree</h3>
@@ -83,27 +83,27 @@ pub enum Token {
                 <h4>Statement Types</h4>
                 <pre><code class="language-rust">pub enum Statement {
     Let { name: String, value: Expr },
-    Out { values: Vec&lt;Expr&gt; },
+    Out { values: Vec<Expr> },
     If {
         condition: Expr,
-        then_block: Vec&lt;Statement&gt;,
-        elif_blocks: Vec&lt;(Expr, Vec&lt;Statement&gt;)&gt;,
-        else_block: Option&lt;Vec&lt;Statement&gt;&gt;,
+        then_block: Vec<Statement>,
+        elif_blocks: Vec<(Expr, Vec<Statement>)>,
+        else_block: Option<Vec<Statement>>,
     },
     While {
         condition: Expr,
-        body: Vec&lt;Statement&gt;,
+        body: Vec<Statement>,
     },
     For {
         var: String,
         iterable: Expr,
-        body: Vec&lt;Statement&gt;,
+        body: Vec<Statement>,
     },
-    Loop { body: Vec&lt;Statement&gt; },
+    Loop { body: Vec<Statement> },
     Break,
     Continue,
-    Call { name: String, args: Vec&lt;Expr&gt; },
-    Parallel { body: Vec&lt;Statement&gt; },
+    Call { name: String, args: Vec<Expr> },
+    Parallel { body: Vec<Statement> },
 }</code></pre>
 
                 <h4>Expression Types</h4>
@@ -111,25 +111,25 @@ pub enum Token {
     Integer(i64),
     Bool(bool),
     String(String),
-    Array(Vec&lt;Expr&gt;),
+    Array(Vec<Expr>),
     Variable(String),
     BinaryOp {
-        left: Box&lt;Expr&gt;,
+        left: Box<Expr>,
         op: BinaryOp,
-        right: Box&lt;Expr&gt;,
+        right: Box<Expr>,
     },
     UnaryOp {
         op: UnaryOp,
-        operand: Box&lt;Expr&gt;,
+        operand: Box<Expr>,
     },
     Index {
-        target: Box&lt;Expr&gt;,
-        index: Box&lt;Expr&gt;,
+        target: Box<Expr>,
+        index: Box<Expr>,
     },
     MethodCall {
-        target: Box&lt;Expr&gt;,
+        target: Box<Expr>,
         method: String,
-        args: Vec&lt;Expr&gt;,
+        args: Vec<Expr>,
     },
 }</code></pre>
 
@@ -159,10 +159,10 @@ pub enum UnaryOp {
 
                 <h4>Key Functions</h4>
                 <ul>
-                    <li><code>parse(tokens: Vec&lt;Token&gt;) -> Result&lt;Vec&lt;Procedure&gt;&gt;</code></li>
-                    <li><code>parse_procedure() -> Result&lt;Procedure&gt;</code></li>
-                    <li><code>parse_statement() -> Result&lt;Statement&gt;</code></li>
-                    <li><code>parse_expression() -> Result&lt;Expr&gt;</code></li>
+                    <li><code>parse(tokens: Vec<Token>) -> Result<Vec<Procedure>></code></li>
+                    <li><code>parse_procedure() -> Result<Procedure></code></li>
+                    <li><code>parse_statement() -> Result<Statement></code></li>
+                    <li><code>parse_expression() -> Result<Expr></code></li>
                 </ul>
 
                 <h4>Precedence Levels</h4>
@@ -185,14 +185,14 @@ pub enum UnaryOp {
                 <p>Lowers AST to runtime operations.</p>
 
                 <h4>Key Functions</h4>
-                <pre><code class="language-rust">pub fn compile(procedures: Vec&lt;Procedure&gt;) 
-    -> Result&lt;HashMap&lt;String, Vec&lt;Operation&gt;&gt;&gt;
+                <pre><code class="language-rust">pub fn compile(procedures: Vec<Procedure>) 
+    -> Result<HashMap<String, Vec<Operation>>>
 
 fn compile_statement(stmt: &Statement) 
-    -> Result&lt;Vec&lt;Operation&gt;&gt;
+    -> Result<Vec<Operation>>
 
 fn compile_expr(expr: &Expr) 
-    -> Result&lt;Operation&gt;</code></pre>
+    -> Result<Operation></code></pre>
 
                 <h3>runtime.rs - Runtime</h3>
                 <p>Executes compiled operations.</p>
@@ -202,19 +202,19 @@ fn compile_expr(expr: &Expr)
     Integer(i64),
     Bool(bool),
     String(String),
-    Array(Vec&lt;Value&gt;),
+    Array(Vec<Value>),
 }</code></pre>
 
                 <h4>Environment</h4>
                 <pre><code class="language-rust">pub struct Environment {
-    variables: HashMap&lt;String, Value&gt;,
+    variables: HashMap<String, Value>,
 }</code></pre>
 
                 <h4>Key Functions</h4>
                 <ul>
-                    <li><code>execute(procedures: HashMap&lt;String, Vec&lt;Op&gt;&gt;) -> Result&lt;()&gt;</code></li>
-                    <li><code>execute_procedure(name: &str, args: Vec&lt;Value&gt;) -> Result&lt;()&gt;</code></li>
-                    <li><code>eval_expr(expr: &Expr, env: &Environment) -> Result&lt;Value&gt;</code></li>
+                    <li><code>execute(procedures: HashMap<String, Vec<Op>>) -> Result<()></code></li>
+                    <li><code>execute_procedure(name: &str, args: Vec<Value>) -> Result<()></code></li>
+                    <li><code>eval_expr(expr: &Expr, env: &Environment) -> Result<Value></code></li>
                 </ul>
 
                 <h3>error.rs - Error Handling</h3>
@@ -231,7 +231,7 @@ fn compile_expr(expr: &Expr)
                 <h2>Command-Line Interface</h2>
 
                 <h3>Usage</h3>
-                <pre><code class="language-bash">lppo [OPTIONS] &lt;file.lppo&gt;</code></pre>
+                <pre><code class="language-bash">lppo [OPTIONS] <file.lppo></code></pre>
 
                 <h3>Options</h3>
                 <table>
@@ -247,7 +247,7 @@ fn compile_expr(expr: &Expr)
                             <td>Enable diagnostic output</td>
                         </tr>
                         <tr>
-                            <td><code>--compile-out &lt;file&gt;</code></td>
+                            <td><code>--compile-out <file></code></td>
                             <td>Compile to standalone executable</td>
                         </tr>
                     </tbody>
