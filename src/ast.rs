@@ -3,6 +3,10 @@
 pub struct Program {
     pub modules: Vec<Module>,
     pub procedures: Vec<Procedure>,
+    pub structs: Vec<StructDef>,
+    pub enums: Vec<EnumDef>,
+    pub traits: Vec<TraitDef>,
+    pub impls: Vec<ImplBlock>,
 }
 
 /// Represents a module for namespace organization
@@ -10,6 +14,66 @@ pub struct Program {
 pub struct Module {
     pub name: String,
     pub procedures: Vec<Procedure>,
+    pub structs: Vec<StructDef>,
+    pub enums: Vec<EnumDef>,
+}
+
+/// Struct definition with explicit fields
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructDef {
+    pub name: String,
+    pub fields: Vec<StructField>,
+    pub methods: Vec<Procedure>,
+    pub is_public: bool,
+    pub generic_params: Vec<String>,
+}
+
+/// Struct field with type and visibility
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructField {
+    pub name: String,
+    pub typ: TypeAnnotation,
+    pub is_public: bool,
+}
+
+/// Enum definition with variants
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumDef {
+    pub name: String,
+    pub variants: Vec<EnumVariant>,
+    pub is_public: bool,
+    pub generic_params: Vec<String>,
+}
+
+/// Enum variant with optional associated data
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumVariant {
+    pub name: String,
+    pub fields: Vec<TypeAnnotation>, // Tuple-style fields
+}
+
+/// Trait definition
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraitDef {
+    pub name: String,
+    pub methods: Vec<TraitMethod>,
+    pub is_public: bool,
+}
+
+/// Trait method signature
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraitMethod {
+    pub name: String,
+    pub params: Vec<Parameter>,
+    pub return_type: TypeAnnotation,
+}
+
+/// Implementation block
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplBlock {
+    pub trait_name: Option<String>, // None for inherent impl
+    pub type_name: String,
+    pub methods: Vec<Procedure>,
 }
 
 /// Type annotations required for all variables and parameters
@@ -23,6 +87,11 @@ pub enum TypeAnnotation {
     Ref(Box<TypeAnnotation>, Option<String>), // Reference with optional lifetime
     Own(Box<TypeAnnotation>), // Owned value
     Mut(Box<TypeAnnotation>), // Mutable reference
+    Custom(String), // User-defined types (structs, enums)
+    Generic(String, Vec<TypeAnnotation>), // Generic types like HashMap<Str, Int64>
+    Tuple(Vec<TypeAnnotation>), // Tuple types
+    Option(Box<TypeAnnotation>), // Option type
+    Result(Box<TypeAnnotation>, Box<TypeAnnotation>), // Result type
 }
 
 /// Parameter with explicit type and ownership annotations
@@ -120,6 +189,17 @@ pub enum Statement {
     Unsafe {
         body: Vec<Statement>,
     },
+    /// Match expression for pattern matching
+    Match {
+        expr: Expr,
+        arms: Vec<MatchArm>,
+    },
+    /// Struct instantiation: let x: Point = Point { x: 10, y: 20 };
+    StructInit {
+        name: String,
+        typ: TypeAnnotation,
+        fields: Vec<(String, Expr)>,
+    },
 }
 
 /// Qualified name for namespaced identifiers like module::submodule::name
@@ -143,6 +223,40 @@ pub enum OwnershipKind {
     Ref,     // Immutable reference
     MutRef,  // Mutable reference
     Borrow,  // Borrowed value
+}
+
+/// Match arm for pattern matching
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub guard: Option<Expr>,
+    pub body: Vec<Statement>,
+}
+
+/// Pattern for matching
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pattern {
+    /// Wildcard pattern _
+    Wildcard,
+    /// Literal pattern (number, string, bool)
+    Literal(Expr),
+    /// Variable binding
+    Variable(String),
+    /// Tuple pattern
+    Tuple(Vec<Pattern>),
+    /// Struct pattern
+    Struct {
+        name: String,
+        fields: Vec<(String, Pattern)>,
+    },
+    /// Enum variant pattern
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        fields: Vec<Pattern>,
+    },
+    /// Or pattern (multiple alternatives)
+    Or(Vec<Pattern>),
 }
 
 /// Expression nodes for simple arithmetic and string literals.

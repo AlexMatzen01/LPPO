@@ -112,6 +112,15 @@ fn compile_statement(statement: Statement) -> Operation {
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::Unsafe { ops }
         }
+        Statement::Match { expr, arms } => {
+            // Match expressions will be compiled to a series of if-else chains
+            // For now, just placeholder - will implement pattern matching later
+            Operation::Nop
+        }
+        Statement::StructInit { name, typ, fields } => {
+            // Struct initialization - placeholder for now
+            Operation::Nop
+        }
     }
 }
 

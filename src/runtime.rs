@@ -68,6 +68,8 @@ pub enum Operation {
     Unsafe {
         ops: Vec<Operation>,
     },
+    /// No operation (placeholder)
+    Nop,
 }
 
 /// Runtime value types used during evaluation.
@@ -460,6 +462,9 @@ impl Executor {
                     if cf != ControlFlow::None {
                         return Ok(cf);
                     }
+                }
+                Operation::Nop => {
+                    // No operation - do nothing
                 }
             }
         }

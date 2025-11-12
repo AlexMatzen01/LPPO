@@ -44,7 +44,14 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Ok(Program { modules, procedures })
+        Ok(Program { 
+            modules, 
+            procedures,
+            structs: Vec::new(),
+            enums: Vec::new(),
+            traits: Vec::new(),
+            impls: Vec::new(),
+        })
     }
     
     fn parse_module(&mut self) -> LppoResult<Module> {
@@ -67,7 +74,12 @@ impl<'a> Parser<'a> {
         }
         self.expect(Token::RBrace)?;
         
-        Ok(Module { name, procedures })
+        Ok(Module { 
+            name, 
+            procedures,
+            structs: Vec::new(),
+            enums: Vec::new(),
+        })
     }
 
     fn parse_procedure(&mut self) -> LppoResult<Procedure> {
