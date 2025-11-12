@@ -39,14 +39,19 @@ impl<'a> Parser<'a> {
                     procedures.push(self.parse_procedure()?);
                 }
                 _ => {
-                    return Err(LppoError::UnexpectedToken {
-                        expected: "module or procedure",
-                        position: self.position,
-                    });
+                    return Err(LppoError::unexpected_token("module or procedure", &format!("{:?}", self.lookahead), self.position,
+                    ));
                 }
             }
         }
-        Ok(Program { modules, procedures })
+        Ok(Program { 
+            modules, 
+            procedures,
+            structs: Vec::new(),
+            enums: Vec::new(),
+            traits: Vec::new(),
+            impls: Vec::new(),
+        })
     }
     
     fn parse_module(&mut self) -> LppoResult<Module> {
@@ -57,10 +62,8 @@ impl<'a> Parser<'a> {
                 name
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "module name",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("module name", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         
@@ -71,7 +74,12 @@ impl<'a> Parser<'a> {
         }
         self.expect(Token::RBrace)?;
         
-        Ok(Module { name, procedures })
+        Ok(Module { 
+            name, 
+            procedures,
+            structs: Vec::new(),
+            enums: Vec::new(),
+        })
     }
 
     fn parse_procedure(&mut self) -> LppoResult<Procedure> {
@@ -97,10 +105,8 @@ impl<'a> Parser<'a> {
                 name
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "procedure name",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("procedure name", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         
@@ -115,10 +121,8 @@ impl<'a> Parser<'a> {
                         self.advance()?;
                     }
                     _ => {
-                        return Err(LppoError::UnexpectedToken {
-                            expected: "lifetime annotation",
-                            position: self.position,
-                        })
+                        return Err(LppoError::unexpected_token("lifetime annotation", &format!("{:?}", self.lookahead), self.position,
+                        ))
                     }
                 }
                 if self.lookahead == Token::Comma {
@@ -141,10 +145,8 @@ impl<'a> Parser<'a> {
                         name
                     }
                     _ => {
-                        return Err(LppoError::UnexpectedToken {
-                            expected: "parameter name",
-                            position: self.position,
-                        })
+                        return Err(LppoError::unexpected_token("parameter name", &format!("{:?}", self.lookahead), self.position,
+                        ))
                     }
                 };
                 
@@ -247,10 +249,8 @@ impl<'a> Parser<'a> {
                 Ok(TypeAnnotation::Own(Box::new(inner)))
             }
             _ => {
-                Err(LppoError::UnexpectedToken {
-                    expected: "type annotation",
-                    position: self.position,
-                })
+                Err(LppoError::unexpected_token("type annotation", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         }
     }
@@ -282,11 +282,9 @@ impl<'a> Parser<'a> {
             Token::Copy => self.parse_copy(),
             Token::Scope => self.parse_scope(),
             Token::Unsafe => self.parse_unsafe_block(),
-            Token::Eof | Token::RBrace => Err(LppoError::UnexpectedEndOfInput),
-            _ => Err(LppoError::UnexpectedToken {
-                expected: "statement",
-                position: self.position,
-            }),
+            Token::Eof | Token::RBrace => Err(LppoError::unexpected_eof("statement or closing brace")),
+            _ => Err(LppoError::unexpected_token("statement", &format!("{:?}", self.lookahead), self.position,
+            )),
         }
     }
     
@@ -302,10 +300,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "variable name",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         
@@ -321,10 +317,8 @@ impl<'a> Parser<'a> {
                 MemoryLocation::Stack
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "heap or stack",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("heap or stack", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         
@@ -345,10 +339,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "variable name",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         self.expect(Token::Semicolon)?;
@@ -363,10 +355,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "source variable",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("source variable", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         self.expect(Token::Arrow)?; // ->
@@ -376,10 +366,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "target variable",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("target variable", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         self.expect(Token::Semicolon)?;
@@ -394,10 +382,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "source variable",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("source variable", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         self.expect(Token::Arrow)?;
@@ -407,10 +393,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "target variable",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("target variable", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         self.expect(Token::Semicolon)?;
@@ -506,10 +490,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "variable name",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         
@@ -597,10 +579,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "identifier",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("identifier", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         
@@ -857,10 +837,8 @@ impl<'a> Parser<'a> {
                             n
                         }
                         _ => {
-                            return Err(LppoError::UnexpectedToken {
-                                expected: "field or method name",
-                                position: self.position,
-                            })
+                            return Err(LppoError::unexpected_token("field or method name", &format!("{:?}", self.lookahead), self.position,
+                            ))
                         }
                     };
                     // check if it's a method call
@@ -940,7 +918,7 @@ impl<'a> Parser<'a> {
                 self.expect(Token::RBracket)?;
                 Ok(Expr::Array(elements))
             }
-            _ => Err(LppoError::UnexpectedToken { expected: "expression", position: self.position }),
+            _ => Err(LppoError::unexpected_token("expression", &format!("{:?}", self.lookahead), self.position )),
         }
     }
 
@@ -977,10 +955,8 @@ impl<'a> Parser<'a> {
                 n
             }
             _ => {
-                return Err(LppoError::UnexpectedToken {
-                    expected: "identifier",
-                    position: self.position,
-                })
+                return Err(LppoError::unexpected_token("identifier", &format!("{:?}", self.lookahead), self.position,
+                ))
             }
         };
         
@@ -994,10 +970,8 @@ impl<'a> Parser<'a> {
                     n
                 }
                 _ => {
-                    return Err(LppoError::UnexpectedToken {
-                        expected: "identifier after ::",
-                        position: self.position,
-                    })
+                    return Err(LppoError::unexpected_token("identifier after ::", &format!("{:?}", self.lookahead), self.position,
+                    ))
                 }
             };
         }
@@ -1020,17 +994,13 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Token::Parallel => {
-                    return Err(LppoError::UnexpectedToken {
-                        expected: "out statement inside parallel block",
-                        position: self.position,
-                    });
+                    return Err(LppoError::unexpected_token("out statement inside parallel block", &format!("{:?}", self.lookahead), self.position,
+                    ));
                 }
                 Token::RBrace => break,
                 _ => {
-                    return Err(LppoError::UnexpectedToken {
-                        expected: "out statement inside parallel block",
-                        position: self.position,
-                    });
+                    return Err(LppoError::unexpected_token("out statement inside parallel block", &format!("{:?}", self.lookahead), self.position,
+                    ));
                 }
             }
         }
@@ -1043,22 +1013,21 @@ impl<'a> Parser<'a> {
             self.advance()?;
             Ok(())
         } else {
-            Err(LppoError::UnexpectedToken {
-                expected: match expected {
-                    Token::Proc => "keyword 'proc'",
-                    Token::Parallel => "keyword 'parallel'",
-                    Token::Out => "keyword 'out'",
-                    Token::Call => "keyword 'call'",
-                    Token::Identifier(_) => "identifier",
-                    Token::StringLiteral(_) => "string literal",
-                    Token::LBrace => "'{'",
-                    Token::RBrace => "'}'",
-                    Token::Semicolon => "';'",
-                    Token::Eof => "end of file",
-                    _ => "token",
-                },
-                position: self.position,
-            })
+            let expected_str = match expected {
+                Token::Proc => "keyword 'proc'".to_string(),
+                Token::Parallel => "keyword 'parallel'".to_string(),
+                Token::Out => "keyword 'out'".to_string(),
+                Token::Call => "keyword 'call'".to_string(),
+                Token::Identifier(_) => "identifier".to_string(),
+                Token::StringLiteral(_) => "string literal".to_string(),
+                Token::LBrace => "'{'".to_string(),
+                Token::RBrace => "'}'".to_string(),
+                Token::Semicolon => "';'".to_string(),
+                Token::Eof => "end of file".to_string(),
+                _ => "token".to_string(),
+            };
+            let found_str = format!("{:?}", self.lookahead);
+            Err(LppoError::unexpected_token(&expected_str, &found_str, self.position))
         }
     }
 

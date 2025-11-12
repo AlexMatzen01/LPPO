@@ -1,0 +1,281 @@
+// LPPO v2.0 - Advanced Features Demonstration
+// Shows complex usage of ownership, memory management, and control flow
+
+module string_utils {
+    // Reverse a string by character
+    pub proc analyze_string(s: Str) -> Void {
+        let own header: Str = "\n=== String Analysis ===";
+        out header;
+        
+        let own len: Int64 = s.len();
+        let own upper: Str = s.upper();
+        let own lower: Str = s.lower();
+        
+        out "Original:", s;
+        out "Length:", len;
+        out "Uppercase:", upper;
+        out "Lowercase:", lower;
+    }
+    
+    // Count words in a string (split by space)
+    pub proc count_words(s: Str) -> Void {
+        let own space: Str = " ";
+        let own words: Arr<Str> = s.split(space);
+        let own count: Int64 = words.len();
+        
+        out "Word count:", count;
+        out "Words:", words;
+    }
+    
+    // Check if string contains only digits
+    pub proc is_numeric_string(s: Str) -> Void {
+        let own len: Int64 = s.len();
+        let own zero: Int64 = 0;
+        let own ten: Int64 = 10;
+        
+        // For demonstration: just check length is positive
+        let own is_valid: Bool = len > zero;
+        
+        out "Is valid length:", is_valid;
+    }
+}
+
+module array_utils {
+    // Filter even numbers from array
+    pub proc show_evens(arr: Arr<Int64>) -> Void {
+        let own header: Str = "Even numbers:";
+        out header;
+        
+        let own two: Int64 = 2;
+        let own zero: Int64 = 0;
+        
+        for num: Int64 in arr {
+            let own rem: Int64 = num % two;
+            let own is_even: Bool = rem == zero;
+            
+            if is_even {
+                out num;
+            }
+        }
+    }
+    
+    // Filter odd numbers from array
+    pub proc show_odds(arr: Arr<Int64>) -> Void {
+        let own header: Str = "Odd numbers:";
+        out header;
+        
+        let own two: Int64 = 2;
+        let own zero: Int64 = 0;
+        
+        for num: Int64 in arr {
+            let own rem: Int64 = num % two;
+            let own is_odd: Bool = rem != zero;
+            
+            if is_odd {
+                out num;
+            }
+        }
+    }
+    
+    // Find all multiples of n in array
+    pub proc show_multiples(arr: Arr<Int64>, n: Int64) -> Void {
+        let own label: Str = "Multiples of";
+        out label, n;
+        
+        let own zero: Int64 = 0;
+        
+        for num: Int64 in arr {
+            let own rem: Int64 = num % n;
+            let own is_multiple: Bool = rem == zero;
+            
+            if is_multiple {
+                out num;
+            }
+        }
+    }
+}
+
+module memory_demo {
+    // Demonstrate move semantics
+    pub proc demo_move() -> Void {
+        let own header: Str = "\n=== Move Semantics Demo ===";
+        out header;
+        
+        let own source: Int64 = 42;
+        let own target: Int64 = 0;
+        
+        out "Before move - source:", source, "target:", target;
+        
+        move source -> target;
+        
+        out "After move - target:", target;
+        // Note: source is now invalid
+    }
+    
+    // Demonstrate copy semantics
+    pub proc demo_copy() -> Void {
+        let own header: Str = "\n=== Copy Semantics Demo ===";
+        out header;
+        
+        let own original: Int64 = 100;
+        let own duplicate: Int64 = 0;
+        
+        out "Before copy - original:", original;
+        
+        copy original -> duplicate;
+        
+        out "After copy - original:", original, "duplicate:", duplicate;
+    }
+    
+    // Demonstrate scope management
+    pub proc demo_scopes() -> Void {
+        let own header: Str = "\n=== Scope Management Demo ===";
+        out header;
+        
+        scope outer {
+            let own x: Int64 = 10;
+            out "Outer scope - x:", x;
+            
+            scope inner {
+                let own y: Int64 = 20;
+                let own sum: Int64 = x + y;
+                out "Inner scope - x:", x, "y:", y, "sum:", sum;
+            }
+            
+            out "Back in outer scope - x:", x;
+        }
+        
+        out "Outside all scopes";
+    }
+}
+
+module control_flow_demo {
+    // Nested loops demonstration
+    pub proc nested_loops() -> Void {
+        let own header: Str = "\n=== Nested Loops ===";
+        out header;
+        
+        let own numbers: Arr<Int64> = [2, 3, 4];
+        let own powers: Arr<Int64> = [1, 2, 3];
+        
+        for base: Int64 in numbers {
+            for exp: Int64 in powers {
+                // Calculate power manually
+                let mut own result: Int64 = 1;
+                let mut own i: Int64 = 0;
+                let own one: Int64 = 1;
+                
+                while i < exp {
+                    let own temp: Int64 = result * base;
+                    move temp -> result;
+                    
+                    let own i_next: Int64 = i + one;
+                    move i_next -> i;
+                }
+                
+                out base, "^", exp, "=", result;
+            }
+        }
+    }
+    
+    // Break and continue demonstration
+    pub proc loop_control() -> Void {
+        let own header: Str = "\n=== Loop Control (break/continue) ===";
+        out header;
+        
+        let mut own i: Int64 = 0;
+        let own limit: Int64 = 10;
+        let own one: Int64 = 1;
+        let own five: Int64 = 5;
+        let own two: Int64 = 2;
+        let own zero: Int64 = 0;
+        
+        while i < limit {
+            let own i_next: Int64 = i + one;
+            move i_next -> i;
+            
+            // Skip multiples of 2
+            let own rem: Int64 = i % two;
+            let own is_even: Bool = rem == zero;
+            if is_even {
+                continue;
+            }
+            
+            // Break at 7
+            let own seven: Int64 = 7;
+            let own should_break: Bool = i >= seven;
+            if should_break {
+                out "Breaking at:", i;
+                break;
+            }
+            
+            out i;
+        }
+    }
+}
+
+pub proc main() -> Void {
+    let own title: Str = "╔═══════════════════════════════════╗";
+    let own title2: Str = "║  LPPO Advanced Features Demo     ║";
+    let own title3: Str = "╚═══════════════════════════════════╝";
+    out title;
+    out title2;
+    out title3;
+    
+    // String utilities
+    let own text: Str = "Hello World From LPPO";
+    call string_utils::analyze_string(text);
+    call string_utils::count_words(text);
+    
+    // Array utilities
+    let own section1: Str = "\n=== Array Utilities ===";
+    out section1;
+    
+    let own numbers: Arr<Int64> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    out "Array:", numbers;
+    
+    call array_utils::show_evens(numbers);
+    call array_utils::show_odds(numbers);
+    
+    let own three: Int64 = 3;
+    call array_utils::show_multiples(numbers, three);
+    
+    // Memory management demonstrations
+    call memory_demo::demo_move();
+    call memory_demo::demo_copy();
+    call memory_demo::demo_scopes();
+    
+    // Control flow demonstrations
+    call control_flow_demo::nested_loops();
+    call control_flow_demo::loop_control();
+    
+    // Parallel execution demo
+    let own section2: Str = "\n=== Parallel Execution ===";
+    out section2;
+    
+    scope parallel_demo {
+        parallel {
+            out "Thread 1: Processing data...";
+            out "Thread 2: Computing results...";
+            out "Thread 3: Generating report...";
+            out "Thread 4: Saving output...";
+        }
+    }
+    
+    // Unsafe block demo
+    let own section3: Str = "\n=== Unsafe Operations ===";
+    out section3;
+    
+    unsafe {
+        let own msg: Str = "Inside unsafe block - use with caution!";
+        out msg;
+    }
+    
+    // Final message
+    let own footer: Str = "\n╔═══════════════════════════════════╗";
+    let own footer2: Str = "║  Demo Complete!                   ║";
+    let own footer3: Str = "╚═══════════════════════════════════╝";
+    out footer;
+    out footer2;
+    out footer3;
+}

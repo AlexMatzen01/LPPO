@@ -75,7 +75,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             let source = fs::read_to_string(path_ref)?;
             let executor = lppo::build_executor(&source).map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
             if !executor.has_procedure("main") {
-                return Err(Box::new(lppo::LppoError::UnknownProcedure("main".into())));
+                return Err(Box::new(lppo::LppoError::unknown_procedure("main".into())));
             }
             executor.run("main").map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
             return Ok(());
@@ -109,7 +109,7 @@ fn run() -> Result<(), Box<dyn Error>> {
                     let payload = &tail[payload_start..payload_start + len];
                     let executor = lppo::load_executor_from_bytes(payload).map_err(|e| -> Box<dyn Error> { Box::new(e) })?;
                     if !executor.has_procedure("main") {
-                        return Err(Box::new(lppo::LppoError::UnknownProcedure("main".into())));
+                        return Err(Box::new(lppo::LppoError::unknown_procedure("main".into())));
                     }
                     executor.run("main").map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
                     return Ok(());
