@@ -1,329 +1,217 @@
-# LPPO v4.0 - Ultra-Maximum Complexity Language with Extreme Verbosity
+# LPPO v5.0 - Complex but Comprehensible Programming Language
 
-> **⚠️ ULTIMATE COMPLEXITY WARNING ⚠️**
+> **📚 BALANCED COMPLEXITY APPROACH**
 > 
-> LPPO v4.0 is **THE MOST COMPLEX programming language ever created**. Building on v3.0's cryptic syntax, v4.0 adds **100+ new ultra-verbose features** requiring **mandatory block markers**, **explicit memory alignment**, **compile-time verification**, and **extreme customization**. This is the FINAL FORM of programming language complexity.
+> LPPO v5.0 represents a **major philosophy shift** from V4.0's "intentionally hostile" design. V5.0 is **complex but comprehensible** - maintaining substantial type system complexity and explicit control while using **human-readable syntax**.
 
-LPPO v4.0 is an **impossibly complex, ultra-verbose, hyper-specialized** programming language that maximizes difficulty through extreme explicitness. It requires:
+LPPO v5.0 is a **statically-typed, explicitly-managed** programming language that balances complexity with readability. It features:
 
-- **V3.0 CRYPTIC ABBREVIATIONS** - All keywords replaced with assembly-like mnemonics (PROCDEF, DECLVAR, CJMP)
-- **V4.0 MANDATORY BLOCK MARKERS** - BEGINSEG and ENDSEG required for ALL code blocks
-- **V4.0 EXPLICIT MEMORY ALIGNMENT** - MEMALIGN specifications mandatory for every variable
-- **V4.0 COMPREHENSIVE TYPE CHECKING** - TYPECHK, BOUNDSCHECK, NULLCHECK, OVERFLOWCHECK everywhere
-- **V4.0 LIFETIME VALIDATION** - LIFETMCHK ensures reference safety at every step
-- **V4.0 REGION-BASED MEMORY** - REGIONDEF, MEMPOOL, MEMBARRIER, CACHEALN for fine control
-- **V4.0 ADVANCED CONCURRENCY** - THREADPOOL, ATOMICOP, LOCKDEF, CHANELDEF with full synchronization
-- **V4.0 METAPROGRAMMING** - MACRODEF, REFLECTTYP, COMPTIME, CODEGEN capabilities
-- **V4.0 SAFETY CONTRACTS** - PRECONDIT, POSTCONDIT, INVARIANT, PROOFHINT verification
-- **V4.0 100+ NEW KEYWORDS** - The longest, most verbose syntax in programming history
+- **READABLE KEYWORDS** - Clear, descriptive names (proc, let, out, if, while) instead of cryptic abbreviations
+- **EXPLICIT TYPE SYSTEM** - Mandatory type annotations for all variables and procedures
+- **OWNERSHIP SEMANTICS** - Manual memory management with clear ownership qualifiers
+- **OPTIONAL ADVANCED FEATURES** - Use complexity when you need it, not mandatory everywhere
+- **STRUCTURED CONTROL FLOW** - Familiar constructs with explicit type requirements
+- **MODULE SYSTEM** - Clear namespace organization with qualified paths
+- **PARALLEL EXECUTION** - Built-in support for concurrent operations
+- **NO MAGIC** - Everything is explicit, no hidden behaviors
 
-Written in Rust, LPPO compiles source code with exhaustive verification, extreme customization options, and unprecedented verbosity.
+Written in Rust, LPPO compiles source code with strong type checking and explicit memory management.
 
-> **Status:** v4.0 - ULTIMATE MAXIMUM COMPLEXITY - The Final Form
+> **Status:** v5.0 - BALANCED COMPLEXITY - Complex but Comprehensible
 >
-> This language is **ACTIVELY HOSTILE TO ALL HUMAN COMPREHENSION**. V4.0 makes V3.0 look simple by comparison.
+> LPPO v5.0 is **NOT Python** - it maintains significant complexity through explicit typing and manual memory management.
 >
-> LPPO v4.0 exists to demonstrate the absolute limits of programming language complexity. Every single construct requires multiple annotations, qualifiers, markers, and verifications. This is programming at its most explicit, most verbose, and most complicated.
+> LPPO v5.0 is **NOT V4.0** - it removes the intentional hostility and cryptic syntax that made code unreadable.
+>
+> LPPO v5.0 achieves the "Goldilocks zone" - complex enough to teach systems programming concepts, readable enough to be practical.
 
-## 🚀 What's New in v4.0 - ULTIMATE COMPLEXITY ACHIEVED
+## 🎯 What's New in v5.0 - HUMAN READABILITY RESTORED
 
-LPPO v4.0 takes complexity to its **ABSOLUTE MAXIMUM** by adding **100+ new ultra-verbose keywords** and requiring extensive annotations for every construct. V4.0 makes V3.0 look like a toy language.
+LPPO v5.0 **pulls back** from V4.0's extreme hostility while **maintaining** meaningful complexity. V5.0 makes code comprehensible without sacrificing type safety or explicit control.
 
-### Mandatory Block Markers (NEW in V4.0!)
+### Readable Keywords (NEW in V5.0!)
 
-**EVERY block** must now be wrapped in BEGINSEG/ENDSEG markers:
+V5.0 **emphasizes** clear, descriptive keywords:
 
 ```lppo
-BEGINSEG my_block
-    // code here
-ENDSEG my_block
+pub proc main() -> Void {
+    let own msg: Str = "Readable!";
+    out msg;
+}
 ```
 
-### Explicit Memory Alignment (NEW in V4.0!)
+### Optional Advanced Features (NEW in V5.0!)
 
-**EVERY variable** must specify alignment:
+V5.0 makes complexity **optional** rather than mandatory:
 
 ```lppo
-DECLVAR OWNR MEMALIGN 8 x: I64 = 42;
-DECLVAR OWNR MEMALIGN 16 arr: ARRPTR<I64> = [1, 2, 3];
-DECLVAR OWNR MEMALIGN 32 ALIGNED buffer: ARRPTR<I64> = [0, 0, 0];
+// Simple when you don't need complexity
+let own x: Int64 = 42;
+
+// Complex when you need control
+alloc<Arr<Int64>> buffer on heap [100];
 ```
 
-### Comprehensive Type Checking (NEW in V4.0!)
+### No Mandatory Annotations (NEW in V5.0!)
 
-Explicit type validation at every step:
+V5.0 removes mandatory verbose markers - use them only when needed:
 
 ```lppo
-TYPECHK x: I64;           // Type checking
-BOUNDSCHECK arr;           // Bounds checking
-NULLCHECK ptr;             // Null pointer checking
-OVERFLOWCHECK result;      // Overflow checking
+// V5.0: Simple and clean
+let own x: Int64 = 42;
+
+// V4.0 required: DECLVAR OWNR MEMALIGN 8 x: I64 = 42; TYPECHK x: I64;
 ```
 
-### V4.0 Complete Feature Set
+### V5.0 Core Feature Set
 
-#### 1. Block Markers & Validation
-- `BEGINSEG` / `ENDSEG` - Mandatory block boundaries
-- `MEMALIGN` - Memory alignment specifications
-- `TYPECHK` - Explicit type checking
-- `LIFETMCHK` - Lifetime validation
-- `STACKCHK` - Stack integrity checking
-- `HEAPCHK` - Heap integrity checking
+#### 1. Readable Type System
+- `Int64` - 64-bit signed integer (not `I64`)
+- `Bool` - Boolean value (not `BOOL8`)
+- `Str` - String type (not `STRPTR`)
+- `Arr<T>` - Array type (not `ARRPTR<T>`)
+- `Void` - Void return (not `VOID0`)
+- `Option<T>` - Optional values
+- `Result<T,E>` - Result types
 
-#### 2. Advanced Type System
-- `TYPDEF` - Type definitions with full qualification
-- `CONSTEXPR` - Compile-time constant expressions
-- `GENRC` - Generic type parameters
-- `UNIONDEF` - Tagged union definitions
-- `PHANTOMTYP` - Phantom types for compile-time tracking
+#### 2. Clear Control Flow
+- `if` / `elif` / `else` - Conditionals (not `CJMP`/`JMPDEF`)
+- `while` - While loops (not `WHLLP`)
+- `for` / `in` - For loops (not `ITRLP`/`INSET`)
+- `loop` - Infinite loops (not `INFLP`)
+- `break` / `continue` - Loop control (not `LPEXIT`/`LPSKIP`)
+- `return` - Return values (not `RETVL`)
 
-#### 3. Memory Management Extensions
-- `REGIONDEF` - Region-based memory management
-- `MEMPOOL` - Custom memory pool definitions
-- `MEMBARRIER` - Memory barrier instructions
-- `CACHEALN` - Cache alignment specifications
-- `MEMLAYOUT` - Explicit memory layout control
+#### 3. Understandable Keywords
+- `proc` - Procedure definition (not `PROCDEF`)
+- `let` - Variable declaration (not `DECLVAR`)
+- `out` - Output statement (not `EMIT`)
+- `call` - Procedure call (not `PROCCALL`)
+- `module` - Module definition (not `MODDEF`)
+- `pub` - Public visibility (not `PUBEXP`)
 
-#### 4. Control Flow Expansion
-- `COMPTLP` - Compile-time loop unrolling
-- `ASYNCBLK` / `AWAITEXPR` - Async/await constructs
-- `EXCEPTIONHDL` / `CATCHBLK` / `FINALLYBLK` - Exception handling
-- `THROWEXPR` - Throw exceptions
-- `ASSERTCHK` - Assertion checking
-- `GOTOLABL` / `JUMPTO` - Explicit goto labels
-- `SELECT` / `CASE` / `DEFAULT` / `FALLTHROUGH` - Enhanced switch
+#### 4. Explicit Memory Management
+- `own` - Owned value (not `OWNR`)
+- `mut` - Mutable qualifier (not `MUTBL`)
+- `ref` - Reference (not `MEMREF`)
+- `alloc` / `dealloc` - Heap allocation (not `HEAPALLOC`/`HEAPFREE`)
+- `move` - Move semantics (not `MEMXFER`)
+- `copy` - Copy semantics (not `MEMCPY`)
+- `borrow` - Borrowing (explicit when needed)
 
-#### 5. Concurrency & Parallelism
-- `THREADPOOL` - Thread pool management
-- `ATOMICOP` - Atomic operation specifications
-- `LOCKDEF` / `UNLOCKOP` - Lock management
-- `CHANELDEF` / `SENDMSG` / `RECVMSG` - Channel communication
-- `FUTUREDEF` / `PROMISEDEF` - Future/promise constructs
-- `BARRIER` / `SEMAPHORE` / `CONDVAR` - Synchronization primitives
-- `RWLOCK` / `SPINLOCK` - Lock types
+#### 5. Structured Organization
+- `scope` - Explicit scope blocks (not `STKFRAME`)
+- `parallel` - Parallel execution (not `PARLBLK`)
+- `module` - Namespace organization
+- `use` - Import modules
+- Qualified paths: `module::function`
 
-#### 6. Metaprogramming
-- `MACRODEF` / `MACROEXPAND` - Macro system
-- `REFLECTTYP` - Type reflection
-- `COMPTIME` - Compile-time execution
-- `ATTRIBDEF` - Attribute system
-- `CODEGEN` - Code generation directives
+#### 6. Optional Advanced Features (Not Mandatory!)
+- `sizeof<T>` - Type size queries (not `TYPESZ`)
+- `alignof<T>` - Alignment queries (not `TYPEALN`)
+- `cast<T>` - Type casting (not `TYPECAST`)
+- `unsafe` - Unsafe blocks (not `UNSAFEBLK`)
+- Lifetime annotations: `'a`, `'b` when needed
 
-#### 7. Advanced I/O
-- `FILEHANDLE` / `OPENFILE` / `CLOSEFILE` - File operations
-- `READDATA` / `WRITEDATA` - Data I/O
-- `NETHANDLE` / `CONNECTNET` / `LISTENNET` - Network operations
-- `STREAMDEF` - Stream processing
-- `BUFFERDEF` - Buffer management
-- `SERIALIZE` / `DESERIALIZE` - Data serialization
-
-#### 8. Safety & Verification
-- `PRECONDIT` / `POSTCONDIT` - Pre/post conditions
-- `INVARIANT` - Loop invariants
-- `PROOFHINT` - Formal verification hints
-- `BOUNDSCHECK` - Array bounds checking
-- `OVERFLOWCHECK` - Arithmetic overflow checking
-- `NULLCHECK` - Null pointer checking
-
-#### 9. Documentation & Metadata
-- `DOCSTRING` - Documentation strings
-- `METADATA` - Metadata attachment
-- `BENCHMARK` - Performance benchmarks
-- `TESTCASE` - Inline test cases
-- `DEPRECATE` - Deprecation warnings
-
-#### 10. Advanced Features
-- `CLOSUREDEF` / `CAPTUREDEF` - Closures with capture
-- `ITERATORDEF` / `YIELDEXPR` - Custom iterators
-- `EFFECTSYS` - Effect system tracking
-- `LINEARTYP` - Linear types
-- `DEPENDTYP` - Dependent types
-- `AFFINETYP` - Affine types
-
-#### 11. Type Qualifiers
-- `VOLATILE` - Volatile qualifier
-- `CONST` - Const qualifier
-- `STATIC` - Static storage
-- `INLINE` / `NOINLINE` - Inline hints
-- `PACKED` - Packed structs
-- `ALIGNED` - Alignment directive
-
-### V4.0 Example (Ultra-Verbose)
+#### 7. Logical Operators
+- `and` - Logical AND (not `LOGAND`)
+- `or` - Logical OR (not `LOGOR`)
+- `not` - Logical NOT (not `LOGNOT`)
+- Boolean values: `true` / `false` (not `BOOLT`/`BOOLF`)
+### V5.0 Example (Readable and Clear)
 
 ```lppo
-BEGINSEG program_segment
-MEMALIGN 64
-TYPECHK enabled
-LIFETMCHK strict
-
-PUBEXP CONSTEXPR MAX_SIZE: I64 = 1000;
-
-PUBEXP PROCDEF main() -> VOID0 {
-    BEGINSEG main_body
-    STACKCHK enabled
+// V5.0: Clean, readable syntax with maintained complexity
+pub proc main() -> Void {
+    // Type annotations still required (complexity maintained)
+    let own greeting: Str = "Hello from LPPO V5.0!";
+    let own numbers: Arr<Int64> = [1, 2, 3, 4, 5];
     
-    DECLVAR OWNR MEMALIGN 8 msg: STRPTR = "Hello V4.0!";
-    TYPECHK msg: STRPTR;
-    EMIT msg;
+    out greeting;
+    out "Numbers:", numbers;
     
-    DECLVAR OWNR MEMALIGN 16 numbers: ARRPTR<I64> = [1, 2, 3];
-    BOUNDSCHECK numbers;
-    NULLCHECK numbers;
-    
-    THREADPOOL workers: 4;
-    PARLBLK {
-        BEGINSEG task1
-        EMIT "Parallel task 1";
-        ENDSEG task1
+    // Explicit control flow with readable keywords
+    for num: Int64 in numbers {
+        let own doubled: Int64 = num * 2;
+        out "Doubled:", doubled;
     }
     
-    ENDSEG main_body
+    // Parallel execution - clear but not simplified
+    parallel {
+        out "Parallel task 1";
+        out "Parallel task 2";
+    }
 }
-
-ENDSEG program_segment
 ```
 
-### V4.0 vs V3.0 vs V2.0
+### V5.0 vs V4.0 vs V3.0 vs V2.0
 
-| Feature | V2.0 | V3.0 | V4.0 |
-|---------|------|------|------|
-| Keywords | 50+ | 70+ | **170+** |
-| Block markers | Optional | Optional | **MANDATORY** |
-| Memory alignment | Implicit | Implicit | **EXPLICIT** |
-| Type checking | Implicit | Implicit | **EXPLICIT** |
-| Customization | Low | Medium | **EXTREME** |
-| Complexity | High | Extreme | **ULTIMATE** |
+| Feature | V2.0 | V3.0 | V4.0 | V5.0 |
+|---------|------|------|------|------|
+| Keywords | 50+ | 70+ (cryptic) | 170+ (ultra-verbose) | **50+ (readable)** |
+| Block markers | Optional | Optional | Mandatory | **Optional** |
+| Memory alignment | Implicit | Implicit | Explicit required | **Optional** |
+| Type annotations | Required | Required | Required | **Required** |
+| Readability | Medium | Very Low | None | **High** |
+| Complexity | High | Extreme | Ultimate | **Balanced** |
+| Philosophy | Verbose | Cryptic | Hostile | **Comprehensible** |
 
-## 🎉 What's New in v3.0
+## Why LPPO V5.0 is Still Complex (Not Python!)
 
-### Ultra-Low-Level Cryptic Syntax Revolution
+V5.0 pulls back from V4.0's hostility but **maintains meaningful complexity**:
 
-LPPO v3.0 **COMPLETELY OVERHAULS** the syntax to be maximally cryptic and assembly-like:
+- **Mandatory Type Annotations:** EVERY variable requires explicit type specification (Int64, Bool, Str, Arr<T>, etc.)
+- **Explicit Memory Management:** Manual allocation, deallocation, move/copy semantics
+- **Ownership System:** Explicit ownership qualifiers (own, mut, ref, borrow) required
+- **No Type Inference:** Cannot infer types from expressions - all must be declared
+- **Manual Control Flow:** Explicit loop management with typed counters
+- **Lifetime Annotations:** References require explicit lifetime tracking when needed
+- **Structured Scope:** Explicit scope blocks and stack frame management
+- **Qualified Paths:** Full module::function paths for organization
+- **No Garbage Collection:** Manual memory management throughout
+- **No Magic:** Everything is explicit - no hidden behaviors or automatic conversions
 
-#### Cryptic Keyword Replacements (No More Conversational Keywords!)
+## Language Overview - Balanced Readable Complexity
 
-| V2.0 (Old)  | V3.0 (New)    | Description                           |
-|-------------|---------------|---------------------------------------|
-| `proc`      | `PROCDEF`     | Procedure definition                  |
-| `let`       | `DECLVAR`     | Variable declaration                  |
-| `out`       | `EMIT`        | Output/emission instruction           |
-| `call`      | `PROCCALL`    | Procedure call instruction            |
-| `if`        | `CJMP`        | Conditional jump                      |
-| `elif`      | `CJMPALT`     | Alternative conditional jump          |
-| `else`      | `JMPDEF`      | Default jump target                   |
-| `while`     | `WHLLP`       | While loop construct                  |
-| `for`       | `ITRLP`       | Iterator loop                         |
-| `loop`      | `INFLP`       | Infinite loop                         |
-| `break`     | `LPEXIT`      | Loop exit instruction                 |
-| `continue`  | `LPSKIP`      | Loop skip to next iteration           |
-| `return`    | `RETVL`       | Return value instruction              |
-| `and`       | `LOGAND`      | Logical AND operation                 |
-| `or`        | `LOGOR`       | Logical OR operation                  |
-| `not`       | `LOGNOT`      | Logical NOT operation                 |
-| `scope`     | `STKFRAME`    | Stack frame boundary                  |
-| `parallel`  | `PARLBLK`     | Parallel execution block              |
-| `input`     | `STDIN`       | Standard input read                   |
-| `move`      | `MEMXFER`     | Memory transfer operation             |
-| `copy`      | `MEMCPY`      | Memory copy operation                 |
-| `ref`       | `MEMREF`      | Memory reference                      |
-| `deref`     | `MEMDEREF`    | Memory dereference                    |
-| `alloc`     | `HEAPALLOC`   | Heap allocation                       |
-| `dealloc`   | `HEAPFREE`    | Heap deallocation                     |
-
-#### Machine-Level Type Names (Explicit Bit Specifications!)
-
-| V2.0 (Old)  | V3.0 (New)    | Description                           |
-|-------------|---------------|---------------------------------------|
-| `Int64`     | `I64`         | 64-bit signed integer                 |
-| `Bool`      | `BOOL8`       | 8-bit boolean value                   |
-| `Str`       | `STRPTR`      | String pointer type                   |
-| `Arr`       | `ARRPTR`      | Array pointer type                    |
-| `Void`      | `VOID0`       | Zero-byte void type                   |
-| `own`       | `OWNR`        | Ownership qualifier                   |
-| `mut`       | `MUTBL`       | Mutable qualifier                     |
-| `pub`       | `PUBEXP`      | Public export visibility              |
-| `module`    | `MODDEF`      | Module definition                     |
-
-### V3.0 Syntax Philosophy
-
-- **Cryptic abbreviations**: Replace all readable keywords with terse mnemonics
-- **Assembly-like**: Control flow uses jump-style terminology (CJMP, JMPDEF)
-- **Machine-level types**: All types specify bit sizes or pointer nature
-- **Memory operations**: Explicit MEMXFER, MEMCPY, HEAPALLOC terminology
-- **Stack awareness**: STKFRAME and FRAMEEND for explicit scope management
-- **Zero readability**: Intentionally hostile to casual reading
-
-### Enhanced Examples
-
-- **[Hello V3.0](examples/hello_v3.lppo)**: Demonstrating new cryptic syntax
-- **[Comprehensive V3.0](examples/comprehensive_v3.lppo)**: All features with ultra-low-level syntax
-- **Backward Compatibility**: V2.0 examples still work during transition
-
-### Future-Ready AST
-
-- Struct definitions with fields and methods (STRUCTDEF)
-- Enum types with pattern matching (ENUMDEF, PATMCH)
-- Trait system with implementations (TRAITDEF, IMPLBLK)
-- Generic types and constraints
-- Advanced type annotations (OPT, RES, Tuple types)
-
-All groundwork laid for future feature implementation!
-
-## Why LPPO v3.0 is EXTREMELY Complex
-
-- **Cryptic Abbreviations:** ALL keywords replaced with assembly-like mnemonics (PROCDEF, DECLVAR, CJMP)
-- **Mandatory Type System:** EVERY variable requires explicit machine-level type with bit specs (I64, BOOL8, STRPTR)
-- **Explicit Memory Management:** Manual HEAPALLOC, HEAPFREE, MEMXFER operations
-- **Ultra-Verbose Syntax:** ALL procedures use PROCDEF with PUBEXP visibility and explicit types
-- **Ownership Semantics:** Explicit OWNR, MEMREF, MUTBL, and BORROW qualifiers required
-- **Stack Frame Management:** Explicit STKFRAME and FRAMEEND for all scope boundaries
-- **Assembly-Like Control Flow:** CJMP (if), CJMPALT (elif), JMPDEF (else), WHLLP (while), ITRLP (for), INFLP (loop)
-- **Low-Level Operations:** MEMXFER (move), MEMCPY (copy), MEMDEREF (deref), HEAPSEG, STKSEG
-- **Namespace Complexity:** Fully qualified paths with MODDEF::submodule::item syntax
-- **No Readability:** Maximum cryptic verbosity, zero human-friendly syntax, intentional obfuscation
-
-## Language Overview - Ultra-Low-Level Cryptic Complexity
-
-### V3.0 Example Demonstrating EXTREME Cryptic Verbosity
+### V5.0 Example Demonstrating Readable Complexity
 
 ```lppo
-// EVERY procedure REQUIRES:
-// - PUBEXP visibility modifier (replaces "pub")
-// - PROCDEF keyword (replaces "proc")
-// - Explicit parameter list with machine-level type annotations
-// - Explicit return type with bit specification (VOID0, I64, etc.)
-PUBEXP PROCDEF main() -> VOID0 {
-    // EVERY variable REQUIRES:
-    // - DECLVAR keyword (replaces "let")
-    // - Explicit ownership qualifier (OWNR, MEMREF, BORROW, MUTBL)
-    // - Explicit machine-level type annotation (I64, STRPTR, ARRPTR)
-    // - No type inference whatsoever
-    DECLVAR OWNR nums: ARRPTR<I64> = [1, 2, 3, 4, 5];
-    DECLVAR OWNR msg: STRPTR = "Processing array:";
-    EMIT msg, nums;
+// V5.0: Clear keywords with maintained complexity
+pub proc main() -> Void {
+    // Type annotations still required (no inference)
+    let own numbers: Arr<Int64> = [1, 2, 3, 4, 5];
+    let own message: Str = "Processing array:";
+    out message, numbers;
     
-    // For loops use ITRLP (iterator loop) with INSET keyword
-    DECLVAR OWNR two: I64 = 2;
-    DECLVAR OWNR zero: I64 = 0;
+    // Explicit types in loops
+    let own two: Int64 = 2;
+    let own zero: Int64 = 0;
     
-    ITRLP n: I64 INSET nums {
-        DECLVAR OWNR remainder: I64 = n % two;
+    for n: Int64 in numbers {
+        let own remainder: Int64 = n % two;
         
-        // Conditional uses CJMP (conditional jump) instead of "if"
-        // Alternative paths use CJMPALT and JMPDEF
-        CJMP remainder == zero {
-            DECLVAR OWNR even_msg: STRPTR = "is even";
-            EMIT n, even_msg;
-        } JMPDEF {
-            DECLVAR OWNR odd_msg: STRPTR = "is odd";
-            EMIT n, odd_msg;
+        // Clear control flow
+        if remainder == zero {
+            let own even_msg: Str = "is even";
+            out n, even_msg;
+        } else {
+            let own odd_msg: Str = "is odd";
+            out n, odd_msg;
         }
     }
     
-    // Procedure calls use PROCCALL with explicit argument list
-    DECLVAR OWNR name: STRPTR = "LPPO";
-    DECLVAR OWNR year: I64 = 2024;
-    PROCCALL greet(name, year);
+    // Explicit procedure calls
+    let own name: Str = "LPPO";
+    let own year: Int64 = 2025;
+    call greet(name, year);
+}
+
+// Procedures require full type signatures
+pub proc greet(name: Str, year: Int64) -> Void {
+    let own hello: Str = "Hello";
+    let own exclaim: Str = "!";
+    let own year_label: Str = "Year:";
+    out hello, name, exclaim, year_label, year;
 }
 
 // ALL parameters REQUIRE explicit machine-level type annotations

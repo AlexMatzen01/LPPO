@@ -1,0 +1,51 @@
+// LPPO V5.0 - Balanced Complexity with Human Readability
+// V5.0 Philosophy: Complex but Comprehensible
+// 
+// V5.0 pulls back from V4.0's "intentional hostility" while maintaining
+// meaningful complexity through:
+// - Explicit type annotations (still required)
+// - Clear ownership semantics
+// - Readable keyword names
+// - Optional advanced features (not mandatory)
+
+pub proc main() -> Void {
+    // V5.0: Uses readable keywords (proc, let, out) instead of cryptic ones
+    // Still requires explicit type annotations for complexity
+    let own greeting: Str = "Welcome to LPPO V5.0!";
+    let own tagline: Str = "Complex but Comprehensible";
+    
+    out greeting;
+    out tagline;
+    
+    // V5.0: Demonstrate the balance of readability and complexity
+    let own version: Int64 = 5;
+    out "Version:", version;
+    
+    // V5.0: Type system still requires explicit annotations
+    let own numbers: Arr<Int64> = [1, 2, 3, 4, 5];
+    out "Numbers:", numbers;
+    
+    // V5.0: Clear control flow with explicit types
+    for num: Int64 in numbers {
+        let own doubled: Int64 = num * 2;
+        out "Doubled:", doubled;
+    }
+    
+    // V5.0: Explicit scope management (readable but structured)
+    scope calculation {
+        let own x: Int64 = 10;
+        let own y: Int64 = 20;
+        let own sum: Int64 = x + y;
+        out "Sum:", sum;
+    }
+    
+    // V5.0: Parallel execution with clear syntax
+    parallel {
+        out "Parallel task 1";
+        out "Parallel task 2";
+        out "Parallel task 3";
+    }
+    
+    let own completion: Str = "V5.0 example complete!";
+    out completion;
+}
