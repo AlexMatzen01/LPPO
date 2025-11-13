@@ -1,34 +1,58 @@
-# LPPO Language Specification v3.0
+# LPPO Language Specification v4.0
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [V3.0 Breaking Changes](#v30-breaking-changes)
-3. [Lexical Structure](#lexical-structure)
-4. [Type System](#type-system)
-5. [Memory Management](#memory-management)
-6. [Expressions](#expressions)
-7. [Statements](#statements)
-8. [Procedures](#procedures)
-9. [Modules and Namespaces](#modules-and-namespaces)
-10. [Advanced Features](#advanced-features)
-11. [Error Handling](#error-handling)
-12. [V2.0 Compatibility](#v20-compatibility)
+2. [V4.0 Revolutionary Changes](#v40-revolutionary-changes)
+3. [V3.0 Breaking Changes](#v30-breaking-changes)
+4. [Lexical Structure](#lexical-structure)
+5. [Type System](#type-system)
+6. [Memory Management](#memory-management)
+7. [Expressions](#expressions)
+8. [Statements](#statements)
+9. [Procedures](#procedures)
+10. [Modules and Namespaces](#modules-and-namespaces)
+11. [Advanced Features](#advanced-features)
+12. [Error Handling](#error-handling)
+13. [V3.0 and V2.0 Compatibility](#v30-and-v20-compatibility)
 
 ## Introduction
 
-LPPO (Low-level Procedural Programming with Ownership) is an **ultra-low-level, cryptic, assembly-like** programming language designed to maximize difficulty and eliminate human readability. V3.0 replaces ALL readable keywords with terse mnemonics.
+LPPO (Low-level Procedural Programming with Ownership) is the **MOST COMPLEX programming language ever created**. V4.0 builds on V3.0's cryptic foundation by adding **100+ ultra-verbose keywords** and requiring extensive annotations for every construct.
 
 ### Design Philosophy
 
-- **Maximum Cryptic Complexity**: All keywords replaced with assembly-like abbreviations
-- **Absolute Explicitness**: Every variable, parameter, and return type must be explicitly annotated with machine-level types
-- **Manual Memory Management**: Explicit ownership tracking and memory operations (HEAPALLOC, MEMXFER, MEMCPY)
-- **Assembly-Like Syntax**: Control flow uses jump-style terminology (CJMP, JMPDEF)
-- **Zero Readability**: Intentionally hostile to casual reading
-- **Zero Inference**: The compiler makes no assumptions about types or ownership
+- **Ultimate Complexity**: Maximum cryptic abbreviations PLUS maximum verbose annotations
+- **Mandatory Block Markers**: ALL code blocks must be wrapped in BEGINSEG/ENDSEG
+- **Explicit Memory Alignment**: Every variable requires MEMALIGN specification
+- **Comprehensive Type Checking**: TYPECHK, BOUNDSCHECK, NULLCHECK everywhere
+- **Safety Contracts**: PRECONDIT/POSTCONDIT for all procedures
+- **Advanced Concurrency**: THREADPOOL, ATOMICOP, LOCKDEF primitives
+- **Extreme Customization**: Control every aspect of program behavior
+- **Zero Assumptions**: The compiler assumes nothing, everything is explicit
 
-### Hello World Example (V3.0)
+### Hello World Example (V4.0)
+
+```lppo
+BEGINSEG program_segment
+MEMALIGN 64
+TYPECHK enabled
+
+PUBEXP PROCDEF main() -> VOID0 {
+    BEGINSEG main_body
+    STACKCHK enabled
+    
+    DECLVAR OWNR MEMALIGN 8 msg: STRPTR = "Hello, World!";
+    TYPECHK msg: STRPTR;
+    EMIT msg;
+    
+    ENDSEG main_body
+}
+
+ENDSEG program_segment
+```
+
+### Hello World Example (V3.0 - Still Supported)
 
 ```lppo
 PUBEXP PROCDEF main() -> VOID0 {
@@ -45,6 +69,99 @@ pub proc main() -> Void {
     out msg;
 }
 ```
+
+## V4.0 Revolutionary Changes
+
+V4.0 introduces **100+ new keywords** and transforms LPPO into the most verbose programming language in existence.
+
+### Mandatory Block Markers
+
+**ALL code blocks** must now use BEGINSEG/ENDSEG:
+
+```lppo
+BEGINSEG block_name
+    // code here
+ENDSEG block_name
+```
+
+### Explicit Memory Alignment
+
+**EVERY variable** must specify alignment:
+
+```lppo
+DECLVAR OWNR MEMALIGN 8 x: I64 = 42;
+DECLVAR OWNR MEMALIGN 16 arr: ARRPTR<I64> = [1, 2, 3];
+```
+
+### Comprehensive Type Checking
+
+Explicit verification at every step:
+
+```lppo
+TYPECHK x: I64;           // Type verification
+BOUNDSCHECK arr;           // Bounds checking
+NULLCHECK ptr;             // Null checking
+OVERFLOWCHECK result;      // Overflow checking
+```
+
+### V4.0 New Keywords (100+ additions)
+
+#### Block Markers & Validation
+- `BEGINSEG` / `ENDSEG` - Block boundaries
+- `MEMALIGN` - Memory alignment
+- `TYPECHK` - Type checking
+- `LIFETMCHK` - Lifetime validation
+- `STACKCHK` / `HEAPCHK` - Memory validation
+
+#### Advanced Type System
+- `TYPDEF` - Type definitions
+- `CONSTEXPR` - Compile-time constants
+- `GENRC` - Generic parameters
+- `UNIONDEF` - Tagged unions
+- `PHANTOMTYP` - Phantom types
+
+#### Memory Management
+- `REGIONDEF` - Memory regions
+- `MEMPOOL` - Memory pools
+- `MEMBARRIER` - Memory barriers
+- `CACHEALN` - Cache alignment
+- `MEMLAYOUT` - Memory layout
+
+#### Control Flow
+- `COMPTLP` - Compile-time loops
+- `ASYNCBLK` / `AWAITEXPR` - Async/await
+- `EXCEPTIONHDL` / `CATCHBLK` / `FINALLYBLK` - Exceptions
+- `ASSERTCHK` - Assertions
+- `GOTOLABL` / `JUMPTO` - Goto
+- `SELECT` / `CASE` / `DEFAULT` - Enhanced switch
+
+#### Concurrency
+- `THREADPOOL` - Thread pools
+- `ATOMICOP` - Atomic operations
+- `LOCKDEF` / `UNLOCKOP` - Locks
+- `CHANELDEF` / `SENDMSG` / `RECVMSG` - Channels
+- `BARRIER` / `SEMAPHORE` / `CONDVAR` - Sync primitives
+
+#### Metaprogramming
+- `MACRODEF` / `MACROEXPAND` - Macros
+- `REFLECTTYP` - Reflection
+- `COMPTIME` - Compile-time execution
+- `CODEGEN` - Code generation
+
+#### I/O Operations
+- `FILEHANDLE` / `OPENFILE` / `CLOSEFILE` - Files
+- `NETHANDLE` / `CONNECTNET` / `LISTENNET` - Network
+- `SERIALIZE` / `DESERIALIZE` - Serialization
+
+#### Safety & Verification
+- `PRECONDIT` / `POSTCONDIT` - Contracts
+- `INVARIANT` - Loop invariants
+- `PROOFHINT` - Verification hints
+- `BOUNDSCHECK` - Bounds checking
+- `OVERFLOWCHECK` - Overflow checking
+- `NULLCHECK` - Null checking
+
+(See V4_MIGRATION_GUIDE.md for complete list and usage)
 
 ## V3.0 Breaking Changes
 

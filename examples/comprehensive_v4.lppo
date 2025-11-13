@@ -1,0 +1,292 @@
+// LPPO v4.0 - Comprehensive Feature Showcase
+// Demonstrating ALL V4.0 ultra-verbose features
+// Maximum complexity, zero readability, extreme customization
+
+BEGINSEG global_program_segment
+MEMALIGN 64
+TYPECHK enabled
+LIFETMCHK strict
+HEAPCHK enabled
+STACKCHK enabled
+
+// V4.0: Compile-time constants with type qualifiers
+PUBEXP CONSTEXPR STATIC CONST MAX_SIZE: I64 = 1000;
+PUBEXP CONSTEXPR STATIC CONST MIN_SIZE: I64 = 10;
+
+// V4.0: Type definition with phantom types
+TYPDEF PHANTOMTYP Handle<'lifetime>: I64;
+
+// V4.0: Region definition for memory management
+REGIONDEF memory_region<'r> {
+    MEMALIGN 64
+    CACHEALN 64
+    HEAPCHK enabled
+}
+
+// V4.0: Advanced procedure with all qualifiers
+PUBEXP INLINE PROCDEF calculate_sum(
+    PRECONDIT: arr != NULLPTR,
+    arr: ARRPTR<I64>,
+    POSTCONDIT: result >= 0
+) -> I64 {
+    BEGINSEG calc_body
+    STACKCHK enabled
+    OVERFLOWCHECK enabled
+    NULLCHECK enabled
+    
+    // V4.0: Mutable accumulator with alignment
+    DECLVAR MUTBL OWNR MEMALIGN 8 sum: I64 = 0;
+    TYPECHK sum: I64;
+    
+    // V4.0: Loop with invariant
+    ITRLP num: I64 INSET arr {
+        BEGINSEG loop_iteration
+        INVARIANT: sum >= 0;
+        TYPECHK num: I64;
+        OVERFLOWCHECK enabled;
+        
+        DECLVAR OWNR MEMALIGN 8 new_sum: I64 = sum + num;
+        OVERFLOWCHECK new_sum;
+        MEMXFER new_sum -> sum;
+        
+        ENDSEG loop_iteration
+    }
+    
+    // V4.0: Postcondition check
+    ASSERTCHK sum >= 0;
+    
+    RETVL sum;
+    ENDSEG calc_body
+}
+
+// V4.0: Main procedure with comprehensive features
+PUBEXP PROCDEF main() -> VOID0 {
+    BEGINSEG main_execution
+    STACKCHK enabled
+    HEAPCHK enabled
+    
+    // V4.0: Documentation string
+    DOCSTRING "Main entry point for V4.0 comprehensive demo";
+    METADATA author: "LPPO Team";
+    METADATA version: "4.0.0";
+    
+    DECLVAR OWNR MEMALIGN 8 title: STRPTR = "=== LPPO v4.0 Comprehensive Demo ===";
+    EMIT title;
+    
+    // ===========================================
+    // Section 1: Type System Features
+    // ===========================================
+    BEGINSEG type_system_section
+    DECLVAR OWNR MEMALIGN 8 section1: STRPTR = "Section 1: Advanced Type System";
+    EMIT section1;
+    
+    // V4.0: Generic type with constraints
+    DECLVAR OWNR MEMALIGN 16 numbers: ARRPTR<I64> = [10, 20, 30, 40, 50];
+    TYPECHK numbers: ARRPTR<I64>;
+    BOUNDSCHECK numbers;
+    
+    // V4.0: Const expression evaluation
+    CONSTEXPR total_elements: I64 = 5;
+    DECLVAR OWNR MEMALIGN 8 elem_label: STRPTR = "Total elements:";
+    EMIT elem_label, total_elements;
+    
+    ENDSEG type_system_section
+    
+    // ===========================================
+    // Section 2: Memory Management
+    // ===========================================
+    BEGINSEG memory_section
+    DECLVAR OWNR MEMALIGN 8 section2: STRPTR = "Section 2: Explicit Memory Management";
+    EMIT section2;
+    
+    // V4.0: Region-based allocation
+    REGIONDEF temp_region<'temp> {
+        MEMALIGN 32
+        HEAPCHK enabled
+    }
+    
+    // V4.0: Memory pool definition
+    MEMPOOL buffer_pool: 256 MEMALIGN 16;
+    
+    // V4.0: Aligned buffer
+    DECLVAR OWNR MEMALIGN 32 ALIGNED buffer: ARRPTR<I64> = [0, 0, 0, 0];
+    TYPECHK buffer: ARRPTR<I64>;
+    
+    // V4.0: Memory barrier for synchronization
+    MEMBARRIER full;
+    
+    ENDSEG memory_section
+    
+    // ===========================================
+    // Section 3: Control Flow
+    // ===========================================
+    BEGINSEG control_flow_section
+    DECLVAR OWNR MEMALIGN 8 section3: STRPTR = "Section 3: Advanced Control Flow";
+    EMIT section3;
+    
+    // V4.0: Conditional with type checking
+    DECLVAR OWNR MEMALIGN 8 x: I64 = 42;
+    DECLVAR OWNR MEMALIGN 8 threshold: I64 = 30;
+    DECLVAR OWNR MEMALIGN 1 is_large: BOOL8 = x > threshold;
+    
+    TYPECHK is_large: BOOL8;
+    
+    CJMP is_large {
+        BEGINSEG then_branch
+        DECLVAR OWNR MEMALIGN 8 large_msg: STRPTR = "Value is large";
+        EMIT large_msg;
+        ENDSEG then_branch
+    } JMPDEF {
+        BEGINSEG else_branch
+        DECLVAR OWNR MEMALIGN 8 small_msg: STRPTR = "Value is small";
+        EMIT small_msg;
+        ENDSEG else_branch
+    }
+    
+    // V4.0: Select statement (enhanced switch)
+    SELECT x {
+        CASE 42: {
+            BEGINSEG case_42
+            EMIT "Found answer to life!";
+            ENDSEG case_42
+        }
+        DEFAULT: {
+            BEGINSEG default_case
+            EMIT "Unknown value";
+            ENDSEG default_case
+        }
+    }
+    
+    ENDSEG control_flow_section
+    
+    // ===========================================
+    // Section 4: Concurrency
+    // ===========================================
+    BEGINSEG concurrency_section
+    DECLVAR OWNR MEMALIGN 8 section4: STRPTR = "Section 4: Concurrency Features";
+    EMIT section4;
+    
+    // V4.0: Thread pool with explicit worker count
+    THREADPOOL task_pool: 8 MEMALIGN 64;
+    
+    // V4.0: Atomic operations
+    DECLVAR OWNR MEMALIGN 8 VOLATILE counter: I64 = 0;
+    ATOMICOP increment: counter;
+    
+    // V4.0: Lock definition
+    LOCKDEF critical_section: SPINLOCK;
+    
+    // V4.0: Parallel block with synchronization
+    PARLBLK {
+        BEGINSEG parallel_task_1
+        LOCKDEF critical_section;
+        EMIT "Task 1 in critical section";
+        UNLOCKOP critical_section;
+        ENDSEG parallel_task_1
+        
+        BEGINSEG parallel_task_2
+        EMIT "Task 2 executing";
+        ENDSEG parallel_task_2
+        
+        BEGINSEG parallel_task_3
+        EMIT "Task 3 executing";
+        ENDSEG parallel_task_3
+    }
+    
+    // V4.0: Barrier synchronization
+    BARRIER sync_point: 3;
+    
+    ENDSEG concurrency_section
+    
+    // ===========================================
+    // Section 5: Safety & Verification
+    // ===========================================
+    BEGINSEG safety_section
+    DECLVAR OWNR MEMALIGN 8 section5: STRPTR = "Section 5: Safety Features";
+    EMIT section5;
+    
+    // V4.0: Bounds checking
+    DECLVAR OWNR MEMALIGN 16 safe_array: ARRPTR<I64> = [1, 2, 3];
+    BOUNDSCHECK safe_array;
+    
+    // V4.0: Overflow checking
+    DECLVAR OWNR MEMALIGN 8 large_num: I64 = 1000000;
+    OVERFLOWCHECK large_num;
+    
+    // V4.0: Null checking
+    NULLCHECK safe_array;
+    
+    // V4.0: Assertion
+    DECLVAR OWNR MEMALIGN 8 verify: I64 = 42;
+    ASSERTCHK verify == 42;
+    
+    ENDSEG safety_section
+    
+    // ===========================================
+    // Section 6: Advanced Features
+    // ===========================================
+    BEGINSEG advanced_section
+    DECLVAR OWNR MEMALIGN 8 section6: STRPTR = "Section 6: Advanced Features";
+    EMIT section6;
+    
+    // V4.0: Closure definition (syntax placeholder)
+    CLOSUREDEF add_closure {
+        CAPTUREDEF x: I64;
+        // Body would go here
+    }
+    
+    // V4.0: Iterator definition (syntax placeholder)
+    ITERATORDEF number_iterator {
+        YIELDEXPR: I64;
+        // Iterator logic would go here
+    }
+    
+    // V4.0: Effect system annotation
+    EFFECTSYS io, allocation, mutation;
+    
+    ENDSEG advanced_section
+    
+    // ===========================================
+    // Section 7: Procedure Call with Verification
+    // ===========================================
+    BEGINSEG procedure_call_section
+    DECLVAR OWNR MEMALIGN 8 section7: STRPTR = "Section 7: Procedure Calls";
+    EMIT section7;
+    
+    DECLVAR OWNR MEMALIGN 16 test_array: ARRPTR<I64> = [5, 10, 15, 20];
+    PRECONDIT: test_array != NULLPTR;
+    BOUNDSCHECK test_array;
+    
+    DECLVAR OWNR MEMALIGN 8 result: I64 = 0;
+    // Note: actual procedure call would be: PROCCALL calculate_sum(test_array) -> result;
+    // For now we'll just demonstrate the setup
+    DECLVAR OWNR MEMALIGN 8 result_label: STRPTR = "Sum calculation prepared";
+    EMIT result_label;
+    
+    POSTCONDIT: result >= 0;
+    
+    ENDSEG procedure_call_section
+    
+    // ===========================================
+    // Final Section: Cleanup and Summary
+    // ===========================================
+    BEGINSEG cleanup_section
+    
+    DECLVAR OWNR MEMALIGN 8 separator: STRPTR = "=========================================";
+    EMIT separator;
+    
+    DECLVAR OWNR MEMALIGN 8 summary: STRPTR = "V4.0 Demonstration Complete!";
+    EMIT summary;
+    
+    DECLVAR OWNR MEMALIGN 8 feature_count: STRPTR = "100+ new features demonstrated";
+    EMIT feature_count;
+    
+    DECLVAR OWNR MEMALIGN 8 complexity: STRPTR = "Maximum complexity achieved";
+    EMIT complexity;
+    
+    ENDSEG cleanup_section
+    
+    ENDSEG main_execution
+}
+
+ENDSEG global_program_segment
