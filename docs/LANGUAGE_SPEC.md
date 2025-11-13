@@ -1,30 +1,43 @@
-# LPPO Language Specification v2.0
+# LPPO Language Specification v3.0
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [Lexical Structure](#lexical-structure)
-3. [Type System](#type-system)
-4. [Memory Management](#memory-management)
-5. [Expressions](#expressions)
-6. [Statements](#statements)
-7. [Procedures](#procedures)
-8. [Modules and Namespaces](#modules-and-namespaces)
-9. [Advanced Features](#advanced-features)
-10. [Error Handling](#error-handling)
+2. [V3.0 Breaking Changes](#v30-breaking-changes)
+3. [Lexical Structure](#lexical-structure)
+4. [Type System](#type-system)
+5. [Memory Management](#memory-management)
+6. [Expressions](#expressions)
+7. [Statements](#statements)
+8. [Procedures](#procedures)
+9. [Modules and Namespaces](#modules-and-namespaces)
+10. [Advanced Features](#advanced-features)
+11. [Error Handling](#error-handling)
+12. [V2.0 Compatibility](#v20-compatibility)
 
 ## Introduction
 
-LPPO (Low-level Procedural Programming with Ownership) is a deliberately complex, verbose programming language designed to maximize explicitness and minimize convenience. Every aspect of the language requires manual specification, with no type inference or syntactic sugar.
+LPPO (Low-level Procedural Programming with Ownership) is an **ultra-low-level, cryptic, assembly-like** programming language designed to maximize difficulty and eliminate human readability. V3.0 replaces ALL readable keywords with terse mnemonics.
 
 ### Design Philosophy
 
-- **Absolute Explicitness**: Every variable, parameter, and return type must be explicitly annotated
-- **Manual Memory Management**: Explicit ownership tracking and lifetime annotations
-- **Maximum Verbosity**: No shortcuts or convenience features
+- **Maximum Cryptic Complexity**: All keywords replaced with assembly-like abbreviations
+- **Absolute Explicitness**: Every variable, parameter, and return type must be explicitly annotated with machine-level types
+- **Manual Memory Management**: Explicit ownership tracking and memory operations (HEAPALLOC, MEMXFER, MEMCPY)
+- **Assembly-Like Syntax**: Control flow uses jump-style terminology (CJMP, JMPDEF)
+- **Zero Readability**: Intentionally hostile to casual reading
 - **Zero Inference**: The compiler makes no assumptions about types or ownership
 
-### Hello World Example
+### Hello World Example (V3.0)
+
+```lppo
+PUBEXP PROCDEF main() -> VOID0 {
+    DECLVAR OWNR msg: STRPTR = "Hello, World!";
+    EMIT msg;
+}
+```
+
+### Hello World Example (V2.0 - Still Supported)
 
 ```lppo
 pub proc main() -> Void {
@@ -33,11 +46,99 @@ pub proc main() -> Void {
 }
 ```
 
+## V3.0 Breaking Changes
+
+### Cryptic Keyword Replacements
+
+V3.0 introduces **60+ cryptic keywords** to replace readable V2.0 keywords. Both syntaxes are supported for backward compatibility.
+
+#### Control Flow Keywords
+
+| V2.0 | V3.0 | Description |
+|------|------|-------------|
+| `proc` | `PROCDEF` | Procedure definition |
+| `let` | `DECLVAR` | Variable declaration |
+| `out` | `EMIT` | Output emission |
+| `call` | `PROCCALL` | Procedure call |
+| `if` | `CJMP` | Conditional jump |
+| `elif` | `CJMPALT` | Alternative conditional jump |
+| `else` | `JMPDEF` | Default jump target |
+| `while` | `WHLLP` | While loop |
+| `for` | `ITRLP` | Iterator loop |
+| `in` | `INSET` | In set/collection |
+| `loop` | `INFLP` | Infinite loop |
+| `break` | `LPEXIT` | Loop exit |
+| `continue` | `LPSKIP` | Loop skip |
+| `return` | `RETVL` | Return value |
+
+#### Machine-Level Type Names
+
+| V2.0 | V3.0 | Description |
+|------|------|-------------|
+| `Int64` | `I64` | 64-bit signed integer |
+| `Bool` | `BOOL8` | 8-bit boolean |
+| `Str` | `STRPTR` | String pointer |
+| `Arr` | `ARRPTR` | Array pointer |
+| `Void` | `VOID0` | Zero-byte void |
+| `true` | `BOOLT` | Boolean true |
+| `false` | `BOOLF` | Boolean false |
+
+#### Memory Operations
+
+| V2.0 | V3.0 | Description |
+|------|------|-------------|
+| `move` | `MEMXFER` | Memory transfer |
+| `copy` | `MEMCPY` | Memory copy |
+| `ref` | `MEMREF` | Memory reference |
+| `deref` | `MEMDEREF` | Memory dereference |
+| `alloc` | `HEAPALLOC` | Heap allocation |
+| `dealloc` | `HEAPFREE` | Heap deallocation |
+
+#### Ownership and Visibility
+
+| V2.0 | V3.0 | Description |
+|------|------|-------------|
+| `own` | `OWNR` | Owner |
+| `mut` | `MUTBL` | Mutable |
+| `pub` | `PUBEXP` | Public export |
+| `module` | `MODDEF` | Module definition |
+| `scope` | `STKFRAME` | Stack frame |
+| `parallel` | `PARLBLK` | Parallel block |
+| `input` | `STDIN` | Standard input |
+
+#### Logical Operations
+
+| V2.0 | V3.0 | Description |
+|------|------|-------------|
+| `and` | `LOGAND` | Logical AND |
+| `or` | `LOGOR` | Logical OR |
+| `not` | `LOGNOT` | Logical NOT |
+
 ## Lexical Structure
 
-### Keywords
+### Keywords (V3.0)
 
-LPPO has the following reserved keywords:
+LPPO V3.0 has the following reserved **cryptic** keywords:
+
+**Control Flow**: `CJMP`, `CJMPALT`, `JMPDEF`, `WHLLP`, `ITRLP`, `INSET`, `INFLP`, `LPEXIT`, `LPSKIP`, `RETVL`, `PATMCH`
+
+**Declarations**: `PROCDEF`, `DECLVAR`, `STRUCTDEF`, `ENUMDEF`, `TRAITDEF`, `IMPLBLK`, `MODDEF`, `MODIMP`
+
+**Visibility**: `PUBEXP`
+
+**Memory**: `HEAPALLOC`, `HEAPFREE`, `MEMXFER`, `MEMCPY`, `MEMREF`, `MEMDEREF`, `BORROW`, `OWNR`, `MUTBL`, `HEAPSEG`, `STKSEG`, `TYPESZ`, `TYPEALN`, `TYPECAST`
+
+**Types**: `I64`, `BOOL8`, `STRPTR`, `ARRPTR`, `VOID0`, `OPT`, `RES`
+
+**Boolean Literals**: `BOOLT`, `BOOLF`
+
+**Operations**: `EMIT`, `PROCCALL`, `PARLBLK`, `STKFRAME`, `FRAMEEND`, `UNSAFEBLK`, `INSTCRT`, `MEMSEG`, `STDIN`
+
+**Logical**: `LOGAND`, `LOGOR`, `LOGNOT`
+
+### Keywords (V2.0 - Backward Compatible)
+
+For backward compatibility, all V2.0 keywords still work:
 
 **Control Flow**: `if`, `elif`, `else`, `while`, `for`, `in`, `loop`, `break`, `continue`, `return`, `match`
 

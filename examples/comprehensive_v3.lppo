@@ -1,0 +1,169 @@
+// LPPO v3.0 - Comprehensive Ultra-Low-Level Feature Demonstration
+// Maximum complexity with cryptic assembly-like syntax
+// Every construct requires explicit machine-level specification
+
+PUBEXP PROCDEF main() -> VOID0 {
+    // V3.0: All variables use DECLVAR with explicit ownership (OWNR)
+    // STKFRAME creates explicit stack frame boundaries
+    STKFRAME math_operations {
+        DECLVAR OWNR x: I64 = 5;
+        DECLVAR OWNR y: I64 = 3;
+        
+        // All arithmetic operations with explicit type declarations
+        DECLVAR OWNR sum: I64 = x + y;
+        DECLVAR OWNR diff: I64 = x - y;
+        DECLVAR OWNR product: I64 = x * y;
+        DECLVAR OWNR quotient: I64 = x / y;
+        DECLVAR OWNR remainder: I64 = x % y;
+        
+        EMIT "Math:", sum, diff, product, quotient, remainder;
+        
+        DECLVAR OWNR base: I64 = 2;
+        DECLVAR OWNR exp: I64 = 8;
+        DECLVAR OWNR power_result: I64 = base ** exp;
+        EMIT "Power:", power_result;
+    }
+    
+    // V3.0: Boolean operations with BOOL8 type
+    STKFRAME boolean_operations {
+        DECLVAR OWNR t: BOOL8 = BOOLT;
+        DECLVAR OWNR f: BOOL8 = BOOLF;
+        DECLVAR OWNR and_result: BOOL8 = t LOGAND f;
+        DECLVAR OWNR or_result: BOOL8 = t LOGOR f;
+        DECLVAR OWNR not_result: BOOL8 = LOGNOT f;
+        EMIT "Bool:", t, f, and_result, or_result, not_result;
+    }
+    
+    // V3.0: Comparison operations
+    STKFRAME comparisons {
+        DECLVAR OWNR x: I64 = 5;
+        DECLVAR OWNR y: I64 = 3;
+        DECLVAR OWNR gt: BOOL8 = x > y;
+        DECLVAR OWNR lt: BOOL8 = x < y;
+        DECLVAR OWNR eq: BOOL8 = x == y;
+        DECLVAR OWNR ne: BOOL8 = x != y;
+        EMIT "Compare:", gt, lt, eq, ne;
+    }
+    
+    // V3.0: Array operations with ARRPTR type
+    STKFRAME array_operations {
+        DECLVAR OWNR arr: ARRPTR<I64> = [1, 2, 3, 4, 5];
+        
+        DECLVAR OWNR zero: I64 = 0;
+        DECLVAR OWNR first: I64 = arr[zero];
+        EMIT "First element:", first;
+        
+        DECLVAR OWNR neg_one: I64 = -1;
+        DECLVAR OWNR last: I64 = arr[neg_one];
+        EMIT "Last element:", last;
+        
+        DECLVAR OWNR arr_len: I64 = arr.len();
+        EMIT "Array length:", arr_len;
+        
+        // Array concatenation
+        DECLVAR OWNR a1: ARRPTR<I64> = [1, 2];
+        DECLVAR OWNR a2: ARRPTR<I64> = [3, 4];
+        DECLVAR OWNR combined: ARRPTR<I64> = a1 + a2;
+        EMIT "Combined:", combined;
+    }
+    
+    // V3.0: String operations with STRPTR type
+    STKFRAME string_operations {
+        DECLVAR OWNR msg: STRPTR = "Hello World";
+        
+        DECLVAR OWNR msg_len: I64 = msg.len();
+        EMIT "String length:", msg_len;
+        
+        DECLVAR OWNR msg_upper: STRPTR = msg.upper();
+        EMIT "Uppercase:", msg_upper;
+        
+        DECLVAR OWNR msg_lower: STRPTR = msg.lower();
+        EMIT "Lowercase:", msg_lower;
+        
+        // String splitting
+        DECLVAR OWNR text: STRPTR = "a,b,c";
+        DECLVAR OWNR sep: STRPTR = ",";
+        DECLVAR OWNR parts: ARRPTR<STRPTR> = text.split(sep);
+        EMIT "Split parts:", parts;
+    }
+    
+    // V3.0: Conditional jump instructions (CJMP, CJMPALT, JMPDEF)
+    STKFRAME conditional_flow {
+        DECLVAR OWNR x: I64 = 15;
+        DECLVAR OWNR ten: I64 = 10;
+        DECLVAR OWNR five: I64 = 5;
+        
+        DECLVAR OWNR is_large: BOOL8 = x > ten;
+        CJMP is_large {
+            DECLVAR OWNR msg: STRPTR = "Large";
+            EMIT msg;
+        } CJMPALT x > five {
+            DECLVAR OWNR msg: STRPTR = "Medium";
+            EMIT msg;
+        } JMPDEF {
+            DECLVAR OWNR msg: STRPTR = "Small";
+            EMIT msg;
+        }
+    }
+    
+    // V3.0: While loop (WHLLP) with mutable variables
+    STKFRAME while_loop {
+        DECLVAR MUTBL OWNR i: I64 = 0;
+        DECLVAR OWNR limit: I64 = 3;
+        
+        WHLLP i < limit {
+            DECLVAR OWNR label: STRPTR = "Count:";
+            EMIT label, i;
+            
+            DECLVAR OWNR i_next: I64 = i + 1;
+            MEMXFER i_next -> i;
+        }
+    }
+    
+    // V3.0: Iterator loop (ITRLP) with INSET
+    STKFRAME for_loop {
+        DECLVAR OWNR items: ARRPTR<I64> = [10, 20, 30];
+        
+        ITRLP item: I64 INSET items {
+            DECLVAR OWNR label: STRPTR = "Item:";
+            EMIT label, item;
+        }
+    }
+    
+    // V3.0: Infinite loop (INFLP) with LPEXIT
+    STKFRAME infinite_loop {
+        DECLVAR MUTBL OWNR count: I64 = 0;
+        DECLVAR OWNR max: I64 = 3;
+        
+        INFLP {
+            DECLVAR OWNR label: STRPTR = "Iteration:";
+            EMIT label, count;
+            
+            DECLVAR OWNR count_next: I64 = count + 1;
+            MEMXFER count_next -> count;
+            
+            DECLVAR OWNR should_break: BOOL8 = count >= max;
+            CJMP should_break {
+                LPEXIT;
+            }
+        }
+    }
+    
+    // V3.0: Procedure calls with PROCCALL
+    STKFRAME procedure_calls {
+        DECLVAR OWNR name: STRPTR = "LPPO";
+        DECLVAR OWNR year: I64 = 2024;
+        PROCCALL greet(name, year);
+    }
+    
+    DECLVAR OWNR final_msg: STRPTR = "All V3.0 features demonstrated!";
+    EMIT final_msg;
+}
+
+// V3.0: Procedure definition with PUBEXP and PROCDEF
+PUBEXP PROCDEF greet(name: STRPTR, year: I64) -> VOID0 {
+    DECLVAR OWNR hello: STRPTR = "Hello";
+    DECLVAR OWNR exclaim: STRPTR = "!";
+    DECLVAR OWNR year_label: STRPTR = "Year:";
+    EMIT hello, name, exclaim, year_label, year;
+}
