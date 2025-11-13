@@ -149,6 +149,10 @@ mod tests {
                     Statement::Parallel(vec![Expr::Str("one".into()), Expr::Str("two".into())]),
                 ],
             }],
+            structs: vec![],
+            enums: vec![],
+            traits: vec![],
+            impls: vec![],
         };
         let compiled = compile_program(program).expect("compile");
         assert!(compiled.contains_key("main"));

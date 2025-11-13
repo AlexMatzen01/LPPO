@@ -634,6 +634,6 @@ mod tests {
     fn reports_missing_procedure() {
         let exec = Executor::new(HashMap::new());
         let err = exec.run("main").expect_err("missing main");
-        assert!(matches!(err, LppoError::UnknownProcedure(name) if name == "main"));
+        assert!(matches!(err, LppoError::UnknownProcedure { name, .. } if name == "main"));
     }
 }

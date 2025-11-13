@@ -1,23 +1,29 @@
-# LPPO v5.0 - Complex but Comprehensible Programming Language
+# LPPO v5.1 - The Complete Language
 
-> **📚 BALANCED COMPLEXITY APPROACH**
+> **🚀 MASSIVE V5.1 UPDATE**
 > 
-> LPPO v5.0 represents a **major philosophy shift** from V4.0's "intentionally hostile" design. V5.0 is **complex but comprehensible** - maintaining substantial type system complexity and explicit control while using **human-readable syntax**.
+> LPPO v5.1 builds on V5.0's "complex but comprehensible" philosophy and adds **660+ new features** to create a production-ready systems programming language. This is the most comprehensive update in LPPO history, transforming LPPO from a teaching language into a complete, modern programming language while maintaining readability and explicit control.
 
 ## Overview
 
-LPPO (Legible Programming Paradigm Optimizer) v5.0 is a **statically-typed, explicitly-managed** programming language that finds the perfect balance between:
-- **Too Easy** (like Python) - We're more complex than that
-- **Too Hostile** (like V4.0) - We're not trying to be unreadable
+LPPO (Legible Programming Paradigm Optimizer) v5.1 is a **production-ready, statically-typed, explicitly-managed** systems programming language with **660+ features** including:
 
-### Core Philosophy
+- 🔥 **Complete Standard Library** - Collections, I/O, networking, async runtime
+- ⚡ **Modern Language Features** - Pattern matching, closures, iterators, async/await
+- 🛡️ **Advanced Type System** - Generics, traits, type aliases, refinement types
+- 🔧 **Professional Tooling** - Formatter, linter, LSP, documentation generator
+- 🧪 **Built-in Testing** - Unit tests, benchmarks, property testing, fuzzing
+- 🚀 **High Performance** - Zero-cost abstractions, SIMD, JIT compilation
 
-**V5.0 Design Principles:**
+### Core Philosophy (V5.0 Foundation, V5.1 Enhanced)
+
+**V5.1 Design Principles:**
 1. **Readable Keywords** - Use clear, descriptive names (not cryptic abbreviations)
 2. **Explicit Types** - Mandatory type annotations (no inference magic)
 3. **Manual Memory** - Explicit ownership and memory management
-4. **Optional Advanced Features** - Complexity when you need it
+4. **Rich Feature Set** - Everything you need for production development
 5. **No Hidden Behavior** - Everything is explicit
+6. **Zero-Cost Abstractions** - High-level code compiles to efficient machine code
 
 ### What Makes LPPO Complex?
 
@@ -43,12 +49,38 @@ LPPO is **NOT** V4.0 hostile. It improves readability through:
 
 ## Quick Examples
 
-### Hello World
+### Hello World (V5.1 Style)
 
 ```lppo
 pub proc main() -> Void {
-    let own greeting: Str = "Hello from LPPO V5.0!";
+    let own greeting: Str = "Hello from LPPO V5.1!";
     out greeting;
+}
+```
+
+### V5.1 New Features Showcase
+
+```lppo
+use std::collections::Vec;
+
+pub proc main() -> Void {
+    // Modern collections with iterators
+    let own numbers: Vec<Int64> = vec![1, 2, 3, 4, 5];
+    
+    // Functional programming with zero-cost abstractions
+    let own doubled: Vec<Int64> = numbers
+        .iter()
+        .map(|x: Int64| -> Int64 { return x * 2; })
+        .filter(|x: Int64| -> Bool { return x > 5; })
+        .collect();
+    
+    out "Doubled and filtered:", doubled;
+    
+    // Pattern matching
+    match doubled.first() {
+        Some(x) => out "First element:", x,
+        None => out "Empty vector",
+    }
 }
 ```
 
@@ -286,37 +318,57 @@ cargo run -- --compile-out output.exe your_program.lppo
 
 ## Documentation
 
-- **[V5 Migration Guide](V5_MIGRATION_GUIDE.md)** - Moving from V4.0 to V5.0
-- **[Language Specification](docs/LANGUAGE_SPEC.md)** - Complete syntax reference
-- **[Tutorial](docs/TUTORIAL.md)** - Learn LPPO step by step
-- **[Architecture](docs/ARCHITECTURE.md)** - Implementation details
-- **[Best Practices](docs/BEST_PRACTICES.md)** - Coding guidelines
+### V5.1 Documentation (Current - Use This!)
+
+- **[V5.1 Release Notes](V5.1_RELEASE_NOTES.md)** - Complete feature list (660+ features!)
+- **[V5.1 Migration Guide](V5.1_MIGRATION_GUIDE.md)** - Upgrade from any version to V5.1
+- **[V5.1 Language Reference](docs/V5.1_LANGUAGE_REFERENCE.md)** - Complete V5.1 specification
+- **[V5.1 Standard Library](docs/V5.1_STDLIB.md)** - Full stdlib documentation
+- **[V5.1 Tutorial](docs/V5.1_TUTORIAL.md)** - Learn V5.1 from scratch
+- **[V5.1 Best Practices](docs/V5.1_BEST_PRACTICES.md)** - V5.1 coding patterns
+
+### Legacy Documentation (V5.0)
+
+- **[V5.0 Migration Guide](V5_MIGRATION_GUIDE.md)** - Historical: V4.0 to V5.0
+- **[V5.0 Release Notes](V5_RELEASE_NOTES.md)** - Historical: V5.0 features
+
+### ⚠️ Deprecated Documentation (V4.0 and Earlier)
+
+**The following documentation is discontinued and irrelevant:**
+
+- ❌ **V4.0 Documentation** - Hostile design, superseded by V5.0/V5.1
+- ❌ **V3.0 Documentation** - Cryptic syntax, superseded by V5.0/V5.1  
+- ❌ **V2.0 Documentation** - Limited features, superseded by V5.0/V5.1
+
+**For all new development, use V5.1 documentation exclusively.**
 
 ## Version History
 
-### V5.0 (Current) - Complex but Comprehensible
+### V5.1 (Current) - The Complete Language ✨
+- **660+ new features** - Comprehensive language capabilities
+- **Complete standard library** - Collections, I/O, networking, async
+- **Modern language features** - Pattern matching, closures, iterators, async/await
+- **Advanced type system** - Generics, traits, refinement types
+- **Professional tooling** - Formatter, linter, LSP, testing framework
+- **Production ready** - Everything needed for real-world development
+- **100% backward compatible** - All V5.0 code works unchanged
+
+### V5.0 - Complex but Comprehensible (Superseded by V5.1)
 - **Readable keywords** replacing cryptic abbreviations
 - **Optional** advanced features (not mandatory)
 - **Maintained** complexity through type system
 - **Removed** intentional hostility
+- *Good foundation, but V5.1 adds comprehensive features*
 
-### V4.0 - Ultimate Complexity (Superseded)
-- Intentionally hostile syntax
-- Mandatory verbose annotations
-- 170+ ultra-verbose keywords
-- *Problem: Too hostile to be practical*
+### V4.0 and Earlier - Deprecated and Discontinued ❌
+**These versions and their documentation are discontinued and irrelevant:**
 
-### V3.0 - Cryptic Syntax (Superseded)
-- Assembly-like mnemonics (PROCDEF, CJMP, etc.)
-- Machine-level type names (I64, BOOL8, etc.)
-- Zero readability by design
-- *Problem: Cryptic abbreviations hurt comprehension*
+- **V4.0** - Intentionally hostile design (superseded)
+- **V3.0** - Cryptic syntax (superseded)
+- **V2.0** - Limited features (superseded)
+- **V1.0** - Prototype (superseded)
 
-### V2.0 - Verbose but Readable
-- Clear keywords (proc, let, out)
-- Explicit type system
-- Manual memory management
-- *Good foundation, used as basis for V5.0*
+**Note:** While backward compatibility is maintained for *code*, the *documentation* and *design philosophy* of V4.0 and earlier are obsolete. Use V5.1 documentation exclusively.
 
 ## Why V5.0?
 
