@@ -52,6 +52,10 @@ fn compile_statement(statement: Statement) -> Operation {
     match statement {
         Statement::Emit(exprs) => Operation::Emit(exprs),
         Statement::Parallel(branches) => Operation::Parallel(branches),
+        Statement::Input { var, typ, prompt } => {
+            // Type is compile-time only, runtime will parse based on context
+            Operation::Input { var, typ, prompt }
+        }
         Statement::Call(qualified_name, args) => {
             let name = qualified_name_to_string(&qualified_name);
             Operation::Call(name, args)
@@ -67,7 +71,7 @@ fn compile_statement(statement: Statement) -> Operation {
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::While { cond, ops }
         }
-        Statement::For { var, typ, iterable, body } => {
+        Statement::For { var, typ: _, iterable, body } => {
             // Type annotation is compile-time only, runtime doesn't track it
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::For { var, iterable, ops }
@@ -79,12 +83,12 @@ fn compile_statement(statement: Statement) -> Operation {
         Statement::Break => Operation::Break,
         Statement::Continue => Operation::Continue,
         Statement::Return(expr) => Operation::Return(expr),
-        Statement::Let { name, typ, expr, is_mut, ownership } => {
+        Statement::Let { name, typ: _, expr, is_mut: _, ownership: _ } => {
             // Type, mutability, and ownership are compile-time only
             // At runtime we just bind the value to the name
             Operation::Let(name, expr)
         }
-        Statement::Alloc { var, typ, location, size } => {
+        Statement::Alloc { var, typ: _, location: _, size: _ } => {
             // For now, treat alloc as creating an array of the specified size
             // This is a simplified implementation
             Operation::Let(var, Expr::Array(vec![]))
@@ -102,7 +106,7 @@ fn compile_statement(statement: Statement) -> Operation {
             // Copy is also like let target = source (values are copied)
             Operation::Let(target, Expr::Var(source))
         }
-        Statement::Scope { name, body } => {
+        Statement::Scope { name: _, body } => {
             // Scope blocks just execute their body
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::Scope { ops }
@@ -112,12 +116,12 @@ fn compile_statement(statement: Statement) -> Operation {
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::Unsafe { ops }
         }
-        Statement::Match { expr, arms } => {
+        Statement::Match { expr: _, arms: _ } => {
             // Match expressions will be compiled to a series of if-else chains
             // For now, just placeholder - will implement pattern matching later
             Operation::Nop
         }
-        Statement::StructInit { name, typ, fields } => {
+        Statement::StructInit { name: _, typ: _, fields: _ } => {
             // Struct initialization - placeholder for now
             Operation::Nop
         }

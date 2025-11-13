@@ -122,6 +122,12 @@ pub enum Statement {
     Emit(Vec<Expr>),
     /// Executes several emit expressions in parallel.
     Parallel(Vec<Expr>),
+    /// Read input from stdin: input var: Type with prompt;
+    Input {
+        var: String,
+        typ: TypeAnnotation,
+        prompt: Option<Expr>,
+    },
     /// Calls another procedure by name (possibly qualified), with optional argument expressions.
     Call(QualifiedName, Vec<Expr>),
     /// Declare a local variable with EXPLICIT type: let name: Type = expr;

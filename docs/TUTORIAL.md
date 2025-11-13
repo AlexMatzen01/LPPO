@@ -168,6 +168,110 @@ pub proc main() -> Void {
 }
 ```
 
+## User Input
+
+LPPO provides the `input` statement for reading user input. Like everything in LPPO, **input requires explicit type annotation**.
+
+### Basic Input
+
+The simplest form reads input without a prompt:
+
+```lppo
+pub proc main() -> Void {
+    input name: Str;
+    out "Hello,", name;
+}
+```
+
+### Input with Prompt
+
+Use `with` to display a prompt before reading:
+
+```lppo
+pub proc main() -> Void {
+    input name: Str with "What is your name?";
+    let own greeting: Str = "Welcome,";
+    out greeting, name;
+}
+```
+
+### Input Types
+
+**String Input:**
+```lppo
+pub proc main() -> Void {
+    input message: Str with "Enter a message:";
+    out "You said:", message;
+}
+```
+
+**Integer Input:**
+```lppo
+pub proc main() -> Void {
+    input number: Int64 with "Enter a number:";
+    let own doubled: Int64 = number + number;
+    out "Double:", doubled;
+}
+```
+
+**Boolean Input:**
+```lppo
+pub proc main() -> Void {
+    input continue_flag: Bool with "Continue? (yes/no):";
+    let own yes_msg: Str = "Continuing...";
+    let own no_msg: Str = "Stopping...";
+    
+    if continue_flag {
+        out yes_msg;
+    } else {
+        out no_msg;
+    }
+}
+```
+
+Boolean input accepts: `true`, `false`, `yes`, `no`, `y`, `n`, `1`, `0` (case-insensitive)
+
+**Array Input:**
+```lppo
+pub proc main() -> Void {
+    input numbers: Arr<Int64> with "Enter numbers (comma-separated):";
+    out "You entered:", numbers;
+    
+    // Process the array
+    for num: Int64 in numbers {
+        out "Processing:", num;
+    }
+}
+```
+
+Array input accepts:
+- Comma-separated: `1,2,3,4,5`
+- Bracket notation: `[1, 2, 3, 4, 5]`
+
+### Exercise 1.5: Interactive Calculator
+
+Create a calculator that reads two numbers and displays their sum:
+
+```lppo
+pub proc main() -> Void {
+    input num1: Int64 with "Enter first number:";
+    input num2: Int64 with "Enter second number:";
+    
+    let own sum: Int64 = num1 + num2;
+    let own product: Int64 = num1 * num2;
+    
+    out "Sum:", sum;
+    out "Product:", product;
+}
+```
+
+### Error Handling
+
+Input validation is automatic:
+- Invalid integers produce: `"Invalid Int64 input: 'abc'"`
+- Invalid booleans produce: `"Invalid Bool input: 'maybe'. Expected: true/false, yes/no, 1/0"`
+- Invalid array elements produce: `"Invalid Int64 in array: 'xyz'"`
+
 ## Operations and Expressions
 
 ### Arithmetic

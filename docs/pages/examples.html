@@ -68,6 +68,45 @@
     out "Stay inside?", not is_sunny or not is_weekend;
 }</code></pre>
 
+                <h2>Input Examples</h2>
+
+                <h3>Simple Greeting</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    input name: Str with "What is your name?";
+    let own greeting: Str = "Hello,";
+    out greeting, name;
+}</code></pre>
+
+                <h3>Interactive Calculator</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    input num1: Int64 with "Enter first number:";
+    input num2: Int64 with "Enter second number:";
+    
+    let own sum: Int64 = num1 + num2;
+    let own product: Int64 = num1 * num2;
+    let own quotient: Int64 = num1 / num2;
+    
+    out "Sum:", sum;
+    out "Product:", product;
+    out "Quotient:", quotient;
+}</code></pre>
+
+                <h3>Array Input Processing</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    input numbers: Arr<Int64> with "Enter numbers (comma-separated):";
+    
+    let mut own total: Int64 = 0;
+    let own zero: Int64 = 0;
+    
+    for num: Int64 in numbers {
+        let own new_total: Int64 = total + num;
+        move new_total -> total;
+    }
+    
+    out "You entered:", numbers;
+    out "Sum:", total;
+}</code></pre>
+
                 <h2>Control Flow Examples</h2>
 
                 <h3>Grade Calculator</h3>

@@ -259,6 +259,7 @@ impl<'a> Parser<'a> {
         match self.lookahead.clone() {
             Token::Let => self.parse_let(),
             Token::Out => self.parse_emit(),
+            Token::Input => self.parse_input(),
             Token::Call => self.parse_call(),
             Token::If => self.parse_if(),
             Token::While => self.parse_while(),
@@ -543,6 +544,41 @@ impl<'a> Parser<'a> {
         }
         self.expect(Token::Semicolon)?;
         Ok(Statement::Emit(exprs))
+    }
+
+    fn parse_input(&mut self) -> LppoResult<Statement> {
+        self.expect(Token::Input)?;
+        
+        // Get variable name
+        let var = match self.lookahead.clone() {
+            Token::Identifier(n) => {
+                self.advance()?;
+                n
+            }
+            _ => {
+                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
+                ))
+            }
+        };
+        
+        // Expect colon and type
+        self.expect(Token::Colon)?;
+        let typ = self.parse_type()?;
+        
+        // Optional prompt with "with" keyword
+        let prompt = if let Token::Identifier(id) = &self.lookahead {
+            if id == "with" {
+                self.advance()?; // consume "with"
+                Some(self.parse_expression()?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        self.expect(Token::Semicolon)?;
+        Ok(Statement::Input { var, typ, prompt })
     }
 
     fn parse_let(&mut self) -> LppoResult<Statement> {

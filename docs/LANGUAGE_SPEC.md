@@ -446,6 +446,55 @@ let own msg: Str = "Value:";
 out msg, x;
 ```
 
+### Input Statement
+
+Read user input from standard input with explicit type specification:
+
+**Syntax:**
+```lppo
+input variable_name: Type;                    // Basic input
+input variable_name: Type with prompt_expr;   // Input with prompt
+```
+
+**Supported Types:** `Int64`, `Bool`, `Str`, `Arr<T>`
+
+**Examples:**
+
+String input:
+```lppo
+input name: Str with "Enter your name:";
+out "Hello,", name;
+```
+
+Integer input:
+```lppo
+input age: Int64 with "Enter your age:";
+let own double: Int64 = age + age;
+out "Double:", double;
+```
+
+Boolean input (accepts: true/false, yes/no, y/n, 1/0):
+```lppo
+input flag: Bool with "Continue? (yes/no):";
+if flag {
+    out "Continuing...";
+} else {
+    out "Stopping...";
+}
+```
+
+Array input (comma-separated or bracket notation):
+```lppo
+// Accepts: "1,2,3" or "[1, 2, 3]"
+input numbers: Arr<Int64> with "Enter numbers:";
+out "You entered:", numbers;
+```
+
+**Type Validation:**
+- Input is automatically parsed according to the specified type
+- Type mismatches produce descriptive error messages
+- Invalid input terminates the program with an error
+
 ### If Statement
 
 ```lppo

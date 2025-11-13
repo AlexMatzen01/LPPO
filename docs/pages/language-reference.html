@@ -565,6 +565,60 @@ let x = 10;</code></pre>
                 <pre><code class="language-lppo">let arr = [1, 2, 3];
 out "Array:", arr;  // Output: Array: [1, 2, 3]</code></pre>
 
+                <h2>Input Statement</h2>
+                <p>The <code>input</code> statement reads user input from stdin with explicit type specification:</p>
+
+                <h3>Syntax</h3>
+                <pre><code class="language-lppo">input variable_name: Type;                    // Basic input
+input variable_name: Type with prompt_expr;   // Input with prompt</code></pre>
+
+                <h3>String Input</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    input name: Str with "Enter your name:";
+    out "Hello,", name;
+}</code></pre>
+
+                <h3>Integer Input</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    input age: Int64 with "Enter your age:";
+    let own double: Int64 = age + age;
+    out "Double:", double;
+}</code></pre>
+
+                <h3>Boolean Input</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    input flag: Bool with "Continue? (yes/no):";
+    let own yes_msg: Str = "Continuing...";
+    let own no_msg: Str = "Stopping...";
+    
+    if flag {
+        out yes_msg;
+    } else {
+        out no_msg;
+    }
+}</code></pre>
+
+                <p>Boolean input accepts: <code>true</code>, <code>false</code>, <code>yes</code>, <code>no</code>, <code>y</code>, <code>n</code>, <code>1</code>, <code>0</code> (case-insensitive)</p>
+
+                <h3>Array Input</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    // Accepts: "1,2,3" or "[1, 2, 3]"
+    input numbers: Arr<Int64> with "Enter numbers:";
+    out "You entered:", numbers;
+    
+    let mut own total: Int64 = 0;
+    for num: Int64 in numbers {
+        let own new_total: Int64 = total + num;
+        move new_total -> total;
+    }
+    out "Sum:", total;
+}</code></pre>
+
+                <div class="info-box warning">
+                    <h4>⚠️ Input Validation</h4>
+                    <p>All input is validated according to the specified type. Type mismatches produce descriptive error messages and terminate the program.</p>
+                </div>
+
                 <div class="info-box success">
                     <h4>📚 Reference Complete</h4>
                     <p>You now have a complete reference for LPPO syntax and features. Check out the <a href="examples.html">Examples</a> page for more practical code samples!</p>

@@ -95,6 +95,17 @@ Welcome to procedural programming!</code></pre>
     out "sum =", sum;
 }</code></pre>
 
+                <h3>User Input</h3>
+                <pre><code class="language-lppo">pub proc main() -> Void {
+    input name: Str with "Enter your name:";
+    input age: Int64 with "Enter your age:";
+    
+    out "Hello,", name;
+    out "You are", age, "years old";
+}</code></pre>
+
+                <p>Input types: <code>Str</code>, <code>Int64</code>, <code>Bool</code>, <code>Arr&lt;Type&gt;</code></p>
+
                 <h3>Control Flow</h3>
                 <pre><code class="language-lppo">proc main {
     let score = 85;

@@ -28,6 +28,12 @@ pub enum Operation {
     Emit(Vec<Expr>),
     /// Emit several expressions concurrently.
     Parallel(Vec<Expr>),
+    /// Read input from stdin into a variable
+    Input {
+        var: String,
+        typ: crate::ast::TypeAnnotation,
+        prompt: Option<Expr>,
+    },
     /// Call another procedure by name with argument expressions.
     Call(String, Vec<Expr>),
     /// Let binding: set a local variable to the value of an expression.
@@ -224,11 +230,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 _ => Err(LppoError::type_error(format!("unknown method: {}", method))),
             }
         }
-        Expr::FieldAccess { target, field } => {
+        Expr::FieldAccess { target: _, field } => {
             // For now, we don't have structs, so this is an error
             Err(LppoError::type_error(format!("field access not yet implemented: {}", field)))
         }
-        Expr::Ref { target, lifetime, is_mut } => {
+        Expr::Ref { target, lifetime: _, is_mut: _ } => {
             // In our simplified runtime, references are just the value itself
             // Full reference semantics would require borrow checking
             eval_expr(target, env)
@@ -273,7 +279,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 (v, _) => Ok(v), // passthrough for same type
             }
         }
-        Expr::Borrow { target, lifetime } => {
+        Expr::Borrow { target, lifetime: _ } => {
             // Simplified: borrow is just like a reference
             eval_expr(target, env)
         }
@@ -331,6 +337,112 @@ impl Executor {
                             });
                         }
                     });
+                }
+                Operation::Input { var, typ, prompt } => {
+                    use std::io::{self, Write};
+                    
+                    // Display prompt if provided
+                    if let Some(prompt_expr) = prompt {
+                        let prompt_val = eval_expr(prompt_expr, env)?;
+                        print!("{} ", value_to_string(&prompt_val));
+                        io::stdout().flush().unwrap();
+                    }
+                    
+                    // Read input from stdin
+                    let mut input_line = String::new();
+                    io::stdin()
+                        .read_line(&mut input_line)
+                        .map_err(|e| LppoError::type_error(format!("Failed to read input: {}", e)))?;
+                    
+                    let input_line = input_line.trim();
+                    
+                    // Parse based on type annotation
+                    use crate::ast::TypeAnnotation;
+                    let value = match typ {
+                        TypeAnnotation::Int64 => {
+                            input_line
+                                .parse::<i64>()
+                                .map(Value::Int)
+                                .map_err(|_| LppoError::type_error(format!("Invalid Int64 input: '{}'", input_line)))?
+                        }
+                        TypeAnnotation::Bool => {
+                            match input_line.to_lowercase().as_str() {
+                                "true" | "t" | "yes" | "y" | "1" => Value::Bool(true),
+                                "false" | "f" | "no" | "n" | "0" => Value::Bool(false),
+                                _ => return Err(LppoError::type_error(format!("Invalid Bool input: '{}'. Expected: true/false, yes/no, 1/0", input_line)))
+                            }
+                        }
+                        TypeAnnotation::Str => Value::Str(input_line.to_string()),
+                        TypeAnnotation::Arr(_) => {
+                            // Parse array input: [1, 2, 3] or comma-separated: 1,2,3
+                            let input_line = input_line.trim();
+                            
+                            // Try parsing as JSON-like array first
+                            if input_line.starts_with('[') && input_line.ends_with(']') {
+                                let inner = &input_line[1..input_line.len()-1];
+                                let elements: Vec<String> = inner
+                                    .split(',')
+                                    .map(|s| s.trim().to_string())
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                
+                                // Try to infer element type from the inner type annotation
+                                if let TypeAnnotation::Arr(inner_type_box) = typ {
+                                    let inner_type = &**inner_type_box;
+                                    let parsed_elements: Result<Vec<Value>, _> = elements
+                                        .iter()
+                                        .map(|elem| match inner_type {
+                                            TypeAnnotation::Int64 => elem.parse::<i64>().map(Value::Int).map_err(|_| 
+                                                LppoError::type_error(format!("Invalid Int64 in array: '{}'", elem))),
+                                            TypeAnnotation::Str => Ok(Value::Str(elem.trim_matches('"').to_string())),
+                                            TypeAnnotation::Bool => match elem.to_lowercase().as_str() {
+                                                "true" => Ok(Value::Bool(true)),
+                                                "false" => Ok(Value::Bool(false)),
+                                                _ => Err(LppoError::type_error(format!("Invalid Bool in array: '{}'", elem)))
+                                            },
+                                            _ => Err(LppoError::type_error("Unsupported array element type".to_string()))
+                                        })
+                                        .collect();
+                                    Value::Array(parsed_elements?)
+                                } else {
+                                    return Err(LppoError::type_error("Invalid array type annotation".to_string()));
+                                }
+                            } else {
+                                // Try comma-separated format
+                                let elements: Vec<String> = input_line
+                                    .split(',')
+                                    .map(|s| s.trim().to_string())
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                
+                                if let TypeAnnotation::Arr(inner_type_box) = typ {
+                                    let inner_type = &**inner_type_box;
+                                    let parsed_elements: Result<Vec<Value>, _> = elements
+                                        .iter()
+                                        .map(|elem| match inner_type {
+                                            TypeAnnotation::Int64 => elem.parse::<i64>().map(Value::Int).map_err(|_| 
+                                                LppoError::type_error(format!("Invalid Int64 in array: '{}'", elem))),
+                                            TypeAnnotation::Str => Ok(Value::Str(elem.to_string())),
+                                            TypeAnnotation::Bool => match elem.to_lowercase().as_str() {
+                                                "true" => Ok(Value::Bool(true)),
+                                                "false" => Ok(Value::Bool(false)),
+                                                _ => Err(LppoError::type_error(format!("Invalid Bool in array: '{}'", elem)))
+                                            },
+                                            _ => Err(LppoError::type_error("Unsupported array element type".to_string()))
+                                        })
+                                        .collect();
+                                    Value::Array(parsed_elements?)
+                                } else {
+                                    return Err(LppoError::type_error("Invalid array type annotation".to_string()));
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(LppoError::type_error(format!("Unsupported input type: {:?}", typ)));
+                        }
+                    };
+                    
+                    env.insert(var.clone(), value);
                 }
                 Operation::Call(name, args) => {
                     // Evaluate argument expressions in current env

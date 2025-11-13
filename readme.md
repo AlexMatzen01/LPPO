@@ -260,6 +260,83 @@ loop {
 
 **Loop Control:** `break` (exit loop), `continue` (skip to next iteration)
 
+### User Input (Explicit Type Specification Required)
+
+LPPO provides the `input` statement for reading user input from standard input. Like all LPPO constructs, input requires **explicit type annotation** for the variable being read.
+
+#### Syntax
+```lppo
+input variable_name: Type;                    // Basic input
+input variable_name: Type with prompt_expr;   // Input with prompt
+```
+
+#### Supported Input Types
+
+**String Input**
+```lppo
+pub proc main() -> Void {
+    input name: Str with "Enter your name:";
+    let own greeting: Str = "Hello,";
+    out greeting, name;
+}
+```
+
+**Integer Input**
+```lppo
+pub proc main() -> Void {
+    input age: Int64 with "Enter your age:";
+    let own double: Int64 = age + age;
+    out "Double your age:", double;
+}
+```
+
+**Boolean Input**
+```lppo
+pub proc main() -> Void {
+    input is_member: Bool with "Are you a member? (true/false):";
+    let own status: Str = "Membership status:";
+    out status, is_member;
+}
+```
+
+**Accepted boolean inputs:** `true`, `false`, `yes`, `no`, `y`, `n`, `1`, `0` (case-insensitive)
+
+**Array Input**
+```lppo
+pub proc main() -> Void {
+    // Comma-separated format: 1,2,3,4,5
+    input numbers: Arr<Int64> with "Enter numbers (comma-separated):";
+    out "You entered:", numbers;
+    
+    // Also supports bracket format: [1, 2, 3, 4, 5]
+    input more_numbers: Arr<Int64>;
+    out "Additional numbers:", more_numbers;
+}
+```
+
+**Input Processing Example**
+```lppo
+pub proc main() -> Void {
+    input nums: Arr<Int64> with "Enter numbers to sum:";
+    
+    let mut own total: Int64 = 0;
+    let own zero: Int64 = 0;
+    
+    for num: Int64 in nums {
+        let own new_total: Int64 = total + num;
+        move new_total -> total;
+    }
+    
+    out "Sum:", total;
+}
+```
+
+**Input Validation:**
+- Type mismatches produce clear error messages
+- Invalid integers: `"Invalid Int64 input: 'abc'"`
+- Invalid booleans: `"Invalid Bool input: 'maybe'. Expected: true/false, yes/no, 1/0"`
+- Invalid array elements: `"Invalid Int64 in array: 'xyz'"`
+
 ### Arrays and Strings (Explicit Type Annotations Required)
 
 #### Array Operations

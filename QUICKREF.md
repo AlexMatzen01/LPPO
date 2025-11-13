@@ -17,6 +17,25 @@ out "Values:", x, y, z;
 out arr;
 ```
 
+### Input
+```lppo
+// Basic input
+input name: Str;
+input age: Int64;
+
+// Input with prompt
+input name: Str with "Enter name:";
+input count: Int64 with "How many?";
+input flag: Bool with "Continue? (yes/no):";
+input nums: Arr<Int64> with "Enter numbers:";
+```
+
+**Input Types:**
+- `Str` - Strings
+- `Int64` - Integers
+- `Bool` - Booleans (true/false, yes/no, y/n, 1/0)
+- `Arr<Type>` - Arrays (comma-separated or [1,2,3])
+
 ### Procedures
 ```lppo
 proc name {
