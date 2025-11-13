@@ -250,12 +250,10 @@ impl<'a> Lexer<'a> {
                 self.bump();
                 self.bump();
                 // scan until '*/' or EOF
-                let mut found_end = false;
                 while let Some(ch) = self.bump() {
                     if ch == b'*' && self.peek() == Some(b'/') {
                         // consume '/'
                         self.bump();
-                        found_end = true;
                         break;
                     }
                 }
