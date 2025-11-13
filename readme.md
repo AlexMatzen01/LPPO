@@ -1,207 +1,298 @@
-# LPPO v2.0 - Advanced Procedural Language with Explicit Type System
+# LPPO v3.0 - Ultra-Low-Level Assembly-Like Language with Cryptic Syntax
 
-> **⚠️ COMPLEXITY WARNING ⚠️**
+> **⚠️ EXTREME COMPLEXITY WARNING ⚠️**
 > 
-> LPPO v2.0 is **intentionally complex, verbose, and difficult to learn**. This language is designed for maximum explicitness with ZERO convenience features. Every aspect of your code requires manual specification.
+> LPPO v3.0 is **EXTREMELY complex, cryptic, and intentionally hostile to beginners**. This language uses assembly-like abbreviations and machine-level terminology. It is designed for MAXIMUM difficulty with ZERO readability. Every aspect requires obscure machine-level knowledge.
 
-LPPO v2.0 is a **sophisticated, complex, and deliberately challenging** programming language that rejects modern convenience in favor of absolute explicitness. It requires:
+LPPO v3.0 is an **ultra-low-level, cryptic, and deliberately obfuscated** programming language that rejects all human readability in favor of machine-like terseness. It requires:
 
-- **MANDATORY type annotations** for every single variable - no inference
-- **MANUAL memory management** with explicit allocation and deallocation
-- **EXPLICIT ownership semantics** - own, ref, mut, borrow must be specified
-- **VERBOSE procedure signatures** - all parameters and returns fully typed
-- **LIFETIME tracking** with explicit annotations ('a, 'b syntax)
-- **QUALIFIED namespaces** - module::path::resolution required
-- **NO syntactic sugar** - maximum verbosity enforced
+- **CRYPTIC ABBREVIATIONS** - All keywords replaced with assembly-like mnemonics
+- **MANDATORY type annotations** with machine-level bit specifications (I64, BOOL8, STRPTR)
+- **MANUAL memory management** with HEAPALLOC, HEAPFREE, MEMXFER operations
+- **EXPLICIT ownership semantics** - OWNR, MEMREF, MUTBL, BORROW must be specified
+- **VERBOSE procedure signatures** - PROCDEF with all parameters and returns fully typed
+- **STACK FRAME tracking** - STKFRAME and FRAMEEND for explicit scope boundaries
+- **QUALIFIED namespaces** - module::path::resolution required with MODDEF
+- **NO syntactic sugar** - maximum cryptic verbosity enforced
+- **ASSEMBLY-LIKE syntax** - CJMP, JMPDEF, WHLLP, ITRLP, INFLP for control flow
 
 Written in Rust, LPPO compiles source code with comprehensive type checking, ownership validation, and advanced memory semantics.
 
-> **Status:** v2.0 - Maximum Complexity Implementation with Comprehensive Documentation
+> **Status:** v3.0 - EXTREME Complexity with Ultra-Low-Level Cryptic Syntax
 >
-> This language is **NOT designed for productivity**. It is **NOT designed for ease of learning**. It is **NOT designed for rapid development**. 
+> This language is **INTENTIONALLY HOSTILE** to human readability. It is **NOT designed for productivity**. It is **NOT designed for ease of learning**. It is **NOT designed for rapid development**. 
 >
-> LPPO v2.0 exists to demonstrate what happens when you maximize explicitness and minimize convenience. Every declaration, every procedure, every variable requires full manual specification.
+> LPPO v3.0 exists to demonstrate what happens when you maximize cryptic complexity and minimize human comprehension. Every declaration uses machine-level abbreviations requiring deep understanding of low-level computing.
 
-## 🎉 What's New in v2.0
+## 🎉 What's New in v3.0
 
-### Massive Documentation Overhaul (2000+ lines!)
+### Ultra-Low-Level Cryptic Syntax Revolution
 
-- **[Language Specification](docs/LANGUAGE_SPEC.md)** (550+ lines): Complete syntax and semantics reference
-- **[Tutorial Guide](docs/TUTORIAL.md)** (540+ lines): Beginner to advanced with exercises
-- **[Architecture Documentation](docs/ARCHITECTURE.md)** (470+ lines): Internal design and implementation
-- **[Best Practices Guide](docs/BEST_PRACTICES.md)** (450+ lines): Coding standards and patterns
+LPPO v3.0 **COMPLETELY OVERHAULS** the syntax to be maximally cryptic and assembly-like:
 
-### Advanced Error Handling System
+#### Cryptic Keyword Replacements (No More Conversational Keywords!)
 
-- **Detailed error messages** with line and column tracking
-- **Source code context** showing the exact error location
-- **Helpful suggestions** for common mistakes
-- **Severity levels**: Info, Warning, Error, Fatal
-- **Stack traces** for runtime errors
+| V2.0 (Old)  | V3.0 (New)    | Description                           |
+|-------------|---------------|---------------------------------------|
+| `proc`      | `PROCDEF`     | Procedure definition                  |
+| `let`       | `DECLVAR`     | Variable declaration                  |
+| `out`       | `EMIT`        | Output/emission instruction           |
+| `call`      | `PROCCALL`    | Procedure call instruction            |
+| `if`        | `CJMP`        | Conditional jump                      |
+| `elif`      | `CJMPALT`     | Alternative conditional jump          |
+| `else`      | `JMPDEF`      | Default jump target                   |
+| `while`     | `WHLLP`       | While loop construct                  |
+| `for`       | `ITRLP`       | Iterator loop                         |
+| `loop`      | `INFLP`       | Infinite loop                         |
+| `break`     | `LPEXIT`      | Loop exit instruction                 |
+| `continue`  | `LPSKIP`      | Loop skip to next iteration           |
+| `return`    | `RETVL`       | Return value instruction              |
+| `and`       | `LOGAND`      | Logical AND operation                 |
+| `or`        | `LOGOR`       | Logical OR operation                  |
+| `not`       | `LOGNOT`      | Logical NOT operation                 |
+| `scope`     | `STKFRAME`    | Stack frame boundary                  |
+| `parallel`  | `PARLBLK`     | Parallel execution block              |
+| `input`     | `STDIN`       | Standard input read                   |
+| `move`      | `MEMXFER`     | Memory transfer operation             |
+| `copy`      | `MEMCPY`      | Memory copy operation                 |
+| `ref`       | `MEMREF`      | Memory reference                      |
+| `deref`     | `MEMDEREF`    | Memory dereference                    |
+| `alloc`     | `HEAPALLOC`   | Heap allocation                       |
+| `dealloc`   | `HEAPFREE`    | Heap deallocation                     |
 
-Example error output:
-```
-error: unknown variable 'foo'
-  --> line 8, column 5
-   |
-8  | out foo;
-   |     ^^^
-   = help: check that the variable is declared before use
-```
+#### Machine-Level Type Names (Explicit Bit Specifications!)
+
+| V2.0 (Old)  | V3.0 (New)    | Description                           |
+|-------------|---------------|---------------------------------------|
+| `Int64`     | `I64`         | 64-bit signed integer                 |
+| `Bool`      | `BOOL8`       | 8-bit boolean value                   |
+| `Str`       | `STRPTR`      | String pointer type                   |
+| `Arr`       | `ARRPTR`      | Array pointer type                    |
+| `Void`      | `VOID0`       | Zero-byte void type                   |
+| `own`       | `OWNR`        | Ownership qualifier                   |
+| `mut`       | `MUTBL`       | Mutable qualifier                     |
+| `pub`       | `PUBEXP`      | Public export visibility              |
+| `module`    | `MODDEF`      | Module definition                     |
+
+### V3.0 Syntax Philosophy
+
+- **Cryptic abbreviations**: Replace all readable keywords with terse mnemonics
+- **Assembly-like**: Control flow uses jump-style terminology (CJMP, JMPDEF)
+- **Machine-level types**: All types specify bit sizes or pointer nature
+- **Memory operations**: Explicit MEMXFER, MEMCPY, HEAPALLOC terminology
+- **Stack awareness**: STKFRAME and FRAMEEND for explicit scope management
+- **Zero readability**: Intentionally hostile to casual reading
 
 ### Enhanced Examples
 
-- **[Math Library](examples/math_library.lppo)**: Advanced module organization with statistics
-- **[Advanced Features](examples/advanced_features.lppo)**: Complex patterns and memory management
-- **Comprehensive Examples**: Demonstrating all language features
+- **[Hello V3.0](examples/hello_v3.lppo)**: Demonstrating new cryptic syntax
+- **[Comprehensive V3.0](examples/comprehensive_v3.lppo)**: All features with ultra-low-level syntax
+- **Backward Compatibility**: V2.0 examples still work during transition
 
 ### Future-Ready AST
 
-- Struct definitions with fields and methods
-- Enum types with pattern matching
-- Trait system with implementations
+- Struct definitions with fields and methods (STRUCTDEF)
+- Enum types with pattern matching (ENUMDEF, PATMCH)
+- Trait system with implementations (TRAITDEF, IMPLBLK)
 - Generic types and constraints
-- Advanced type annotations (Option, Result, Tuple)
+- Advanced type annotations (OPT, RES, Tuple types)
 
 All groundwork laid for future feature implementation!
 
-## Why LPPO v2.0 is Complex
+## Why LPPO v3.0 is EXTREMELY Complex
 
-- **Mandatory Type System:** EVERY variable requires explicit type annotation - no type inference
-- **Explicit Memory Management:** Manual allocation, deallocation, and ownership tracking
-- **Verbose Syntax:** ALL procedures require explicit parameter types and return types
-- **Ownership Semantics:** Explicit `own`, `ref`, `mut`, and `borrow` qualifiers required
-- **Lifetime Annotations:** Complex lifetime tracking with `'a`, `'b` syntax
-- **Namespace Complexity:** Fully qualified paths with `module::submodule::item` syntax
-- **No Convenience Features:** Maximum verbosity, minimum inference, deliberate complexity
+- **Cryptic Abbreviations:** ALL keywords replaced with assembly-like mnemonics (PROCDEF, DECLVAR, CJMP)
+- **Mandatory Type System:** EVERY variable requires explicit machine-level type with bit specs (I64, BOOL8, STRPTR)
+- **Explicit Memory Management:** Manual HEAPALLOC, HEAPFREE, MEMXFER operations
+- **Ultra-Verbose Syntax:** ALL procedures use PROCDEF with PUBEXP visibility and explicit types
+- **Ownership Semantics:** Explicit OWNR, MEMREF, MUTBL, and BORROW qualifiers required
+- **Stack Frame Management:** Explicit STKFRAME and FRAMEEND for all scope boundaries
+- **Assembly-Like Control Flow:** CJMP (if), CJMPALT (elif), JMPDEF (else), WHLLP (while), ITRLP (for), INFLP (loop)
+- **Low-Level Operations:** MEMXFER (move), MEMCPY (copy), MEMDEREF (deref), HEAPSEG, STKSEG
+- **Namespace Complexity:** Fully qualified paths with MODDEF::submodule::item syntax
+- **No Readability:** Maximum cryptic verbosity, zero human-friendly syntax, intentional obfuscation
 
-## Language Overview - Mandatory Complexity
+## Language Overview - Ultra-Low-Level Cryptic Complexity
 
-### Example Demonstrating Required Verbosity
+### V3.0 Example Demonstrating EXTREME Cryptic Verbosity
 
 ```lppo
 // EVERY procedure REQUIRES:
-// - pub or module visibility
-// - Explicit parameter list with type annotations (even if empty)
-// - Explicit return type annotation
-pub proc main() -> Void {
+// - PUBEXP visibility modifier (replaces "pub")
+// - PROCDEF keyword (replaces "proc")
+// - Explicit parameter list with machine-level type annotations
+// - Explicit return type with bit specification (VOID0, I64, etc.)
+PUBEXP PROCDEF main() -> VOID0 {
     // EVERY variable REQUIRES:
-    // - Explicit ownership qualifier (own, ref, borrow, mut)
-    // - Explicit type annotation after colon
+    // - DECLVAR keyword (replaces "let")
+    // - Explicit ownership qualifier (OWNR, MEMREF, BORROW, MUTBL)
+    // - Explicit machine-level type annotation (I64, STRPTR, ARRPTR)
     // - No type inference whatsoever
-    let own nums: Arr<Int64> = [1, 2, 3, 4, 5];
-    let own msg: Str = "Processing array:";
-    out msg, nums;
+    DECLVAR OWNR nums: ARRPTR<I64> = [1, 2, 3, 4, 5];
+    DECLVAR OWNR msg: STRPTR = "Processing array:";
+    EMIT msg, nums;
     
-    // For loops REQUIRE explicit type for loop variable
-    let own two: Int64 = 2;
-    let own zero: Int64 = 0;
+    // For loops use ITRLP (iterator loop) with INSET keyword
+    DECLVAR OWNR two: I64 = 2;
+    DECLVAR OWNR zero: I64 = 0;
     
-    for n: Int64 in nums {
-        let own remainder: Int64 = n % two;
+    ITRLP n: I64 INSET nums {
+        DECLVAR OWNR remainder: I64 = n % two;
         
-        if remainder == zero {
-            let own even_msg: Str = "is even";
-            out n, even_msg;
-        } else {
-            let own odd_msg: Str = "is odd";
-            out n, odd_msg;
+        // Conditional uses CJMP (conditional jump) instead of "if"
+        // Alternative paths use CJMPALT and JMPDEF
+        CJMP remainder == zero {
+            DECLVAR OWNR even_msg: STRPTR = "is even";
+            EMIT n, even_msg;
+        } JMPDEF {
+            DECLVAR OWNR odd_msg: STRPTR = "is odd";
+            EMIT n, odd_msg;
         }
     }
     
-    // Procedure calls REQUIRE explicit argument list with parentheses
-    let own name: Str = "LPPO";
-    let own year: Int64 = 2024;
-    call greet(name, year);
+    // Procedure calls use PROCCALL with explicit argument list
+    DECLVAR OWNR name: STRPTR = "LPPO";
+    DECLVAR OWNR year: I64 = 2024;
+    PROCCALL greet(name, year);
 }
 
-// ALL parameters REQUIRE explicit type annotations
-pub proc greet(name: Str, year: Int64) -> Void {
-    let own hello: Str = "Hello";
-    let own exclaim: Str = "!";
-    let own year_label: Str = "Year:";
-    out hello, name, exclaim, year_label, year;
+// ALL parameters REQUIRE explicit machine-level type annotations
+PUBEXP PROCDEF greet(name: STRPTR, year: I64) -> VOID0 {
+    DECLVAR OWNR hello: STRPTR = "Hello";
+    DECLVAR OWNR exclaim: STRPTR = "!";
+    DECLVAR OWNR year_label: STRPTR = "Year:";
+    EMIT hello, name, exclaim, year_label, year;
 }
 ```
 
-### Data Types (All Require Explicit Annotation)
+### V2.0 Compatibility
 
-- **Int64:** 64-bit signed integers - `let own x: Int64 = 42;`
-- **Bool:** Boolean values - `let own flag: Bool = true;`
-- **Str:** String literals - `let own msg: Str = "hello";`
-- **Arr<T>:** Typed arrays - `let own nums: Arr<Int64> = [1, 2, 3];`
-- **Void:** No return value - `proc foo() -> Void { }`
+V2.0 syntax still works for backward compatibility during the transition period:
 
-### Type Annotations (MANDATORY FOR ALL)
+```lppo
+// V2.0 style (still supported)
+pub proc main() -> Void {
+    let own msg: Str = "Hello from V2.0";
+    out msg;
+}
+```
 
-**Every single variable** requires explicit type annotation with ownership qualifier:
+### Data Types (V3.0 Machine-Level Specifications)
+
+#### V3.0 Ultra-Low-Level Types (Cryptic Abbreviations)
+
+- **I64:** 64-bit signed integers - `DECLVAR OWNR x: I64 = 42;`
+- **BOOL8:** 8-bit boolean values - `DECLVAR OWNR flag: BOOL8 = BOOLT;`
+- **STRPTR:** String pointer type - `DECLVAR OWNR msg: STRPTR = "hello";`
+- **ARRPTR<T>:** Array pointer with element type - `DECLVAR OWNR nums: ARRPTR<I64> = [1, 2, 3];`
+- **VOID0:** Zero-byte void return - `PROCDEF foo() -> VOID0 { }`
+
+#### V2.0 Backward Compatible Types (Still Supported)
+
+- **Int64:** Maps to I64 internally
+- **Bool:** Maps to BOOL8 internally
+- **Str:** Maps to STRPTR internally
+- **Arr<T>:** Maps to ARRPTR<T> internally
+- **Void:** Maps to VOID0 internally
+
+### Type Annotations (V3.0 CRYPTIC MANDATORY SPECIFICATION)
+
+**Every single variable** requires explicit machine-level type annotation with ownership qualifier:
 
 ```lppo
 // WRONG - Type inference not supported:
-// let x = 10;  // ERROR: Missing type annotation
+// DECLVAR x = 10;  // ERROR: Missing type annotation
 
-// CORRECT - Explicit type required:
-let own x: Int64 = 10;
+// CORRECT - Explicit I64 type required:
+DECLVAR OWNR x: I64 = 10;
 
 // WRONG - Cannot infer from expression:
-// let y = x * 2 + 5;  // ERROR
+// DECLVAR y = x * 2 + 5;  // ERROR
 
-// CORRECT - Intermediate results need types too:
-let own two: Int64 = 2;
-let own five: Int64 = 5;
-let own mult: Int64 = x * two;
-let own y: Int64 = mult + five;
+// CORRECT - Intermediate results need machine-level types:
+DECLVAR OWNR two: I64 = 2;
+DECLVAR OWNR five: I64 = 5;
+DECLVAR OWNR mult: I64 = x * two;
+DECLVAR OWNR y: I64 = mult + five;
 
 // WRONG - Type inference for booleans:
-// let flag = x > y;  // ERROR
+// DECLVAR flag = x > y;  // ERROR
 
-// CORRECT - Explicit Bool type:
-let own gt_result: Bool = x > y;
-let own eq_result: Bool = y == 25;
-let own flag: Bool = gt_result or eq_result;
+// CORRECT - Explicit BOOL8 type with LOGAND/LOGOR:
+DECLVAR OWNR gt_result: BOOL8 = x > y;
+DECLVAR OWNR eq_result: BOOL8 = y == 25;
+DECLVAR OWNR flag: BOOL8 = gt_result LOGOR eq_result;
 
-// Arrays REQUIRE element type specification:
+// Arrays REQUIRE ARRPTR with element type specification:
+DECLVAR OWNR arr: ARRPTR<I64> = [1, 2, 3];
+```
+
+#### V2.0 Style (Still Supported for Transition)
+
+```lppo
+// Old V2.0 syntax still works:
+let own x: Int64 = 10;
+let own flag: Bool = x > 5;
 let own arr: Arr<Int64> = [1, 2, 3];
 ```
 
-### Operators (All Require Typed Operands)
+### Operators (V3.0 Machine-Level Typed Operands)
 
 **Arithmetic:** `+`, `-`, `*`, `/`, `%` (modulo), `**` (power)
-- All operands must be explicitly typed Int64
-- Results must be assigned to explicitly typed Int64 variables
+- All operands must be explicitly typed I64
+- Results must be assigned to explicitly typed I64 variables
 
 **Comparison:** `==`, `!=`, `<`, `>`, `<=`, `>=`
-- Results must be explicitly typed as Bool
-- Cannot use in conditions without explicit Bool variable
+- Results must be explicitly typed as BOOL8
+- Cannot use in conditions without explicit BOOL8 variable
 
-**Logical:** `and`, `or`, `not`
-- Require explicitly typed Bool operands
-- Results must be assigned to Bool variables
+**Logical (V3.0 Cryptic):** `LOGAND`, `LOGOR`, `LOGNOT`
+- Require explicitly typed BOOL8 operands
+- Results must be assigned to BOOL8 variables
+- V2.0 syntax (`and`, `or`, `not`) still supported
 
 **Bitwise:** `&`, `|`, `^` (xor), `~` (not)
-- Operate on Int64 types only
-- Results must be assigned to Int64 variables
+- Operate on I64 types only
+- Results must be assigned to I64 variables
 
-**Unary:** `-` (negation), `not` (logical), `~` (bitwise not)
+**Unary:** `-` (negation), `LOGNOT` (logical), `~` (bitwise not)
 - Type of operand determines operation type
 
-### Control Flow (Explicit Types Required)
+### Control Flow (V3.0 Assembly-Like Jump Instructions)
 
-#### If/Elif/Else (Conditions Must Be Explicitly Typed Bool)
+#### CJMP/CJMPALT/JMPDEF (Conditional/Alternative/Default Jumps)
+
+**V3.0 Ultra-Low-Level Syntax:**
 ```lppo
-let own x: Int64 = 15;
-let own ten: Int64 = 10;
-let own five: Int64 = 5;
+DECLVAR OWNR x: I64 = 15;
+DECLVAR OWNR ten: I64 = 10;
+DECLVAR OWNR five: I64 = 5;
 
 // WRONG: Cannot use expression directly
-// if x > 10 { ... }  // ERROR
+// CJMP x > 10 { ... }  // ERROR
 
-// CORRECT: Store comparison in typed Bool variable
-let own is_large: Bool = x > ten;
+// CORRECT: Store comparison in typed BOOL8 variable
+DECLVAR OWNR is_large: BOOL8 = x > ten;
+CJMP is_large {
+    DECLVAR OWNR msg: STRPTR = "Large";
+    EMIT msg;
+} CJMPALT x > five {
+    DECLVAR OWNR msg: STRPTR = "Medium";
+    EMIT msg;
+} JMPDEF {
+    DECLVAR OWNR msg: STRPTR = "Small";
+    EMIT msg;
+}
+```
+
+**V2.0 Backward Compatible Syntax:**
+```lppo
+let own x: Int64 = 15;
+let own is_large: Bool = x > 10;
 if is_large {
     let own msg: Str = "Large";
     out msg;
-} elif x > five {
+} elif x > 5 {
     let own msg: Str = "Medium";
     out msg;
 } else {
@@ -210,7 +301,24 @@ if is_large {
 }
 ```
 
-#### While Loop (Counter Must Be Explicitly Mutable)
+#### WHLLP Loop (While Loop with Mutable Counter)
+
+**V3.0 Ultra-Low-Level Syntax:**
+```lppo
+DECLVAR MUTBL OWNR i: I64 = 0;
+DECLVAR OWNR limit: I64 = 5;
+
+WHLLP i < limit {
+    DECLVAR OWNR label: STRPTR = "Count:";
+    EMIT label, i;
+    
+    // MEMXFER (memory transfer) for reassignment
+    DECLVAR OWNR i_next: I64 = i + 1;
+    MEMXFER i_next -> i;
+}
+```
+
+**V2.0 Backward Compatible Syntax:**
 ```lppo
 let mut own i: Int64 = 0;
 let own limit: Int64 = 5;
@@ -219,27 +327,59 @@ while i < limit {
     let own label: Str = "Count:";
     out label, i;
     
-    // Move semantics for reassignment
     let own i_next: Int64 = i + 1;
     move i_next -> i;
 }
 ```
 
-#### For Loop (REQUIRES Explicit Type for Loop Variable)
+#### ITRLP Loop (Iterator Loop with INSET)
+
+**V3.0 Ultra-Low-Level Syntax:**
+```lppo
+DECLVAR OWNR items: ARRPTR<I64> = [10, 20, 30];
+
+// WRONG: Type inference not allowed
+// ITRLP item INSET items { ... }  // ERROR
+
+// CORRECT: Explicit I64 type for loop variable with INSET keyword
+ITRLP item: I64 INSET items {
+    DECLVAR OWNR label: STRPTR = "Item:";
+    EMIT label, item;
+}
+```
+
+**V2.0 Backward Compatible Syntax:**
 ```lppo
 let own items: Arr<Int64> = [10, 20, 30];
 
-// WRONG: Type inference not allowed
-// for item in items { ... }  // ERROR
-
-// CORRECT: Explicit type for loop variable
 for item: Int64 in items {
     let own label: Str = "Item:";
     out label, item;
 }
 ```
 
-#### Infinite Loop (Explicit Scope Management)
+#### INFLP Loop (Infinite Loop with LPEXIT)
+
+**V3.0 Ultra-Low-Level Syntax:**
+```lppo
+DECLVAR MUTBL OWNR count: I64 = 0;
+DECLVAR OWNR max: I64 = 3;
+
+INFLP {
+    DECLVAR OWNR label: STRPTR = "Iteration:";
+    EMIT label, count;
+    
+    DECLVAR OWNR count_next: I64 = count + 1;
+    MEMXFER count_next -> count;
+    
+    DECLVAR OWNR should_break: BOOL8 = count >= max;
+    CJMP should_break {
+        LPEXIT;  // Exit loop instruction
+    }
+}
+```
+
+**V2.0 Backward Compatible Syntax:**
 ```lppo
 let mut own count: Int64 = 0;
 let own max: Int64 = 3;
@@ -258,7 +398,9 @@ loop {
 }
 ```
 
-**Loop Control:** `break` (exit loop), `continue` (skip to next iteration)
+**Loop Control (V3.0):** `LPEXIT` (exit loop), `LPSKIP` (skip to next iteration)
+
+**Loop Control (V2.0):** `break` (exit loop), `continue` (skip to next iteration)
 
 ### User Input (Explicit Type Specification Required)
 
