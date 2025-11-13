@@ -1,0 +1,143 @@
+// LPPO v3.0 - Advanced Ultra-Low-Level Features
+// Demonstrating cryptic assembly-like syntax with advanced constructs
+// Maximum complexity with machine-level terminology
+
+// Module definition with MODDEF
+MODDEF mathops {
+    // Public procedure with explicit I64 return
+    PUBEXP PROCDEF add(a: I64, b: I64) -> I64 {
+        DECLVAR OWNR result: I64 = a + b;
+        RETVL result;
+    }
+    
+    PUBEXP PROCDEF multiply(a: I64, b: I64) -> I64 {
+        DECLVAR OWNR result: I64 = a * b;
+        RETVL result;
+    }
+    
+    PUBEXP PROCDEF power(base: I64, exp: I64) -> I64 {
+        DECLVAR OWNR one: I64 = 1;
+        DECLVAR OWNR result: I64 = base ** exp;
+        RETVL result;
+    }
+}
+
+PUBEXP PROCDEF main() -> VOID0 {
+    EMIT "=== LPPO V3.0 Advanced Features ===";
+    
+    // Stack frame for basic operations
+    STKFRAME basic_ops {
+        DECLVAR OWNR x: I64 = 10;
+        DECLVAR OWNR y: I64 = 5;
+        
+        // Basic operations without module calls
+        DECLVAR OWNR sum: I64 = x + y;
+        DECLVAR OWNR product: I64 = x * y;
+        DECLVAR OWNR power: I64 = x ** 2;
+        
+        EMIT "Basic operations:";
+        EMIT "Sum:", sum;
+        EMIT "Product:", product;
+        EMIT "Power:", power;
+    }
+    
+    // Advanced control flow with nested conditions
+    STKFRAME nested_conditions {
+        DECLVAR OWNR value: I64 = 42;
+        DECLVAR OWNR threshold1: I64 = 50;
+        DECLVAR OWNR threshold2: I64 = 30;
+        DECLVAR OWNR threshold3: I64 = 10;
+        
+        DECLVAR OWNR check1: BOOL8 = value > threshold1;
+        CJMP check1 {
+            EMIT "Value is very large";
+        } CJMPALT value > threshold2 {
+            EMIT "Value is medium-large";
+        } CJMPALT value > threshold3 {
+            EMIT "Value is medium";
+        } JMPDEF {
+            EMIT "Value is small";
+        }
+    }
+    
+    // Complex loop with break condition
+    STKFRAME loop_demo {
+        DECLVAR MUTBL OWNR counter: I64 = 0;
+        DECLVAR OWNR limit: I64 = 5;
+        
+        EMIT "Loop iteration demo:";
+        INFLP {
+            EMIT "Iteration:", counter;
+            
+            DECLVAR OWNR next: I64 = counter + 1;
+            MEMXFER next -> counter;
+            
+            DECLVAR OWNR should_exit: BOOL8 = counter >= limit;
+            CJMP should_exit {
+                LPEXIT;
+            }
+        }
+    }
+    
+    // Array processing with iterator loop
+    STKFRAME array_processing {
+        DECLVAR OWNR numbers: ARRPTR<I64> = [1, 2, 3, 4, 5];
+        DECLVAR MUTBL OWNR sum: I64 = 0;
+        
+        EMIT "Processing array:";
+        ITRLP num: I64 INSET numbers {
+            DECLVAR OWNR new_sum: I64 = sum + num;
+            MEMXFER new_sum -> sum;
+        }
+        
+        EMIT "Array sum:", sum;
+    }
+    
+    // String operations
+    STKFRAME string_ops {
+        DECLVAR OWNR text: STRPTR = "LPPO v3.0";
+        DECLVAR OWNR upper: STRPTR = text.upper();
+        DECLVAR OWNR lower: STRPTR = text.lower();
+        DECLVAR OWNR length: I64 = text.len();
+        
+        EMIT "String operations:";
+        EMIT "Original:", text;
+        EMIT "Uppercase:", upper;
+        EMIT "Lowercase:", lower;
+        EMIT "Length:", length;
+    }
+    
+    // Boolean logic with LOGAND, LOGOR, LOGNOT
+    STKFRAME boolean_logic {
+        DECLVAR OWNR a: BOOL8 = BOOLT;
+        DECLVAR OWNR b: BOOL8 = BOOLF;
+        
+        DECLVAR OWNR and_result: BOOL8 = a LOGAND b;
+        DECLVAR OWNR or_result: BOOL8 = a LOGOR b;
+        DECLVAR OWNR not_a: BOOL8 = LOGNOT a;
+        DECLVAR OWNR not_b: BOOL8 = LOGNOT b;
+        
+        EMIT "Boolean logic:";
+        EMIT "A AND B:", and_result;
+        EMIT "A OR B:", or_result;
+        EMIT "NOT A:", not_a;
+        EMIT "NOT B:", not_b;
+    }
+    
+    // Bitwise operations
+    STKFRAME bitwise_ops {
+        DECLVAR OWNR a: I64 = 12;
+        DECLVAR OWNR b: I64 = 5;
+        
+        DECLVAR OWNR and_result: I64 = a & b;
+        DECLVAR OWNR or_result: I64 = a | b;
+        DECLVAR OWNR xor_result: I64 = a ^ b;
+        
+        EMIT "Bitwise operations:";
+        EMIT "AND:", and_result;
+        EMIT "OR:", or_result;
+        EMIT "XOR:", xor_result;
+    }
+    
+    EMIT "=== All V3.0 advanced features demonstrated ===";
+}
