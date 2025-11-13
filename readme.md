@@ -402,19 +402,79 @@ loop {
 
 **Loop Control (V2.0):** `break` (exit loop), `continue` (skip to next iteration)
 
-### User Input (Explicit Type Specification Required)
+### User Input (V3.0 STDIN Instruction)
 
-LPPO provides the `input` statement for reading user input from standard input. Like all LPPO constructs, input requires **explicit type annotation** for the variable being read.
+#### V3.0 Ultra-Low-Level Syntax
 
-#### Syntax
+LPPO V3.0 uses the `STDIN` instruction for reading user input. Like all V3.0 constructs, input requires **explicit machine-level type annotation**.
+
+**Syntax:**
 ```lppo
-input variable_name: Type;                    // Basic input
-input variable_name: Type with prompt_expr;   // Input with prompt
+STDIN variable_name: Type;                    // Basic input
+STDIN variable_name: Type with prompt_expr;   // Input with prompt
 ```
 
-#### Supported Input Types
+**String Input:**
+```lppo
+PUBEXP PROCDEF main() -> VOID0 {
+    STDIN name: STRPTR with "Enter your name:";
+    DECLVAR OWNR greeting: STRPTR = "Hello,";
+    EMIT greeting, name;
+}
+```
 
-**String Input**
+**Integer Input:**
+```lppo
+PUBEXP PROCDEF main() -> VOID0 {
+    STDIN age: I64 with "Enter your age:";
+    DECLVAR OWNR double: I64 = age + age;
+    EMIT "Double your age:", double;
+}
+```
+
+**Boolean Input:**
+```lppo
+PUBEXP PROCDEF main() -> VOID0 {
+    STDIN is_member: BOOL8 with "Are you a member? (BOOLT/BOOLF):";
+    DECLVAR OWNR status: STRPTR = "Membership status:";
+    EMIT status, is_member;
+}
+```
+
+**Accepted boolean inputs:** `BOOLT`, `BOOLF`, `true`, `false`, `yes`, `no`, `y`, `n`, `1`, `0` (case-insensitive)
+
+**Array Input:**
+```lppo
+PUBEXP PROCDEF main() -> VOID0 {
+    // Comma-separated format: 1,2,3,4,5
+    STDIN numbers: ARRPTR<I64> with "Enter numbers (comma-separated):";
+    EMIT "You entered:", numbers;
+    
+    // Also supports bracket format: [1, 2, 3, 4, 5]
+    STDIN more_numbers: ARRPTR<I64>;
+    EMIT "Additional numbers:", more_numbers;
+}
+```
+
+**Input Processing Example:**
+```lppo
+PUBEXP PROCDEF main() -> VOID0 {
+    STDIN nums: ARRPTR<I64> with "Enter numbers to sum:";
+    
+    DECLVAR MUTBL OWNR total: I64 = 0;
+    DECLVAR OWNR zero: I64 = 0;
+    
+    ITRLP num: I64 INSET nums {
+        DECLVAR OWNR new_total: I64 = total + num;
+        MEMXFER new_total -> total;
+    }
+    
+    EMIT "Sum:", total;
+}
+```
+
+#### V2.0 Backward Compatible Syntax
+
 ```lppo
 pub proc main() -> Void {
     input name: Str with "Enter your name:";
@@ -423,266 +483,294 @@ pub proc main() -> Void {
 }
 ```
 
-**Integer Input**
-```lppo
-pub proc main() -> Void {
-    input age: Int64 with "Enter your age:";
-    let own double: Int64 = age + age;
-    out "Double your age:", double;
-}
-```
-
-**Boolean Input**
-```lppo
-pub proc main() -> Void {
-    input is_member: Bool with "Are you a member? (true/false):";
-    let own status: Str = "Membership status:";
-    out status, is_member;
-}
-```
-
-**Accepted boolean inputs:** `true`, `false`, `yes`, `no`, `y`, `n`, `1`, `0` (case-insensitive)
-
-**Array Input**
-```lppo
-pub proc main() -> Void {
-    // Comma-separated format: 1,2,3,4,5
-    input numbers: Arr<Int64> with "Enter numbers (comma-separated):";
-    out "You entered:", numbers;
-    
-    // Also supports bracket format: [1, 2, 3, 4, 5]
-    input more_numbers: Arr<Int64>;
-    out "Additional numbers:", more_numbers;
-}
-```
-
-**Input Processing Example**
-```lppo
-pub proc main() -> Void {
-    input nums: Arr<Int64> with "Enter numbers to sum:";
-    
-    let mut own total: Int64 = 0;
-    let own zero: Int64 = 0;
-    
-    for num: Int64 in nums {
-        let own new_total: Int64 = total + num;
-        move new_total -> total;
-    }
-    
-    out "Sum:", total;
-}
-```
-
 **Input Validation:**
 - Type mismatches produce clear error messages
-- Invalid integers: `"Invalid Int64 input: 'abc'"`
-- Invalid booleans: `"Invalid Bool input: 'maybe'. Expected: true/false, yes/no, 1/0"`
-- Invalid array elements: `"Invalid Int64 in array: 'xyz'"`
+- Invalid integers: `"Invalid I64 input: 'abc'"`
+- Invalid booleans: `"Invalid BOOL8 input: 'maybe'. Expected: BOOLT/BOOLF, true/false, yes/no, 1/0"`
+- Invalid array elements: `"Invalid I64 in array: 'xyz'"`
 
-### Arrays and Strings (Explicit Type Annotations Required)
+### Arrays and Strings (V3.0 ARRPTR and STRPTR Operations)
 
-#### Array Operations
+#### V3.0 Array Operations
+
+**V3.0 Ultra-Low-Level Syntax:**
 ```lppo
 // WRONG: Type inference not supported
-// let arr = [1, 2, 3, 4, 5];  // ERROR
+// DECLVAR arr = [1, 2, 3, 4, 5];  // ERROR
 
-// CORRECT: Explicit Arr<T> type with element type
-let own arr: Arr<Int64> = [1, 2, 3, 4, 5];
+// CORRECT: Explicit ARRPTR<T> type with element type
+DECLVAR OWNR arr: ARRPTR<I64> = [1, 2, 3, 4, 5];
 
 // All array accesses require typed index and result
+DECLVAR OWNR zero: I64 = 0;
+DECLVAR OWNR first: I64 = arr[zero];
+EMIT first;  // First element: 1
+
+DECLVAR OWNR neg_one: I64 = -1;
+DECLVAR OWNR last: I64 = arr[neg_one];
+EMIT last;  // Last element: 5
+
+DECLVAR OWNR arr_len: I64 = arr.len();
+EMIT arr_len;  // Length: 5
+
+// Array concatenation requires explicit ARRPTR types
+DECLVAR OWNR a1: ARRPTR<I64> = [1, 2];
+DECLVAR OWNR a2: ARRPTR<I64> = [3, 4];
+DECLVAR OWNR combined: ARRPTR<I64> = a1 + a2;  // [1, 2, 3, 4]
+```
+
+**V2.0 Backward Compatible:**
+```lppo
+let own arr: Arr<Int64> = [1, 2, 3, 4, 5];
 let own zero: Int64 = 0;
 let own first: Int64 = arr[zero];
-out first;  // First element: 1
-
-let own neg_one: Int64 = -1;
-let own last: Int64 = arr[neg_one];
-out last;  // Last element: 5
-
-let own arr_len: Int64 = arr.len();
-out arr_len;  // Length: 5
-
-// Array concatenation requires explicit types
-let own a1: Arr<Int64> = [1, 2];
-let own a2: Arr<Int64> = [3, 4];
-let own combined: Arr<Int64> = a1 + a2;  // [1, 2, 3, 4]
+out first;
 ```
 
-#### String Operations
+#### V3.0 String Operations
+
+**V3.0 Ultra-Low-Level Syntax:**
 ```lppo
 // WRONG: Implicit string typing
-// let msg = "Hello World";  // ERROR
+// DECLVAR msg = "Hello World";  // ERROR
 
-// CORRECT: Explicit Str type
-let own msg: Str = "Hello World";
+// CORRECT: Explicit STRPTR type
+DECLVAR OWNR msg: STRPTR = "Hello World";
 
-let own msg_len: Int64 = msg.len();
-out msg_len;  // 11
+DECLVAR OWNR msg_len: I64 = msg.len();
+EMIT msg_len;  // 11
 
-let own msg_upper: Str = msg.upper();
-out msg_upper;  // HELLO WORLD
+DECLVAR OWNR msg_upper: STRPTR = msg.upper();
+EMIT msg_upper;  // HELLO WORLD
 
-let own msg_lower: Str = msg.lower();
-out msg_lower;  // hello world
+DECLVAR OWNR msg_lower: STRPTR = msg.lower();
+EMIT msg_lower;  // hello world
 
 // Split requires explicit separator and typed result
-let own text: Str = "a,b,c";
-let own sep: Str = ",";
-let own parts: Arr<Str> = text.split(sep);  // ["a", "b", "c"]
+DECLVAR OWNR text: STRPTR = "a,b,c";
+DECLVAR OWNR sep: STRPTR = ",";
+DECLVAR OWNR parts: ARRPTR<STRPTR> = text.split(sep);  // ["a", "b", "c"]
 
 // String concatenation requires explicit intermediate variables
-let own hello: Str = "hello";
-let own space: Str = " ";
-let own world: Str = "world";
-let own temp: Str = hello + space;
-let own result: Str = temp + world;  // Concatenation
+DECLVAR OWNR hello: STRPTR = "hello";
+DECLVAR OWNR space: STRPTR = " ";
+DECLVAR OWNR world: STRPTR = "world";
+DECLVAR OWNR temp: STRPTR = hello + space;
+DECLVAR OWNR result: STRPTR = temp + world;  // Concatenation
 ```
 
-### Procedures (Explicit Signatures Required)
+**V2.0 Backward Compatible:**
+```lppo
+let own msg: Str = "Hello World";
+let own msg_len: Int64 = msg.len();
+let own msg_upper: Str = msg.upper();
+out msg_upper;
+```
+
+### Procedures (V3.0 PROCDEF with Explicit Signatures)
+
+#### V3.0 Ultra-Low-Level Syntax
 
 **ALL procedures require:**
-1. Visibility modifier (`pub` or module-scoped)
-2. Explicit parameter list with parentheses (even if empty)
-3. Type annotation for EVERY parameter
-4. Explicit return type annotation (use `Void` for no return)
+1. Visibility modifier (`PUBEXP` or module-scoped)
+2. `PROCDEF` keyword (replaces `proc`)
+3. Explicit parameter list with parentheses (even if empty)
+4. Machine-level type annotation for EVERY parameter
+5. Explicit return type annotation (use `VOID0` for no return)
 
 ```lppo
 // WRONG: Missing type annotations
-// proc calculate(a, b) { ... }  // ERROR
+// PROCDEF calculate(a, b) { ... }  // ERROR
 
-// CORRECT: Fully explicit procedure signature
-pub proc calculate(a: Int64, b: Int64) -> Void {
-    let own sum: Int64 = a + b;
-    let own product: Int64 = a * b;
-    let own sum_label: Str = "Sum:";
-    let own prod_label: Str = "Product:";
-    out sum_label, sum, prod_label, product;
+// CORRECT: Fully explicit PROCDEF signature
+PUBEXP PROCDEF calculate(a: I64, b: I64) -> VOID0 {
+    DECLVAR OWNR sum: I64 = a + b;
+    DECLVAR OWNR product: I64 = a * b;
+    DECLVAR OWNR sum_label: STRPTR = "Sum:";
+    DECLVAR OWNR prod_label: STRPTR = "Product:";
+    EMIT sum_label, sum, prod_label, product;
 }
 
 // WRONG: Missing parentheses and return type
-// proc main { ... }  // ERROR
+// PROCDEF main { ... }  // ERROR
 
 // CORRECT: Explicit empty parameter list and return type
+PUBEXP PROCDEF main() -> VOID0 {
+    DECLVAR OWNR arg1: I64 = 5;
+    DECLVAR OWNR arg2: I64 = 3;
+    
+    // WRONG: Missing parentheses in call
+    // PROCCALL calculate;  // ERROR
+    
+    // CORRECT: PROCCALL with explicit argument list
+    PROCCALL calculate(arg1, arg2);
+}
+```
+
+#### V2.0 Backward Compatible Syntax
+
+```lppo
+pub proc calculate(a: Int64, b: Int64) -> Void {
+    let own sum: Int64 = a + b;
+    out sum;
+}
+
 pub proc main() -> Void {
     let own arg1: Int64 = 5;
     let own arg2: Int64 = 3;
-    
-    // WRONG: Missing parentheses in call
-    // call calculate;  // ERROR
-    
-    // CORRECT: Explicit argument list with parentheses
     call calculate(arg1, arg2);
 }
 ```
 
-### Advanced Memory Management (Explicit Ownership)
+### Advanced Memory Management (V3.0 Explicit Low-Level Operations)
 
-LPPO v2.0 requires explicit memory management and ownership semantics for all variables:
+#### V3.0 Ultra-Low-Level Syntax
 
-#### Ownership Qualifiers (REQUIRED)
-- `own` - Owned value (default ownership)
-- `ref` - Immutable reference
-- `mut` - Mutable reference/variable
-- `borrow` - Borrowed value
+LPPO v3.0 requires explicit machine-level memory management and ownership semantics:
+
+**Ownership Qualifiers (REQUIRED):**
+- `OWNR` - Owned value (default ownership) - replaces `own`
+- `MEMREF` - Immutable reference - replaces `ref`
+- `MUTBL` - Mutable reference/variable - replaces `mut`
+- `BORROW` - Borrowed value - replaces `borrow`
 
 ```lppo
 // Owned values (most common)
-let own x: Int64 = 42;
+DECLVAR OWNR x: I64 = 42;
 
 // Mutable owned variable
-let mut own counter: Int64 = 0;
+DECLVAR MUTBL OWNR counter: I64 = 0;
 
 // Reference to value (explicit)
-let ref y: Ref<Int64> = ref x;
+DECLVAR MEMREF y: Ref<I64> = MEMREF x;
 
 // Borrow semantics
-let borrow z: Int64 = borrow<'a> x;
+DECLVAR BORROW z: I64 = BORROW<'a> x;
 ```
 
-#### Manual Memory Operations
+**Manual Memory Operations:**
 ```lppo
-// Explicit heap allocation
+// Explicit heap allocation with HEAPALLOC
+HEAPALLOC<ARRPTR<I64>> my_array MEMSEG HEAPSEG [100];
+
+// MEMXFER (memory transfer) - replaces "move"
+DECLVAR OWNR source: I64 = 10;
+DECLVAR OWNR target: I64 = 0;
+MEMXFER source -> target;
+
+// MEMCPY (memory copy) - replaces "copy"
+DECLVAR OWNR original: I64 = 20;
+DECLVAR OWNR duplicate: I64 = 0;
+MEMCPY original -> duplicate;
+
+// Explicit deallocation with HEAPFREE
+HEAPFREE my_array;
+```
+
+#### V2.0 Backward Compatible Syntax
+
+```lppo
+// Old V2.0 syntax still works:
+let own x: Int64 = 42;
+let mut own counter: Int64 = 0;
+
 alloc<Arr<Int64>> my_array on heap [100];
-
-// Move semantics (transfers ownership)
-let own source: Int64 = 10;
-let own target: Int64 = 0;
 move source -> target;
-
-// Copy semantics (duplicates value)
-let own original: Int64 = 20;
-let own duplicate: Int64 = 0;
 copy original -> duplicate;
-
-// Explicit deallocation
 dealloc my_array;
 ```
 
 #### Lifetime Annotations
-Procedures can specify explicit lifetime parameters:
 
+**V3.0 Ultra-Low-Level Syntax:**
+```lppo
+PUBEXP PROCDEF process<'a, 'b>(x: Ref<I64> 'a, y: Ref<I64> 'b) -> VOID0 {
+    // Lifetime tracking ensures references remain valid
+    DECLVAR OWNR result: I64 = MEMDEREF x + MEMDEREF y;
+    EMIT result;
+}
+```
+
+**V2.0 Backward Compatible:**
 ```lppo
 pub proc process<'a, 'b>(x: Ref<Int64> 'a, y: Ref<Int64> 'b) -> Void {
-    // Lifetime tracking ensures references remain valid
     let own result: Int64 = deref x + deref y;
     out result;
 }
 ```
 
 #### Type Introspection
+
+**V3.0 Ultra-Low-Level Syntax:**
 ```lppo
-// Query size of types
+// Query size of types with TYPESZ
+DECLVAR OWNR int_size: I64 = TYPESZ<I64>;
+DECLVAR OWNR arr_size: I64 = TYPESZ<ARRPTR<I64>>;
+
+// Query alignment requirements with TYPEALN
+DECLVAR OWNR int_align: I64 = TYPEALN<I64>;
+
+// Explicit type casting with TYPECAST
+DECLVAR OWNR x: I64 = 42;
+DECLVAR OWNR as_bool: BOOL8 = TYPECAST<BOOL8>(x);
+```
+
+**V2.0 Backward Compatible:**
+```lppo
 let own int_size: Int64 = sizeof<Int64>;
-let own arr_size: Int64 = sizeof<Arr<Int64>>;
-
-// Query alignment requirements
 let own int_align: Int64 = alignof<Int64>;
-
-// Explicit type casting
-let own x: Int64 = 42;
 let own as_bool: Bool = cast<Bool>(x);
 ```
 
-### Parallel Execution (Explicit Scope)
+### Parallel Execution (V3.0 PARLBLK with STKFRAME)
 
-Parallel blocks require explicit scope management:
+**V3.0 Ultra-Low-Level Syntax:**
+```lppo
+STKFRAME parallel_section {
+    PARLBLK {
+        DECLVAR OWNR msg1: STRPTR = "Task 1";
+        EMIT msg1;
+        
+        DECLVAR OWNR msg2: STRPTR = "Task 2";
+        EMIT msg2;
+        
+        DECLVAR OWNR msg3: STRPTR = "Task 3";
+        EMIT msg3;
+    }
+}
+```
 
+**V2.0 Backward Compatible:**
 ```lppo
 scope parallel_section {
     parallel {
         let own msg1: Str = "Task 1";
         out msg1;
-        
-        let own msg2: Str = "Task 2";
-        out msg2;
-        
-        let own msg3: Str = "Task 3";
-        out msg3;
     }
 }
 ```
 
-### Namespace and Module System
+### Namespace and Module System (V3.0 MODDEF)
 
-LPPO v2.0 supports complex namespace hierarchies:
-
+**V3.0 Ultra-Low-Level Syntax:**
 ```lppo
-// Define a module
-module math {
-    pub proc add(a: Int64, b: Int64) -> Int64 {
-        let own result: Int64 = a + b;
-        return result;
+// Define a module with MODDEF
+MODDEF math {
+    PUBEXP PROCDEF add(a: I64, b: I64) -> I64 {
+        DECLVAR OWNR result: I64 = a + b;
+        RETVL result;
     }
     
-    pub proc multiply(a: Int64, b: Int64) -> Int64 {
-        let own result: Int64 = a * b;
-        return result;
+    PUBEXP PROCDEF multiply(a: I64, b: I64) -> I64 {
+        DECLVAR OWNR result: I64 = a * b;
+        RETVL result;
     }
 }
 
 // Call with qualified path
-pub proc main() -> Void {
-    let own x: Int64 = 5;
-    let own y: Int64 = 3;
+PUBEXP PROCDEF main() -> VOID0 {
+    DECLVAR OWNR x: I64 = 5;
+    DECLVAR OWNR y: I64 = 3;
     
     // Fully qualified procedure call
     call math::add(x, y);
@@ -690,10 +778,24 @@ pub proc main() -> Void {
 }
 ```
 
-### Explicit Scope Blocks
+### Explicit Scope Blocks (V3.0 STKFRAME)
 
-All code blocks can be explicitly scoped:
+**V3.0 Ultra-Low-Level Syntax:**
+```lppo
+STKFRAME outer {
+    DECLVAR OWNR x: I64 = 10;
+    
+    STKFRAME inner {
+        DECLVAR OWNR y: I64 = 20;
+        DECLVAR OWNR sum: I64 = x + y;
+        EMIT sum;
+    }
+    
+    // y is no longer accessible here
+}
+```
 
+**V2.0 Backward Compatible:**
 ```lppo
 scope outer {
     let own x: Int64 = 10;
@@ -703,18 +805,23 @@ scope outer {
         let own sum: Int64 = x + y;
         out sum;
     }
-    
-    // y is no longer accessible here
 }
 ```
 
-### Unsafe Operations
+### Unsafe Operations (V3.0 UNSAFEBLK)
 
-Potentially dangerous operations require explicit unsafe blocks:
+**V3.0 Ultra-Low-Level Syntax:**
+```lppo
+UNSAFEBLK {
+    // Low-level operations that bypass safety checks
+    DECLVAR OWNR ptr: I64 = 0x1000;
+    DECLVAR OWNR value: I64 = MEMDEREF TYPECAST<Ref<I64>>(ptr);
+}
+```
 
+**V2.0 Backward Compatible:**
 ```lppo
 unsafe {
-    // Low-level operations that bypass safety checks
     let own ptr: Int64 = 0x1000;
     let own value: Int64 = deref cast<Ref<Int64>>(ptr);
 }
@@ -731,26 +838,32 @@ unsafe {
 */
 ```
 
-## Getting Started (Warning: High Complexity)
+## Getting Started (Warning: EXTREME Complexity)
 
-> **⚠️ LEARNING CURVE WARNING:** LPPO v2.0 is **intentionally difficult** to learn. The language requires:
-> - Explicit type annotations for EVERY variable
-> - Manual memory management with ownership tracking
-> - Verbose procedure signatures with all types specified
-> - No convenience features or type inference
-> - Understanding of lifetimes, borrowing, and move semantics
+> **⚠️ EXTREME LEARNING CURVE WARNING:** LPPO v3.0 is **INTENTIONALLY HOSTILE** to beginners. The language requires:
+> - Understanding cryptic assembly-like mnemonics (PROCDEF, DECLVAR, CJMP, MEMXFER)
+> - Explicit machine-level type annotations (I64, BOOL8, STRPTR, ARRPTR)
+> - Manual memory management with low-level operations (HEAPALLOC, MEMXFER, MEMCPY)
+> - Ultra-verbose procedure signatures with PUBEXP and PROCDEF
+> - Deep understanding of stack frames (STKFRAME), jump instructions, and memory segments
+> - No convenience features, no type inference, maximum cryptic complexity
+> - Understanding of lifetimes, borrowing, and memory transfer semantics
 > 
-> This is **not** a beginner-friendly language. It is designed to maximize explicitness and complexity.
+> This is **ACTIVELY HOSTILE** to casual users. It is designed to maximize cryptic difficulty and eliminate readability.
 
 ### Prerequisites
 
 - Rust toolchain (1.80+ recommended, 2021 edition)
-- Strong understanding of:
+- **Expert-level** understanding of:
+  - Assembly language and machine code concepts
   - Type systems and type theory
-  - Memory management concepts
+  - Manual memory management and memory layouts
+  - Stack frames and calling conventions
   - Ownership and borrowing semantics
-  - Lifetime annotations
-- Patience for verbose syntax
+  - Lifetime annotations and reference tracking
+  - Jump instructions and control flow at machine level
+- Extreme patience for cryptic, assembly-like syntax
+- Willingness to decipher mnemonics and abbreviations
 
 ### Build
 
@@ -762,7 +875,19 @@ cargo build --release
 
 See our **[Tutorial](docs/TUTORIAL.md)** for a step-by-step learning guide!
 
-### Run Examples (All Use Complex Syntax)
+### Run Examples
+
+#### V3.0 Ultra-Low-Level Cryptic Examples
+
+```bash
+# V3.0 hello world (ultra-cryptic PROCDEF, DECLVAR, EMIT syntax)
+cargo run -- examples/hello_v3.lppo
+
+# V3.0 comprehensive feature demo (maximum cryptic complexity)
+cargo run -- examples/comprehensive_v3.lppo
+```
+
+#### V2.0 Backward Compatible Examples (Still Work!)
 
 ```bash
 # Basic hello world (with explicit types)
