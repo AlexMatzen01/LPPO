@@ -1,4 +1,19 @@
-# LPPO v5.0 - Complex but Comprehensible Programming Language
+# ⚠️ HISTORICAL DOCUMENT - V4.0 ERA (DISCONTINUED)
+
+> **🛑 THIS DOCUMENTATION IS DEPRECATED AND IRRELEVANT**
+>
+> This document describes V4.0 and earlier versions of LPPO which had an "intentionally hostile" design philosophy. These versions and their documentation are **discontinued** as of LPPO V5.1.
+>
+> **For current documentation, see:**
+> - [LPPO V5.1 README](readme.md) - Current version
+> - [V5.1 Release Notes](V5.1_RELEASE_NOTES.md) - Full feature list
+> - [V5.1 Migration Guide](V5.1_MIGRATION_GUIDE.md) - How to upgrade
+>
+> This file is kept for historical reference only.
+
+---
+
+# LPPO v5.0 - Complex but Comprehensible Programming Language (Historical)
 
 > **📚 BALANCED COMPLEXITY APPROACH**
 > 
