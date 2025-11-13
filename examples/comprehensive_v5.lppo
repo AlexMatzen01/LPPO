@@ -1,0 +1,222 @@
+// LPPO V5.0 - Comprehensive Feature Showcase
+// Demonstrating the balance between readability and complexity
+// V5.0: Not too easy (like Python), not hostile (like V4.0)
+
+// V5.0: Module system with clear namespace
+module math {
+    // V5.0: Public procedures with explicit type signatures
+    pub proc add(a: Int64, b: Int64) -> Int64 {
+        let own result: Int64 = a + b;
+        return result;
+    }
+    
+    pub proc multiply(a: Int64, b: Int64) -> Int64 {
+        let own result: Int64 = a * b;
+        return result;
+    }
+    
+    // V5.0: More complex function with array handling
+    pub proc sum_array(numbers: Arr<Int64>) -> Int64 {
+        let mut own total: Int64 = 0;
+        
+        for num: Int64 in numbers {
+            let own new_total: Int64 = total + num;
+            move new_total -> total;
+        }
+        
+        return total;
+    }
+}
+
+// V5.0: String utilities module
+module strings {
+    pub proc greet(name: Str) -> Void {
+        let own hello: Str = "Hello";
+        let own exclaim: Str = "!";
+        out hello, name, exclaim;
+    }
+    
+    pub proc describe(item: Str, count: Int64) -> Void {
+        out "Item:", item;
+        out "Count:", count;
+    }
+}
+
+// V5.0: Main procedure showcasing various features
+pub proc main() -> Void {
+    out "=== LPPO V5.0 Comprehensive Demo ===";
+    out "";
+    
+    // === Basic Variables and Types ===
+    out "1. Basic Types and Variables:";
+    let own number: Int64 = 42;
+    let own is_active: Bool = true;
+    let own message: Str = "V5.0 is readable!";
+    
+    out "Number:", number;
+    out "Active:", is_active;
+    out "Message:", message;
+    out "";
+    
+    // === Arrays and Collections ===
+    out "2. Arrays:";
+    let own numbers: Arr<Int64> = [10, 20, 30, 40, 50];
+    out "Array:", numbers;
+    
+    let own first: Int64 = numbers[0];
+    let own last: Int64 = numbers[-1];
+    out "First:", first;
+    out "Last:", last;
+    out "";
+    
+    // === Control Flow ===
+    out "3. Control Flow:";
+    
+    // V5.0: If-elif-else with readable syntax
+    let own value: Int64 = 75;
+    if value > 100 {
+        out "Value is large";
+    } elif value > 50 {
+        out "Value is medium";
+    } else {
+        out "Value is small";
+    }
+    
+    // V5.0: While loop
+    let mut own counter: Int64 = 0;
+    let own limit: Int64 = 3;
+    
+    out "While loop:";
+    while counter < limit {
+        out "Counter:", counter;
+        let own next: Int64 = counter + 1;
+        move next -> counter;
+    }
+    out "";
+    
+    // === For Loops ===
+    out "4. For Loops:";
+    let own items: Arr<Int64> = [100, 200, 300];
+    
+    for item: Int64 in items {
+        out "Item:", item;
+    }
+    out "";
+    
+    // === Module Usage ===
+    out "5. Module Functions:";
+    let own x: Int64 = 15;
+    let own y: Int64 = 7;
+    
+    call math::add(x, y);
+    call math::multiply(x, y);
+    
+    out "Module functions called";
+    
+    let own data: Arr<Int64> = [1, 2, 3, 4, 5];
+    call math::sum_array(data);
+    out "";
+    
+    // === String Operations ===
+    out "6. String Operations:";
+    let own name: Str = "LPPO";
+    call strings::greet(name);
+    call strings::describe("Widget", 42);
+    
+    let own text: Str = "Hello World";
+    let own length: Int64 = text.len();
+    let own upper: Str = text.upper();
+    
+    out "Length:", length;
+    out "Uppercase:", upper;
+    out "";
+    
+    // === Scoped Blocks ===
+    out "7. Explicit Scopes:";
+    scope outer {
+        let own a: Int64 = 10;
+        out "Outer scope a:", a;
+        
+        scope inner {
+            let own b: Int64 = 20;
+            let own total: Int64 = a + b;
+            out "Inner scope total:", total;
+        }
+        
+        out "Back in outer scope";
+    }
+    out "";
+    
+    // === Memory Management ===
+    out "8. Memory Management:";
+    
+    // V5.0: Explicit memory operations when needed
+    let own source: Int64 = 999;
+    let own target: Int64 = 0;
+    
+    // Copy value
+    copy source -> target;
+    out "Copied value:", target;
+    
+    // Move value
+    let own new_value: Int64 = 777;
+    move new_value -> target;
+    out "Moved value:", target;
+    out "";
+    
+    // === Ownership System ===
+    out "9. Ownership Semantics:";
+    
+    let own owned_value: Int64 = 100;
+    let mut own mutable_value: Int64 = 200;
+    
+    out "Owned:", owned_value;
+    out "Mutable:", mutable_value;
+    
+    let own increment: Int64 = 1;
+    let own new_mut: Int64 = mutable_value + increment;
+    move new_mut -> mutable_value;
+    out "Modified mutable:", mutable_value;
+    out "";
+    
+    // === Parallel Execution ===
+    out "10. Parallel Execution:";
+    
+    parallel {
+        out "Parallel task A";
+        out "Parallel task B";
+        out "Parallel task C";
+    }
+    out "";
+    
+    // === Operators ===
+    out "11. Arithmetic and Logical:";
+    
+    let own a: Int64 = 10;
+    let own b: Int64 = 3;
+    
+    let own add_result: Int64 = a + b;
+    let own sub_result: Int64 = a - b;
+    let own mul_result: Int64 = a * b;
+    let own div_result: Int64 = a / b;
+    let own mod_result: Int64 = a % b;
+    let own pow_result: Int64 = a ** 2;
+    
+    out "Addition:", add_result;
+    out "Subtraction:", sub_result;
+    out "Multiplication:", mul_result;
+    out "Division:", div_result;
+    out "Modulo:", mod_result;
+    out "Power:", pow_result;
+    
+    let own is_greater: Bool = a > b;
+    let own is_equal: Bool = a == b;
+    
+    out "Greater:", is_greater;
+    out "Equal:", is_equal;
+    out "";
+    
+    // === Final Message ===
+    out "=== V5.0 Demo Complete ===";
+    out "LPPO V5.0: Complex but Comprehensible!";
+}

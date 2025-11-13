@@ -1,5 +1,173 @@
 # LPPO Changelog
 
+## v5.0.0 - HUMAN READABILITY RESTORED - Balanced Complexity Revolution (2025)
+
+### 🎯 MAJOR PHILOSOPHY SHIFT - COMPLEX BUT COMPREHENSIBLE
+
+LPPO v5.0 represents a **fundamental redesign** of the language philosophy. After V4.0's "intentionally hostile" approach, V5.0 **pulls back** the extreme verbosity while **maintaining meaningful complexity**.
+
+**Philosophy Change:** V5.0 achieves the "Goldilocks zone" - more complex than Python, but comprehensible unlike V3.0/V4.0.
+
+### 🌟 Key Changes in V5.0
+
+#### 1. Readable Keywords Emphasized (MAJOR CHANGE)
+
+V5.0 **encourages** clear, descriptive keywords over cryptic abbreviations:
+
+**V4.0 (Hostile):**
+```lppo
+PROCDEF main() -> VOID0 {
+    DECLVAR OWNR msg: STRPTR = "Hello";
+    EMIT msg;
+}
+```
+
+**V5.0 (Readable):**
+```lppo
+proc main() -> Void {
+    let own msg: Str = "Hello";
+    out msg;
+}
+```
+
+Readable keywords now preferred:
+- `proc` over `PROCDEF`
+- `let` over `DECLVAR`
+- `out` over `EMIT`
+- `if`/`elif`/`else` over `CJMP`/`CJMPALT`/`JMPDEF`
+- `Int64`, `Bool`, `Str` over `I64`, `BOOL8`, `STRPTR`
+
+#### 2. Optional Advanced Features (NEW)
+
+V5.0 makes complexity **optional** rather than mandatory:
+- No mandatory `BEGINSEG`/`ENDSEG` block markers
+- No required memory alignment specifications
+- No forced type checking annotations
+- Advanced features available when needed, not required everywhere
+
+**V4.0 Required:**
+```lppo
+BEGINSEG main_body
+DECLVAR OWNR MEMALIGN 8 x: I64 = 42;
+TYPECHK x: I64;
+ENDSEG main_body
+```
+
+**V5.0 Simple:**
+```lppo
+let own x: Int64 = 42;
+```
+
+#### 3. Maintained Meaningful Complexity
+
+V5.0 is **NOT Python** - it retains substantial complexity:
+- Mandatory explicit type annotations
+- No type inference for variables
+- Explicit ownership qualifiers required
+- Manual memory management
+- Lifetime annotations when needed
+- No automatic conversions or magic
+
+#### 4. Backward Compatibility
+
+V5.0 maintains **full backward compatibility**:
+- All V2.0 code works
+- All V3.0 cryptic keywords still recognized
+- Gradual migration supported
+- Both old and new syntax acceptable
+
+### 📊 Version Comparison
+
+| Feature | V3.0 | V4.0 | V5.0 |
+|---------|------|------|------|
+| Readability | Very Low | None | **High** |
+| Keyword Style | Cryptic | Ultra-verbose | **Descriptive** |
+| Mandatory Annotations | Few | Many | **Optional** |
+| Type System | Required | Required | **Required** |
+| Complexity Source | Syntax | Verbosity | **Type System** |
+| Philosophy | Hostile | Maximally Hostile | **Balanced** |
+
+### 📝 New Features
+
+#### V5.0 Examples
+- `examples/hello_v5.lppo` - Clean, readable V5.0 demonstration
+- `examples/comprehensive_v5.lppo` - Full feature showcase with readable syntax
+
+#### V5.0 Documentation
+- `V5_MIGRATION_GUIDE.md` - Complete migration guide from V4.0
+- Updated README with V5.0 philosophy
+- Emphasis on readability in all documentation
+
+### 🔧 Technical Implementation
+
+#### Lexer Updates
+- All keywords support both readable and cryptic versions
+- Readable versions now emphasized in documentation
+- Backward compatibility maintained
+
+#### Version Update
+- Updated from 4.0.0 to 5.0.0
+- All internal version references updated
+
+### 🎯 Design Goals Achieved
+
+✅ More human-readable than V3.0/V4.0
+✅ Still significantly more complex than Python  
+✅ Maintains type safety and explicit control
+✅ Optional advanced features (not mandatory)
+✅ Clear, descriptive keywords
+✅ Fully backward compatible
+
+### 📖 Migration Path
+
+**From V4.0 to V5.0:**
+1. Replace cryptic keywords with readable ones
+2. Remove unnecessary annotations
+3. Simplify block markers
+4. Keep type annotations (still required)
+5. Maintain ownership semantics
+
+**Example Migration:**
+
+Before (V4.0):
+```lppo
+BEGINSEG program
+PUBEXP PROCDEF main() -> VOID0 {
+    BEGINSEG main_body
+    DECLVAR OWNR MEMALIGN 8 msg: STRPTR = "Hello";
+    TYPECHK msg: STRPTR;
+    EMIT msg;
+    ENDSEG main_body
+}
+ENDSEG program
+```
+
+After (V5.0):
+```lppo
+pub proc main() -> Void {
+    let own msg: Str = "Hello";
+    out msg;
+}
+```
+
+### 🚀 Why V5.0?
+
+**The Problem with V4.0:**
+- Intentionally hostile to comprehension
+- Excessive mandatory annotations
+- Cryptic keywords hurt readability
+- Complexity through obscurity, not meaning
+
+**The V5.0 Solution:**
+- Complexity through type system, not syntax
+- Readable but still explicit
+- Optional advanced features
+- Maintains safety without hostility
+
+**Result:** LPPO V5.0 is the most **usable** version while remaining appropriately **complex**.
+
+---
+
 ## v4.0.0 - ULTIMATE COMPLEXITY ACHIEVED - Maximum Verbosity Revolution (2024)
 
 ### 🚀 REVOLUTIONARY CHANGES - THE FINAL FORM
