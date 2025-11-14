@@ -283,6 +283,21 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
             // Simplified: borrow is just like a reference
             eval_expr(target, env)
         }
+        Expr::Closure { params: _, return_type: _, body: _ } => {
+            // TODO: Implement closure support
+            // For now, return a placeholder
+            Err(LppoError::type_error("closures not yet implemented in runtime".into()))
+        }
+        Expr::Call { func: _, args: _ } => {
+            // TODO: Implement function calls
+            // For now, return a placeholder
+            Err(LppoError::type_error("function calls not yet implemented in runtime".into()))
+        }
+        Expr::Range { start: _, end: _, inclusive: _ } => {
+            // TODO: Implement range expressions
+            // For now, return a placeholder
+            Err(LppoError::type_error("range expressions not yet implemented in runtime".into()))
+        }
     }
 }
 

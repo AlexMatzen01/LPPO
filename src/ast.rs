@@ -1,12 +1,41 @@
 /// Represents a complete LPPO program consisting of zero or more modules and procedures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
+    pub use_declarations: Vec<UseDeclaration>,
+    pub type_aliases: Vec<TypeAlias>,
     pub modules: Vec<Module>,
     pub procedures: Vec<Procedure>,
     pub structs: Vec<StructDef>,
     pub enums: Vec<EnumDef>,
     pub traits: Vec<TraitDef>,
     pub impls: Vec<ImplBlock>,
+}
+
+/// Use declaration for importing items
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UseDeclaration {
+    pub path: Vec<String>,
+    pub items: UseItems,
+}
+
+/// Items that can be imported
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UseItems {
+    /// Import all items from a path: use std::collections::*;
+    All,
+    /// Import specific items: use std::collections::{Vec, HashMap};
+    Items(Vec<String>),
+    /// Import a single item: use std::collections::Vec;
+    Single(String),
+}
+
+/// Type alias definition
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeAlias {
+    pub name: String,
+    pub typ: TypeAnnotation,
+    pub is_public: bool,
+    pub generic_params: Vec<String>,
 }
 
 /// Represents a module for namespace organization
@@ -95,7 +124,7 @@ pub enum TypeAnnotation {
 }
 
 /// Parameter with explicit type and ownership annotations
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Parameter {
     pub name: String,
     pub typ: TypeAnnotation,
@@ -322,6 +351,23 @@ pub enum Expr {
     Borrow {
         target: Box<Expr>,
         lifetime: Option<String>,
+    },
+    /// Closure/Lambda expression: |params| -> return_type { body }
+    Closure {
+        params: Vec<Parameter>,
+        return_type: Option<TypeAnnotation>,
+        body: Box<Expr>,
+    },
+    /// Function call: func(args)
+    Call {
+        func: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    /// Range expression: start..end
+    Range {
+        start: Box<Expr>,
+        end: Box<Expr>,
+        inclusive: bool,
     },
 }
 

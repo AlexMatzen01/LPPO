@@ -1090,7 +1090,7 @@ impl<'a> Lexer<'a> {
                     "STACKCHK" => Token::StackChk,
                     "HEAPCHK" => Token::HeapChk,
                     // V4.0: Advanced type system
-                    "TYPDEF" => Token::TypeDef,
+                    "TYPDEF" | "type" => Token::TypeDef,
                     "CONSTEXPR" => Token::ConstExpr,
                     "GENRC" => Token::GenRc,
                     "UNIONDEF" => Token::UnionDef,

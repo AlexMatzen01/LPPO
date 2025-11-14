@@ -1,4 +1,4 @@
-use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp, TypeAnnotation, Parameter, QualifiedName, MemoryLocation, OwnershipKind, Module};
+use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp, TypeAnnotation, Parameter, QualifiedName, MemoryLocation, OwnershipKind, Module, UseDeclaration, UseItems, TypeAlias};
 use crate::error::{LppoError, LppoResult};
 use crate::lexer::{Lexer, Token};
 
@@ -27,11 +27,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_program(&mut self) -> LppoResult<Program> {
+        let mut use_declarations = Vec::new();
+        let mut type_aliases = Vec::new();
         let mut modules = Vec::new();
         let mut procedures = Vec::new();
         
         while self.lookahead != Token::Eof {
             match &self.lookahead {
+                Token::Use => {
+                    use_declarations.push(self.parse_use_declaration()?);
+                }
+                Token::TypeDef => {
+                    type_aliases.push(self.parse_type_alias()?);
+                }
                 Token::Module => {
                     modules.push(self.parse_module()?);
                 }
@@ -39,12 +47,14 @@ impl<'a> Parser<'a> {
                     procedures.push(self.parse_procedure()?);
                 }
                 _ => {
-                    return Err(LppoError::unexpected_token("module or procedure", &format!("{:?}", self.lookahead), self.position,
+                    return Err(LppoError::unexpected_token("use, type, module or procedure", &format!("{:?}", self.lookahead), self.position,
                     ));
                 }
             }
         }
         Ok(Program { 
+            use_declarations,
+            type_aliases,
             modules, 
             procedures,
             structs: Vec::new(),
@@ -79,6 +89,124 @@ impl<'a> Parser<'a> {
             procedures,
             structs: Vec::new(),
             enums: Vec::new(),
+        })
+    }
+    
+    fn parse_use_declaration(&mut self) -> LppoResult<UseDeclaration> {
+        self.expect(Token::Use)?;
+        
+        // Parse the path and items: std::collections::{Vec, HashMap}
+        let mut path = Vec::new();
+        loop {
+            if let Some(name) = self.token_as_identifier(&self.lookahead.clone()) {
+                path.push(name);
+                self.advance()?;
+            } else {
+                return Err(LppoError::unexpected_token("module path", &format!("{:?}", self.lookahead), self.position));
+            }
+            
+            if self.lookahead == Token::DoubleColon {
+                self.advance()?;
+                // Check if next is * or { - if so, we're at the import list
+                if self.lookahead == Token::Star || self.lookahead == Token::LBrace {
+                    break;
+                }
+                // Otherwise continue parsing the path
+            } else {
+                break;
+            }
+        }
+        
+        // Now parse the items to import
+        let items = if self.lookahead == Token::Star {
+            self.advance()?;
+            UseItems::All
+        } else if self.lookahead == Token::LBrace {
+            self.advance()?;
+            let mut items = Vec::new();
+            loop {
+                if let Some(name) = self.token_as_identifier(&self.lookahead.clone()) {
+                    items.push(name);
+                    self.advance()?;
+                } else {
+                    return Err(LppoError::unexpected_token("item name", &format!("{:?}", self.lookahead), self.position));
+                }
+                
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                } else {
+                    break;
+                }
+            }
+            self.expect(Token::RBrace)?;
+            UseItems::Items(items)
+        } else {
+            // Single item - import the last element in path
+            let last = path.pop().ok_or_else(|| LppoError::unexpected_token("module name", "empty path", self.position))?;
+            UseItems::Single(last)
+        };
+        
+        self.expect(Token::Semicolon)?;
+        
+        Ok(UseDeclaration { path, items })
+    }
+    
+    fn parse_type_alias(&mut self) -> LppoResult<TypeAlias> {
+        // Check for pub modifier
+        let is_public = if self.lookahead == Token::Pub {
+            self.advance()?;
+            true
+        } else {
+            false
+        };
+        
+        self.expect(Token::TypeDef)?;
+        
+        let name = match self.lookahead.clone() {
+            Token::Identifier(name) => {
+                self.advance()?;
+                name
+            }
+            _ => {
+                return Err(LppoError::unexpected_token("type alias name", &format!("{:?}", self.lookahead), self.position));
+            }
+        };
+        
+        // Parse generic parameters if present: <T, U>
+        let mut generic_params = Vec::new();
+        if self.lookahead == Token::Less {
+            self.advance()?;
+            loop {
+                match self.lookahead.clone() {
+                    Token::Identifier(param) => {
+                        generic_params.push(param);
+                        self.advance()?;
+                    }
+                    _ => {
+                        return Err(LppoError::unexpected_token("generic parameter", &format!("{:?}", self.lookahead), self.position));
+                    }
+                }
+                
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                } else {
+                    break;
+                }
+            }
+            self.expect(Token::Greater)?;
+        }
+        
+        self.expect(Token::Equals)?;
+        
+        let typ = self.parse_type()?;
+        
+        self.expect(Token::Semicolon)?;
+        
+        Ok(TypeAlias {
+            name,
+            typ,
+            is_public,
+            generic_params,
         })
     }
 
@@ -1071,5 +1199,40 @@ impl<'a> Parser<'a> {
         self.lookahead = self.lexer.next_token()?;
         self.position = self.lexer.position();
         Ok(())
+    }
+    
+    /// Extract an identifier name from tokens that can act as identifiers (including type tokens)
+    fn token_as_identifier(&self, tok: &Token) -> Option<String> {
+        match tok {
+            Token::Identifier(name) => Some(name.clone()),
+            // Type tokens that can be used as identifiers in use paths
+            Token::TypeVec => Some("Vec".to_string()),
+            Token::TypeHashMap => Some("HashMap".to_string()),
+            Token::TypeHashSet => Some("HashSet".to_string()),
+            Token::TypeLinkedList => Some("LinkedList".to_string()),
+            Token::TypeBTreeMap => Some("BTreeMap".to_string()),
+            Token::TypeBTreeSet => Some("BTreeSet".to_string()),
+            Token::TypeBox => Some("Box".to_string()),
+            Token::TypeRc => Some("Rc".to_string()),
+            Token::TypeArc => Some("Arc".to_string()),
+            Token::TypeOption => Some("Option".to_string()),
+            Token::TypeResult => Some("Result".to_string()),
+            Token::TypeString => Some("String".to_string()),
+            Token::TypeFile => Some("File".to_string()),
+            Token::TypeBufReader => Some("BufReader".to_string()),
+            Token::TypeBufWriter => Some("BufWriter".to_string()),
+            Token::TypeTcpStream => Some("TcpStream".to_string()),
+            Token::TypeUdpSocket => Some("UdpSocket".to_string()),
+            Token::TypeMutex => Some("Mutex".to_string()),
+            Token::TypeDuration => Some("Duration".to_string()),
+            Token::TypeInstant => Some("Instant".to_string()),
+            Token::TypeDateTime => Some("DateTime".to_string()),
+            Token::TypeFuture => Some("Future".to_string()),
+            Token::TypeTask => Some("Task".to_string()),
+            Token::TypeAtomic => Some("Atomic".to_string()),
+            Token::Async => Some("async".to_string()),
+            Token::Await => Some("await".to_string()),
+            _ => None,
+        }
     }
 }
