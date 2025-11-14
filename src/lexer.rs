@@ -1291,8 +1291,8 @@ impl<'a> Lexer<'a> {
                     "switch" => Token::Switch,
                     "fallthrough" => Token::Fallthrough,
                     "goto" => Token::Goto,
-                    "label" => Token::Label,
-                    "target" => Token::Target,
+                    // "label" => Token::Label,  // Commented out - conflicts with common variable name
+                    // "target" => Token::Target,  // Commented out - conflicts with common variable name
                     "jump" => Token::Jump,
                     "skip" => Token::Skip,
                     "defer" => Token::Defer,
