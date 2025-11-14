@@ -52,19 +52,19 @@ pub enum LppoError {
     /// Raised by the lexer when an unexpected character is encountered.
     UnexpectedCharacter { 
         ch: char, 
-        position: usize,
+        location: SourceLocation,
         suggestion: Option<String>,
     },
     /// Raised by the lexer when a string literal is not properly terminated.
     UnterminatedString { 
-        position: usize,
+        location: SourceLocation,
         suggestion: Option<String>,
     },
     /// Raised by the parser when a token was not expected at the given location.
     UnexpectedToken { 
         expected: String, 
         found: String,
-        position: usize,
+        location: SourceLocation,
         suggestion: Option<String>,
     },
     /// Raised by the parser when the input ends unexpectedly.
@@ -224,6 +224,9 @@ impl LppoError {
     /// Get the source location associated with this error, if available
     pub fn location(&self) -> Option<&SourceLocation> {
         match self {
+            LppoError::UnexpectedCharacter { location, .. } => Some(location),
+            LppoError::UnterminatedString { location, .. } => Some(location),
+            LppoError::UnexpectedToken { location, .. } => Some(location),
             LppoError::DuplicateProcedure { second_location, .. } => second_location.as_ref(),
             LppoError::UnknownProcedure { location, .. }
             | LppoError::UnknownVariable { location, .. }
@@ -295,14 +298,14 @@ impl LppoError {
 impl Display for LppoError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            LppoError::UnexpectedCharacter { ch, position, .. } => {
-                write!(f, "unexpected character '{}' at position {}", ch, position)
+            LppoError::UnexpectedCharacter { ch, location, .. } => {
+                write!(f, "unexpected character '{}' at line {}, column {}", ch, location.line + 1, location.column + 1)
             }
-            LppoError::UnterminatedString { position, .. } => {
-                write!(f, "unterminated string literal at position {}", position)
+            LppoError::UnterminatedString { location, .. } => {
+                write!(f, "unterminated string literal at line {}, column {}", location.line + 1, location.column + 1)
             }
-            LppoError::UnexpectedToken { expected, found, position, .. } => {
-                write!(f, "expected {} but found '{}' at position {}", expected, found, position)
+            LppoError::UnexpectedToken { expected, found, location, .. } => {
+                write!(f, "expected {} but found '{}' at line {}, column {}", expected, found, location.line + 1, location.column + 1)
             }
             LppoError::UnexpectedEndOfInput { expected, .. } => {
                 write!(f, "unexpected end of input, expected {}", expected)
@@ -373,31 +376,46 @@ impl std::error::Error for LppoError {}
 
 // Helper functions for creating errors with backward compatibility
 impl LppoError {
-    /// Create an UnexpectedCharacter error (simplified)
-    pub fn unexpected_char(ch: char, position: usize) -> Self {
+    /// Create an UnexpectedCharacter error at a known `SourceLocation`.
+    pub fn unexpected_char_at(ch: char, location: SourceLocation) -> Self {
         LppoError::UnexpectedCharacter {
             ch,
-            position,
+            location,
             suggestion: None,
         }
     }
 
-    /// Create an UnterminatedString error (simplified)
-    pub fn unterminated_string(position: usize) -> Self {
+    /// Backwards-compatible helper which builds a minimal `SourceLocation` from a raw position.
+    pub fn unexpected_char(ch: char, position: usize) -> Self {
+        Self::unexpected_char_at(ch, SourceLocation::new(position))
+    }
+
+    /// Create an UnterminatedString error at a known `SourceLocation`.
+    pub fn unterminated_string_at(location: SourceLocation) -> Self {
         LppoError::UnterminatedString {
-            position,
+            location,
             suggestion: Some("add a closing quote '\"' to terminate the string".to_string()),
         }
     }
 
-    /// Create an UnexpectedToken error (simplified)
-    pub fn unexpected_token(expected: &str, found: &str, position: usize) -> Self {
+    /// Backwards-compatible wrapper that uses a raw position.
+    pub fn unterminated_string(position: usize) -> Self {
+        Self::unterminated_string_at(SourceLocation::new(position))
+    }
+
+    /// Create an UnexpectedToken error at a known `SourceLocation`.
+    pub fn unexpected_token_at(expected: &str, found: &str, location: SourceLocation) -> Self {
         LppoError::UnexpectedToken {
             expected: expected.to_string(),
             found: found.to_string(),
-            position,
+            location,
             suggestion: None,
         }
+    }
+
+    /// Backwards-compatible wrapper that accepts a raw position.
+    pub fn unexpected_token(expected: &str, found: &str, position: usize) -> Self {
+        Self::unexpected_token_at(expected, found, SourceLocation::new(position))
     }
 
     /// Create an UnexpectedEndOfInput error (simplified)

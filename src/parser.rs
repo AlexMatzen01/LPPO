@@ -11,7 +11,7 @@ pub fn parse_program(source: &str) -> LppoResult<Program> {
 struct Parser<'a> {
     lexer: Lexer<'a>,
     lookahead: Token,
-    position: usize,
+    position: crate::error::SourceLocation,
 }
 
 impl<'a> Parser<'a> {
@@ -47,8 +47,7 @@ impl<'a> Parser<'a> {
                     procedures.push(self.parse_procedure()?);
                 }
                 _ => {
-                    return Err(LppoError::unexpected_token("use, type, module or procedure", &format!("{:?}", self.lookahead), self.position,
-                    ));
+                    return Err(LppoError::unexpected_token_at("use, type, module or procedure", &format!("{:?}", self.lookahead), self.position.clone()));
                 }
             }
         }
@@ -72,8 +71,7 @@ impl<'a> Parser<'a> {
                 name
             }
             _ => {
-                return Err(LppoError::unexpected_token("module name", &format!("{:?}", self.lookahead), self.position,
-                ))
+                return Err(LppoError::unexpected_token_at("module name", &format!("{:?}", self.lookahead), self.position.clone()))
             }
         };
         
@@ -101,8 +99,8 @@ impl<'a> Parser<'a> {
             if let Some(name) = self.token_as_identifier(&self.lookahead.clone()) {
                 path.push(name);
                 self.advance()?;
-            } else {
-                return Err(LppoError::unexpected_token("module path", &format!("{:?}", self.lookahead), self.position));
+                } else {
+                return Err(LppoError::unexpected_token_at("module path", &format!("{:?}", self.lookahead), self.position.clone()));
             }
             
             if self.lookahead == Token::DoubleColon {
@@ -129,7 +127,7 @@ impl<'a> Parser<'a> {
                     items.push(name);
                     self.advance()?;
                 } else {
-                    return Err(LppoError::unexpected_token("item name", &format!("{:?}", self.lookahead), self.position));
+                    return Err(LppoError::unexpected_token_at("item name", &format!("{:?}", self.lookahead), self.position.clone()));
                 }
                 
                 if self.lookahead == Token::Comma {
@@ -142,7 +140,7 @@ impl<'a> Parser<'a> {
             UseItems::Items(items)
         } else {
             // Single item - import the last element in path
-            let last = path.pop().ok_or_else(|| LppoError::unexpected_token("module name", "empty path", self.position))?;
+            let last = path.pop().ok_or_else(|| LppoError::unexpected_token_at("module name", "empty path", self.position.clone()))?;
             UseItems::Single(last)
         };
         
@@ -168,7 +166,7 @@ impl<'a> Parser<'a> {
                 name
             }
             _ => {
-                return Err(LppoError::unexpected_token("type alias name", &format!("{:?}", self.lookahead), self.position));
+                return Err(LppoError::unexpected_token_at("type alias name", &format!("{:?}", self.lookahead), self.position.clone()));
             }
         };
         
@@ -183,7 +181,7 @@ impl<'a> Parser<'a> {
                         self.advance()?;
                     }
                     _ => {
-                        return Err(LppoError::unexpected_token("generic parameter", &format!("{:?}", self.lookahead), self.position));
+                        return Err(LppoError::unexpected_token_at("generic parameter", &format!("{:?}", self.lookahead), self.position.clone()));
                     }
                 }
                 
@@ -227,15 +225,11 @@ impl<'a> Parser<'a> {
         };
         
         self.expect(Token::Proc)?;
-        let name = match self.lookahead.clone() {
-            Token::Identifier(name) => {
-                self.advance()?;
-                name
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("procedure name", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("procedure name", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
         // Parse lifetime parameters <'a, 'b>
@@ -249,8 +243,7 @@ impl<'a> Parser<'a> {
                         self.advance()?;
                     }
                     _ => {
-                        return Err(LppoError::unexpected_token("lifetime annotation", &format!("{:?}", self.lookahead), self.position,
-                        ))
+                            return Err(LppoError::unexpected_token_at("lifetime annotation", &format!("{:?}", self.lookahead), self.position.clone()));
                     }
                 }
                 if self.lookahead == Token::Comma {
@@ -262,49 +255,57 @@ impl<'a> Parser<'a> {
             self.expect(Token::Greater)?;
         }
         
-        // REQUIRED parameter list with EXPLICIT TYPES
-        self.expect(Token::LParen)?;
+        // Parameter list - support both old and new syntax
         let mut params = Vec::new();
-        if self.lookahead != Token::RParen {
-            loop {
-                let name = match self.lookahead.clone() {
-                    Token::Identifier(name) => {
+        if self.lookahead == Token::LParen {
+            self.advance()?;  // consume '('
+            if self.lookahead != Token::RParen {
+                loop {
+                    let name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
                         self.advance()?;
-                        name
+                        n
+                    } else {
+                        return Err(LppoError::unexpected_token_at("parameter name", &format!("{:?}", self.lookahead), self.position.clone()));
+                    };
+                    
+                    // Optional colon and type (for old syntax compatibility)
+                    let typ = if self.lookahead == Token::Colon {
+                        self.advance()?;
+                        self.parse_type()?
+                    } else {
+                        // Default to Void for old syntax without types
+                        TypeAnnotation::Void
+                    };
+                    
+                    // Optional lifetime
+                    let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
+                        let lt = lt.clone();
+                        self.advance()?;
+                        Some(lt)
+                    } else {
+                        None
+                    };
+                    
+                    params.push(Parameter { name, typ, lifetime });
+                    
+                    if self.lookahead == Token::Comma {
+                        self.advance()?;
+                        continue;
                     }
-                    _ => {
-                        return Err(LppoError::unexpected_token("parameter name", &format!("{:?}", self.lookahead), self.position,
-                        ))
-                    }
-                };
-                
-                // REQUIRE colon and type
-                self.expect(Token::Colon)?;
-                let typ = self.parse_type()?;
-                
-                // Optional lifetime
-                let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
-                    let lt = lt.clone();
-                    self.advance()?;
-                    Some(lt)
-                } else {
-                    None
-                };
-                
-                params.push(Parameter { name, typ, lifetime });
-                
-                if self.lookahead == Token::Comma {
-                    self.advance()?;
-                    continue;
+                    break;
                 }
-                break;
             }
+            self.expect(Token::RParen)?;
         }
-        self.expect(Token::RParen)?;
         
-        // REQUIRE return type annotation
-        self.expect(Token::Arrow)?;
-        let return_type = self.parse_type()?;
+        // Optional return type annotation (for old syntax compatibility)
+        let return_type = if self.lookahead == Token::Arrow {
+            self.advance()?;
+            self.parse_type()?
+        } else {
+            // Default to Void for old syntax
+            TypeAnnotation::Void
+        };
 
         self.expect(Token::LBrace)?;
         let mut statements = Vec::new();
@@ -403,10 +404,7 @@ impl<'a> Parser<'a> {
                     Ok(TypeAnnotation::Custom(type_name))
                 }
             }
-            _ => {
-                Err(LppoError::unexpected_token("type annotation", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+            _ => Err(LppoError::unexpected_token_at("type annotation", &format!("{:?}", self.lookahead), self.position.clone())),
         }
     }
     
@@ -559,7 +557,7 @@ impl<'a> Parser<'a> {
                 }
             }
             _ => {
-                Err(LppoError::unexpected_token("pattern", &format!("{:?}", self.lookahead), self.position))
+                Err(LppoError::unexpected_token_at("pattern", &format!("{:?}", self.lookahead), self.position.clone()))
             }
         }
     }
@@ -608,15 +606,11 @@ impl<'a> Parser<'a> {
         let typ = self.parse_type()?;
         self.expect(Token::Greater)?;
         
-        let var = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let var = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("variable name", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
         // Parse on heap or stack
@@ -631,8 +625,7 @@ impl<'a> Parser<'a> {
                 MemoryLocation::Stack
             }
             _ => {
-                return Err(LppoError::unexpected_token("heap or stack", &format!("{:?}", self.lookahead), self.position,
-                ))
+                return Err(LppoError::unexpected_token_at("heap or stack", &format!("{:?}", self.lookahead), self.position.clone()));
             }
         };
         
@@ -647,15 +640,11 @@ impl<'a> Parser<'a> {
     
     fn parse_dealloc(&mut self) -> LppoResult<Statement> {
         self.expect(Token::Dealloc)?;
-        let var = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let var = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("variable name", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         self.expect(Token::Semicolon)?;
         Ok(Statement::Dealloc(var))
@@ -663,26 +652,18 @@ impl<'a> Parser<'a> {
     
     fn parse_move(&mut self) -> LppoResult<Statement> {
         self.expect(Token::Move)?;
-        let source = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("source variable", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let source = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("source variable", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         self.expect(Token::Arrow)?; // ->
-        let target = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("target variable", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let target = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("target variable", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         self.expect(Token::Semicolon)?;
         Ok(Statement::Move { source, target })
@@ -690,26 +671,18 @@ impl<'a> Parser<'a> {
     
     fn parse_copy(&mut self) -> LppoResult<Statement> {
         self.expect(Token::Copy)?;
-        let source = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("source variable", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let source = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("source variable", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         self.expect(Token::Arrow)?;
-        let target = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("target variable", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let target = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("target variable", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         self.expect(Token::Semicolon)?;
         Ok(Statement::Copy { source, target })
@@ -798,20 +771,21 @@ impl<'a> Parser<'a> {
 
     fn parse_for(&mut self) -> LppoResult<Statement> {
         self.expect(Token::For)?;
-        let var = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let var = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("variable name", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
-        // REQUIRE explicit type for loop variable
-        self.expect(Token::Colon)?;
-        let typ = self.parse_type()?;
+        // Optional explicit type for loop variable (for old syntax compatibility)
+        let typ = if self.lookahead == Token::Colon {
+            self.advance()?;
+            self.parse_type()?
+        } else {
+            // Default to Void - will be inferred at runtime
+            TypeAnnotation::Void
+        };
         
         self.expect(Token::In)?;
         let iterable = self.parse_expression()?;
@@ -863,15 +837,11 @@ impl<'a> Parser<'a> {
         self.expect(Token::Input)?;
         
         // Get variable name
-        let var = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("variable name", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let var = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("variable name", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
         // Expect colon and type
@@ -879,13 +849,9 @@ impl<'a> Parser<'a> {
         let typ = self.parse_type()?;
         
         // Optional prompt with "with" keyword
-        let prompt = if let Token::Identifier(id) = &self.lookahead {
-            if id == "with" {
-                self.advance()?; // consume "with"
-                Some(self.parse_expression()?)
-            } else {
-                None
-            }
+        let prompt = if self.lookahead == Token::With {
+            self.advance()?; // consume "with"
+            Some(self.parse_expression()?)
         } else {
             None
         };
@@ -922,20 +888,21 @@ impl<'a> Parser<'a> {
             _ => OwnershipKind::Own, // default
         };
         
-        let name = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("identifier", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("identifier", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
-        // REQUIRE explicit type annotation
-        self.expect(Token::Colon)?;
-        let typ = self.parse_type()?;
+        // Optional explicit type annotation (for old syntax compatibility)
+        let typ = if self.lookahead == Token::Colon {
+            self.advance()?;
+            self.parse_type()?
+        } else {
+            // Default to Void for old syntax - will be inferred at runtime
+            TypeAnnotation::Void
+        };
         
         // expect an equals token
         self.expect(Token::Equals)?;
@@ -1195,8 +1162,7 @@ impl<'a> Parser<'a> {
                             name
                         }
                         _ => {
-                            return Err(LppoError::unexpected_token("field or method name", &format!("{:?}", self.lookahead), self.position,
-                            ))
+                            return Err(LppoError::unexpected_token_at("field or method name", &format!("{:?}", self.lookahead), self.position.clone()));
                         }
                     };
                     // check if it's a method call
@@ -1307,7 +1273,7 @@ impl<'a> Parser<'a> {
                                 n
                             }
                             _ => {
-                                return Err(LppoError::unexpected_token("identifier after ::", &format!("{:?}", self.lookahead), self.position));
+                                return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
                             }
                         };
                     }
@@ -1368,7 +1334,7 @@ impl<'a> Parser<'a> {
                                 "new".to_string()
                             }
                             _ => {
-                                return Err(LppoError::unexpected_token("identifier after ::", &format!("{:?}", self.lookahead), self.position));
+                                return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
                             }
                         };
                     }
@@ -1396,7 +1362,7 @@ impl<'a> Parser<'a> {
                                 n
                             }
                             _ => {
-                                return Err(LppoError::unexpected_token("parameter name", &format!("{:?}", self.lookahead), self.position));
+                                return Err(LppoError::unexpected_token_at("parameter name", &format!("{:?}", self.lookahead), self.position.clone()));
                             }
                         };
                         
@@ -1483,7 +1449,7 @@ impl<'a> Parser<'a> {
                     arms,
                 })
             }
-            _ => Err(LppoError::unexpected_token("expression", &format!("{:?}", self.lookahead), self.position )),
+            _ => Err(LppoError::unexpected_token_at("expression", &format!("{:?}", self.lookahead), self.position.clone())),
         }
     }
 
@@ -1514,30 +1480,22 @@ impl<'a> Parser<'a> {
     
     fn parse_qualified_name(&mut self) -> LppoResult<QualifiedName> {
         let mut path = Vec::new();
-        let mut name = match self.lookahead.clone() {
-            Token::Identifier(n) => {
-                self.advance()?;
-                n
-            }
-            _ => {
-                return Err(LppoError::unexpected_token("identifier", &format!("{:?}", self.lookahead), self.position,
-                ))
-            }
+        let mut name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            n
+        } else {
+            return Err(LppoError::unexpected_token_at("identifier", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
         // Parse qualified path separators
         while self.lookahead == Token::DoubleColon {
             self.advance()?;
             path.push(name);
-            name = match self.lookahead.clone() {
-                Token::Identifier(n) => {
-                    self.advance()?;
-                    n
-                }
-                _ => {
-                    return Err(LppoError::unexpected_token("identifier after ::", &format!("{:?}", self.lookahead), self.position,
-                    ))
-                }
+            name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+                self.advance()?;
+                n
+            } else {
+                return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
             };
         }
         
@@ -1559,13 +1517,11 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Token::Parallel => {
-                    return Err(LppoError::unexpected_token("out statement inside parallel block", &format!("{:?}", self.lookahead), self.position,
-                    ));
+                    return Err(LppoError::unexpected_token_at("out statement inside parallel block", &format!("{:?}", self.lookahead), self.position.clone()));
                 }
                 Token::RBrace => break,
                 _ => {
-                    return Err(LppoError::unexpected_token("out statement inside parallel block", &format!("{:?}", self.lookahead), self.position,
-                    ));
+                    return Err(LppoError::unexpected_token_at("out statement inside parallel block", &format!("{:?}", self.lookahead), self.position.clone()));
                 }
             }
         }
@@ -1592,7 +1548,7 @@ impl<'a> Parser<'a> {
                 _ => "token".to_string(),
             };
             let found_str = format!("{:?}", self.lookahead);
-            Err(LppoError::unexpected_token(&expected_str, &found_str, self.position))
+            Err(LppoError::unexpected_token_at(&expected_str, &found_str, self.position.clone()))
         }
     }
 
@@ -1638,6 +1594,53 @@ impl<'a> Parser<'a> {
             Token::None => Some("None".to_string()),
             Token::Ok => Some("Ok".to_string()),
             Token::Err => Some("Err".to_string()),
+            // Common tokens that are over-reserved but should work as identifiers
+            Token::Json => Some("json".to_string()),
+            Token::Csv => Some("csv".to_string()),
+            Token::Xml => Some("xml".to_string()),
+            Token::Yaml => Some("yaml".to_string()),
+            Token::Toml => Some("toml".to_string()),
+            Token::Base => Some("base".to_string()),
+            Token::Test => Some("test".to_string()),
+            Token::Info => Some("info".to_string()),
+            Token::Warning => Some("warning".to_string()),
+            Token::Error => Some("error".to_string()),
+            Token::Log => Some("log".to_string()),
+            Token::Hash => Some("hash".to_string()),
+            Token::Random => Some("random".to_string()),
+            Token::Binary => Some("binary".to_string()),
+            Token::Hex => Some("hex".to_string()),
+            Token::Base64 => Some("base64".to_string()),
+            Token::Final => Some("final".to_string()),
+            Token::Virtual => Some("virtual".to_string()),
+            Token::Abstract => Some("abstract".to_string()),
+            Token::Partial => Some("partial".to_string()),
+            Token::Sealed => Some("sealed".to_string()),
+            Token::Property => Some("property".to_string()),
+            Token::Extension => Some("extension".to_string()),
+            Token::Constraint => Some("constraint".to_string()),
+            Token::Where => Some("where".to_string()),
+            Token::Simd => Some("simd".to_string()),
+            Token::Gpu => Some("gpu".to_string()),
+            Token::Jit => Some("jit".to_string()),
+            Token::Kernel => Some("kernel".to_string()),
+            Token::Grid => Some("grid".to_string()),
+            Token::Block => Some("block".to_string()),
+            Token::Device => Some("device".to_string()),
+            Token::Thread => Some("thread".to_string()),
+            Token::AssertEq => Some("assert_eq".to_string()),
+            Token::AssertNe => Some("assert_ne".to_string()),
+            Token::Assert => Some("assert".to_string()),
+            Token::Panic => Some("panic".to_string()),
+            Token::Debug => Some("debug".to_string()),
+            Token::Print => Some("print".to_string()),
+            Token::Println => Some("println".to_string()),
+            Token::Env => Some("env".to_string()),
+            Token::File => Some("file".to_string()),
+            Token::Alloc => Some("alloc".to_string()),
+            Token::Range => Some("range".to_string()),
+            Token::Reduce => Some("reduce".to_string()),
+            // Allow most soft keywords to be used as identifiers
             _ => None,
         }
     }

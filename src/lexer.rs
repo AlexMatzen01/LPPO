@@ -822,6 +822,11 @@ pub struct Lexer<'a> {
     input: &'a [u8],
     position: usize,
     current: usize,
+    line: usize,
+    column: usize,
+    token_start_position: usize,
+    token_start_line: usize,
+    token_start_column: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -830,6 +835,11 @@ impl<'a> Lexer<'a> {
             input: input.as_bytes(),
             position: 0,
             current: 0,
+            line: 0,
+            column: 0,
+            token_start_position: 0,
+            token_start_line: 0,
+            token_start_column: 0,
         }
     }
 
@@ -840,6 +850,13 @@ impl<'a> Lexer<'a> {
     fn bump(&mut self) -> Option<u8> {
         let ch = self.peek()?;
         self.current += 1;
+        // update line/column based on the character we just consumed
+        if ch == b'\n' {
+            self.line += 1;
+            self.column = 0;
+        } else {
+            self.column += 1;
+        }
         Some(ch)
     }
 
@@ -881,6 +898,10 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn current_token_location(&self) -> crate::error::SourceLocation {
+        crate::error::SourceLocation::with_line_col(self.token_start_line, self.token_start_column, self.token_start_position)
+    }
+
     fn read_identifier(&mut self, first: u8) -> String {
         let mut ident = String::new();
         ident.push(first as char);
@@ -900,7 +921,7 @@ impl<'a> Lexer<'a> {
                 }
                 b'\\' => {
                     let escaped = self.bump().ok_or_else(|| {
-                        LppoError::unterminated_string(self.current)
+                        LppoError::unterminated_string_at(self.current_token_location())
                     })?;
                     let esc_char = match escaped {
                         b'n' => '\n',
@@ -915,12 +936,16 @@ impl<'a> Lexer<'a> {
                 other => value.push(other as char),
             }
         }
-        Err(LppoError::unterminated_string(self.current))
+        Err(LppoError::unterminated_string_at(self.current_token_location()))
     }
 
     /// Returns the next token in the input stream.
     pub fn next_token(&mut self) -> LppoResult<Token> {
         self.skip_whitespace_and_comments();
+        // mark token start location before consuming any character
+        self.token_start_position = self.current;
+        self.token_start_line = self.line;
+        self.token_start_column = self.column;
         self.position = self.current;
         let ch = match self.bump() {
             Some(ch) => ch,
@@ -984,7 +1009,7 @@ impl<'a> Lexer<'a> {
                         lifetime.push(self.bump().unwrap() as char);
                     }
                     if lifetime.is_empty() {
-                        return Err(LppoError::unexpected_char('\'', self.position));
+                        return Err(LppoError::unexpected_char_at('\'', self.current_token_location()));
                     }
                     Token::Lifetime(lifetime)
                 }
@@ -1569,14 +1594,14 @@ impl<'a> Lexer<'a> {
                 }
             }
             other => {
-                return Err(LppoError::unexpected_char(other as char, self.position))
+                return Err(LppoError::unexpected_char_at(other as char, self.current_token_location()))
             }
         };
         Ok(token)
     }
 
-    /// Returns the index in the input of the last consumed character.
-    pub fn position(&self) -> usize {
-        self.position
+    /// Returns the source location for the last-produced token start.
+    pub fn position(&self) -> crate::error::SourceLocation {
+        self.current_token_location()
     }
 }
