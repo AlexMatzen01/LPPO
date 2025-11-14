@@ -263,15 +263,15 @@ pub enum OwnershipKind {
 }
 
 /// Match arm for pattern matching
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MatchArm {
     pub pattern: Pattern,
     pub guard: Option<Expr>,
-    pub body: Vec<Statement>,
+    pub body: Expr, // Expression for match expressions, statements for match statements
 }
 
 /// Pattern for matching
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Pattern {
     /// Wildcard pattern _
     Wildcard,
@@ -370,6 +370,11 @@ pub enum Expr {
         start: Box<Expr>,
         end: Box<Expr>,
         inclusive: bool,
+    },
+    /// Match expression: match expr { arms }
+    MatchExpr {
+        expr: Box<Expr>,
+        arms: Vec<MatchArm>,
     },
 }
 

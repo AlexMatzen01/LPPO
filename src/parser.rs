@@ -409,6 +409,160 @@ impl<'a> Parser<'a> {
             }
         }
     }
+    
+    fn parse_match_arm(&mut self) -> LppoResult<crate::ast::MatchArm> {
+        use crate::ast::MatchArm;
+        
+        // Parse pattern
+        let pattern = self.parse_pattern()?;
+        
+        // Check for guard: if condition
+        let guard = if self.lookahead == Token::If {
+            self.advance()?;
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
+        
+        // Expect =>
+        self.expect(Token::FatArrow)?;
+        
+        // Parse body expression or special statement-like expressions
+        let body = if self.lookahead == Token::Out {
+            // Handle "out ..." as a special expression
+            self.advance()?; // consume 'out'
+            
+            // Parse expressions to output
+            let mut exprs = Vec::new();
+            loop {
+                exprs.push(self.parse_expression()?);
+                if self.lookahead == Token::Comma && exprs.len() < 10 {
+                    // Check if this is the arm separator or part of the out args
+                    // Peek ahead - if next is a pattern start, break
+                    self.advance()?;
+                    
+                    // If we see tokens that start a pattern (identifiers, Some, None, etc.), break
+                    match self.lookahead {
+                        Token::Identifier(_) | Token::Some | Token::None | Token::Underscore | Token::RBrace => {
+                            // This comma is the arm separator, not part of out
+                            break;
+                        }
+                        _ => {
+                            // Continue parsing out arguments
+                            continue;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+            
+            // Create a placeholder expression that represents the out
+            // For now, we'll use the first expression or Int(0)
+            if exprs.is_empty() {
+                Expr::Int(0)
+            } else {
+                exprs.into_iter().next().unwrap()
+            }
+        } else {
+            self.parse_expression()?
+        };
+        
+        Ok(MatchArm {
+            pattern,
+            guard,
+            body,
+        })
+    }
+    
+    fn parse_pattern(&mut self) -> LppoResult<crate::ast::Pattern> {
+        use crate::ast::Pattern;
+        
+        match self.lookahead.clone() {
+            Token::Underscore => {
+                self.advance()?;
+                Ok(Pattern::Wildcard)
+            }
+            Token::Number(n) => {
+                self.advance()?;
+                Ok(Pattern::Literal(Expr::Int(n)))
+            }
+            Token::StringLiteral(s) => {
+                self.advance()?;
+                Ok(Pattern::Literal(Expr::Str(s)))
+            }
+            Token::Identifier(name) if name == "true" => {
+                self.advance()?;
+                Ok(Pattern::Literal(Expr::Bool(true)))
+            }
+            Token::Identifier(name) if name == "false" => {
+                self.advance()?;
+                Ok(Pattern::Literal(Expr::Bool(false)))
+            }
+            Token::Identifier(name) => {
+                // Could be a variable binding or enum variant
+                self.advance()?;
+                
+                // Check if it's an enum variant (followed by optional fields)
+                if self.lookahead == Token::LParen {
+                    // Enum variant with fields: Some(x)
+                    self.advance()?;
+                    let mut fields = Vec::new();
+                    if self.lookahead != Token::RParen {
+                        loop {
+                            fields.push(self.parse_pattern()?);
+                            if self.lookahead == Token::Comma {
+                                self.advance()?;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    Ok(Pattern::EnumVariant {
+                        enum_name: String::new(), // Inferred from context
+                        variant: name,
+                        fields,
+                    })
+                } else {
+                    // Simple variable binding
+                    Ok(Pattern::Variable(name))
+                }
+            }
+            tok if self.token_as_identifier(&tok).is_some() => {
+                // Handle type tokens as identifiers (e.g., Some, None, Ok, Err)
+                let name = self.token_as_identifier(&tok).unwrap();
+                self.advance()?;
+                
+                if self.lookahead == Token::LParen {
+                    // Enum variant with fields
+                    self.advance()?;
+                    let mut fields = Vec::new();
+                    if self.lookahead != Token::RParen {
+                        loop {
+                            fields.push(self.parse_pattern()?);
+                            if self.lookahead == Token::Comma {
+                                self.advance()?;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    Ok(Pattern::EnumVariant {
+                        enum_name: String::new(),
+                        variant: name,
+                        fields,
+                    })
+                } else {
+                    Ok(Pattern::Variable(name))
+                }
+            }
+            _ => {
+                Err(LppoError::unexpected_token("pattern", &format!("{:?}", self.lookahead), self.position))
+            }
+        }
+    }
 
     fn parse_statement(&mut self) -> LppoResult<Statement> {
         match self.lookahead.clone() {
@@ -1305,6 +1459,30 @@ impl<'a> Parser<'a> {
                     body,
                 })
             }
+            Token::Match => {
+                // Match expression: match expr { arms }
+                self.advance()?; // consume 'match'
+                let expr = Box::new(self.parse_expression()?);
+                self.expect(Token::LBrace)?;
+                
+                let mut arms = Vec::new();
+                while self.lookahead != Token::RBrace {
+                    let arm = self.parse_match_arm()?;
+                    arms.push(arm);
+                    
+                    // Match arms are separated by commas
+                    if self.lookahead == Token::Comma {
+                        self.advance()?;
+                    }
+                }
+                
+                self.expect(Token::RBrace)?;
+                
+                Ok(Expr::MatchExpr {
+                    expr,
+                    arms,
+                })
+            }
             _ => Err(LppoError::unexpected_token("expression", &format!("{:?}", self.lookahead), self.position )),
         }
     }
@@ -1455,6 +1633,11 @@ impl<'a> Parser<'a> {
             Token::TypeAtomic => Some("Atomic".to_string()),
             Token::Async => Some("async".to_string()),
             Token::Await => Some("await".to_string()),
+            // Enum variant tokens for pattern matching
+            Token::Some => Some("Some".to_string()),
+            Token::None => Some("None".to_string()),
+            Token::Ok => Some("Ok".to_string()),
+            Token::Err => Some("Err".to_string()),
             _ => None,
         }
     }

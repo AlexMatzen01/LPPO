@@ -952,6 +952,9 @@ impl<'a> Lexer<'a> {
                     if self.peek() == Some(b'=') {
                         self.bump();
                         Token::EqEq
+                    } else if self.peek() == Some(b'>') {
+                        self.bump();
+                        Token::FatArrow
                     } else {
                         Token::Equals
                     }
