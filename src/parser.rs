@@ -1026,6 +1026,49 @@ impl<'a> Parser<'a> {
                     self.expect(Token::RBracket)?;
                     node = Expr::Index { target: Box::new(node), index: Box::new(index) };
                 }
+                Token::LParen => {
+                    // Function call without 'call' keyword (e.g., foo(1, 2))
+                    // Only works if node is a Var or QualifiedVar
+                    match &node {
+                        Expr::Var(name) => {
+                            let func_name = QualifiedName {
+                                path: Vec::new(),
+                                name: name.clone(),
+                            };
+                            self.advance()?; // consume '('
+                            let mut args = Vec::new();
+                            if self.lookahead != Token::RParen {
+                                loop {
+                                    args.push(self.parse_expression()?);
+                                    if self.lookahead == Token::Comma {
+                                        self.advance()?;
+                                        continue;
+                                    }
+                                    break;
+                                }
+                            }
+                            self.expect(Token::RParen)?;
+                            node = Expr::FunctionCall { func: func_name, args };
+                        }
+                        Expr::QualifiedVar(qname) => {
+                            self.advance()?; // consume '('
+                            let mut args = Vec::new();
+                            if self.lookahead != Token::RParen {
+                                loop {
+                                    args.push(self.parse_expression()?);
+                                    if self.lookahead == Token::Comma {
+                                        self.advance()?;
+                                        continue;
+                                    }
+                                    break;
+                                }
+                            }
+                            self.expect(Token::RParen)?;
+                            node = Expr::FunctionCall { func: qname.clone(), args };
+                        }
+                        _ => break, // Not a function call
+                    }
+                }
                 Token::Dot => {
                     self.advance()?;
                     let name = match self.lookahead.clone() {

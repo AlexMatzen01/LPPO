@@ -283,6 +283,27 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
             // Simplified: borrow is just like a reference
             eval_expr(target, env)
         }
+        Expr::FunctionCall { func, args } => {
+            // Function calls in expressions need to be handled by creating a temporary
+            // execution context. For now, we'll return an error suggesting to use 'call' statement
+            // or we could evaluate it inline if we had access to the executor
+            // This is a simplified implementation - full support would require
+            // passing the executor context through eval_expr
+            Err(LppoError::type_error(
+                format!("Function calls in expressions ({}()) are not fully supported yet. Use 'call {}()' as a statement or store result in a variable.", 
+                    if func.path.is_empty() { 
+                        func.name.clone() 
+                    } else { 
+                        format!("{}::{}", func.path.join("::"), func.name)
+                    },
+                    if func.path.is_empty() { 
+                        func.name.clone() 
+                    } else { 
+                        format!("{}::{}", func.path.join("::"), func.name)
+                    }
+                )
+            ))
+        }
     }
 }
 

@@ -331,6 +331,11 @@ pub enum Expr {
         target: Box<Expr>,
         lifetime: Option<String>,
     },
+    /// Function call: func(args) - without 'call' keyword
+    FunctionCall {
+        func: QualifiedName,
+        args: Vec<Expr>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
