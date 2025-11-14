@@ -140,6 +140,8 @@ mod tests {
     #[test]
     fn compiles_emit_and_parallel() {
         let program = Program {
+            use_declarations: vec![],
+            type_aliases: vec![],
             modules: vec![],
             procedures: vec![Procedure {
                 name: "main".to_string(),

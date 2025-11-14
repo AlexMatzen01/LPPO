@@ -1,6 +1,6 @@
-proc main {
-    let x = 1 + 2 * 3;
-    let y = (4 + 2) * 3;
-    let s = "Result:";
+proc main() -> Void {
+    let x: Int64 = 1 + 2 * 3;
+    let y: Int64 = (4 + 2) * 3;
+    let s: Str = "Result:";
     out s, x, ",", y, "=", x + y;
 }
