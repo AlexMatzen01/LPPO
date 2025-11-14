@@ -235,6 +235,8 @@ pub enum Statement {
         typ: TypeAnnotation,
         fields: Vec<(String, Expr)>,
     },
+    /// Expression statement: expr;
+    ExprStatement(Expr),
 }
 
 /// Qualified name for namespaced identifiers like module::submodule::name

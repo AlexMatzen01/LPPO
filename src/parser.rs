@@ -439,8 +439,12 @@ impl<'a> Parser<'a> {
             Token::Scope => self.parse_scope(),
             Token::Unsafe => self.parse_unsafe_block(),
             Token::Eof | Token::RBrace => Err(LppoError::unexpected_eof("statement or closing brace")),
-            _ => Err(LppoError::unexpected_token("statement", &format!("{:?}", self.lookahead), self.position,
-            )),
+            _ => {
+                // Try to parse as expression statement
+                let expr = self.parse_expression()?;
+                self.expect(Token::Semicolon)?;
+                Ok(Statement::ExprStatement(expr))
+            }
         }
     }
     
@@ -1027,6 +1031,15 @@ impl<'a> Parser<'a> {
                             self.advance()?;
                             n
                         }
+                        Token::Insert => {
+                            self.advance()?;
+                            "insert".to_string()
+                        }
+                        _ if self.token_as_identifier(&self.lookahead.clone()).is_some() => {
+                            let name = self.token_as_identifier(&self.lookahead.clone()).unwrap();
+                            self.advance()?;
+                            name
+                        }
                         _ => {
                             return Err(LppoError::unexpected_token("field or method name", &format!("{:?}", self.lookahead), self.position,
                             ))
@@ -1051,6 +1064,26 @@ impl<'a> Parser<'a> {
                     } else {
                         node = Expr::FieldAccess { target: Box::new(node), field: name };
                     }
+                }
+                Token::LParen => {
+                    // Function call: func(args) or Type::new()
+                    self.advance()?;
+                    let mut args = Vec::new();
+                    if self.lookahead != Token::RParen {
+                        loop {
+                            args.push(self.parse_expression()?);
+                            if self.lookahead == Token::Comma {
+                                self.advance()?;
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                    self.expect(Token::RParen)?;
+                    node = Expr::Call {
+                        func: Box::new(node),
+                        args,
+                    };
                 }
                 _ => break,
             }
@@ -1156,6 +1189,121 @@ impl<'a> Parser<'a> {
                 }
                 self.expect(Token::RBracket)?;
                 Ok(Expr::Array(elements))
+            }
+            // Handle type tokens as identifiers in expression context (e.g., HashMap::new())
+            tok if self.token_as_identifier(&tok).is_some() => {
+                let saved_name = self.token_as_identifier(&tok).unwrap();
+                self.advance()?;
+                
+                // Check if this is a qualified name with ::
+                if self.lookahead == Token::DoubleColon {
+                    let mut path = Vec::new();
+                    let mut name = saved_name;
+                    
+                    while self.lookahead == Token::DoubleColon {
+                        path.push(name);
+                        self.advance()?; // consume ::
+                        
+                        name = match self.lookahead.clone() {
+                            Token::Identifier(n) => {
+                                self.advance()?;
+                                n
+                            }
+                            Token::New => {
+                                self.advance()?;
+                                "new".to_string()
+                            }
+                            _ => {
+                                return Err(LppoError::unexpected_token("identifier after ::", &format!("{:?}", self.lookahead), self.position));
+                            }
+                        };
+                    }
+                    
+                    if path.is_empty() {
+                        Ok(Expr::Var(name))
+                    } else {
+                        Ok(Expr::QualifiedVar(QualifiedName { path, name }))
+                    }
+                } else {
+                    // Simple identifier
+                    Ok(Expr::Var(saved_name))
+                }
+            }
+            Token::Pipe => {
+                // Closure: |params| -> type { body } or |params| expr
+                self.advance()?; // consume opening |
+                
+                let mut params = Vec::new();
+                if self.lookahead != Token::Pipe {
+                    loop {
+                        let name = match self.lookahead.clone() {
+                            Token::Identifier(n) => {
+                                self.advance()?;
+                                n
+                            }
+                            _ => {
+                                return Err(LppoError::unexpected_token("parameter name", &format!("{:?}", self.lookahead), self.position));
+                            }
+                        };
+                        
+                        // Expect type annotation: x: Int64
+                        self.expect(Token::Colon)?;
+                        let typ = self.parse_type()?;
+                        
+                        params.push(Parameter {
+                            name,
+                            typ,
+                            lifetime: None,
+                        });
+                        
+                        if self.lookahead == Token::Comma {
+                            self.advance()?;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                
+                self.expect(Token::Pipe)?; // closing |
+                
+                // Check for optional return type: -> Type
+                let return_type = if self.lookahead == Token::Arrow {
+                    self.advance()?;
+                    Some(self.parse_type()?)
+                } else {
+                    None
+                };
+                
+                // Parse body: either { statements } or expression
+                let body = if self.lookahead == Token::LBrace {
+                    self.advance()?;
+                    // For now, parse as a single return expression
+                    // A full implementation would parse statements
+                    if self.lookahead == Token::Return {
+                        self.advance()?;
+                        let expr = self.parse_expression()?;
+                        self.expect(Token::Semicolon)?;
+                        self.expect(Token::RBrace)?;
+                        Box::new(expr)
+                    } else {
+                        // Try to parse as expression
+                        let expr = self.parse_expression()?;
+                        if self.lookahead == Token::Semicolon {
+                            self.advance()?;
+                        }
+                        self.expect(Token::RBrace)?;
+                        Box::new(expr)
+                    }
+                } else {
+                    // Simple expression body
+                    Box::new(self.parse_expression()?)
+                };
+                
+                Ok(Expr::Closure {
+                    params,
+                    return_type,
+                    body,
+                })
             }
             _ => Err(LppoError::unexpected_token("expression", &format!("{:?}", self.lookahead), self.position )),
         }

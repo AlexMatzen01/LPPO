@@ -76,6 +76,8 @@ pub enum Operation {
     },
     /// No operation (placeholder)
     Nop,
+    /// Expression statement - evaluate for side effects
+    ExprStatement(Expr),
 }
 
 /// Runtime value types used during evaluation.
@@ -592,6 +594,10 @@ impl Executor {
                 }
                 Operation::Nop => {
                     // No operation - do nothing
+                }
+                Operation::ExprStatement(expr) => {
+                    // Evaluate expression for side effects (e.g., method calls)
+                    let _ = eval_expr(expr, env)?;
                 }
             }
         }
