@@ -1259,7 +1259,7 @@ impl<'a> Lexer<'a> {
                     "Self" => Token::SelfType,
                     "self" => Token::SelfValue,
                     "this" => Token::This,
-                    "base" => Token::Base,
+                    // "base" => Token::Base, // Commented out - not used in parser, conflicts with variable names
                     "parent" => Token::Parent,
                     "virtual" => Token::Virtual,
                     "override" => Token::Override,
@@ -1291,8 +1291,8 @@ impl<'a> Lexer<'a> {
                     "switch" => Token::Switch,
                     "fallthrough" => Token::Fallthrough,
                     "goto" => Token::Goto,
-                    "label" => Token::Label,
-                    "target" => Token::Target,
+                    // "label" => Token::Label, // Commented out - not used in parser, conflicts with variable names
+                    // "target" => Token::Target, // Commented out - not used in parser, conflicts with variable names
                     "jump" => Token::Jump,
                     "skip" => Token::Skip,
                     "defer" => Token::Defer,
@@ -1332,7 +1332,7 @@ impl<'a> Lexer<'a> {
                     "Err" => Token::Err,
                     "guard" => Token::Guard,
                     "at" => Token::At,
-                    "range" => Token::Range,
+                    // "range" => Token::Range, // Commented out - not used in parser, conflicts with function names
                     "rest" => Token::Rest,
                     
                     // V5.2: Macro System
