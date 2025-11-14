@@ -59,6 +59,50 @@ impl<'a> Parser<'a> {
         })
     }
     
+    // Helper to convert type tokens to strings in use statements
+    fn token_to_use_name(&self) -> Option<String> {
+        match &self.lookahead {
+            Token::Identifier(name) => Some(name.clone()),
+            // V5.2 Container types
+            Token::TypeVec => Some("Vec".to_string()),
+            Token::TypeHashMap => Some("HashMap".to_string()),
+            Token::TypeHashSet => Some("HashSet".to_string()),
+            Token::TypeBTreeMap => Some("BTreeMap".to_string()),
+            Token::TypeBTreeSet => Some("BTreeSet".to_string()),
+            Token::TypeLinkedList => Some("LinkedList".to_string()),
+            Token::TypeVecDeque => Some("VecDeque".to_string()),
+            Token::TypeBinaryHeap => Some("BinaryHeap".to_string()),
+            // V5.2 Result/Option
+            Token::TypeOption => Some("Option".to_string()),
+            Token::TypeResult => Some("Result".to_string()),
+            // V5.2 Pointer types
+            Token::TypeBox => Some("Box".to_string()),
+            Token::TypeRc => Some("Rc".to_string()),
+            Token::TypeArc => Some("Arc".to_string()),
+            Token::TypeCell => Some("Cell".to_string()),
+            Token::TypeRefCell => Some("RefCell".to_string()),
+            Token::TypePin => Some("Pin".to_string()),
+            // V5.2 I/O types
+            Token::TypeFile => Some("File".to_string()),
+            Token::TypeBufReader => Some("BufReader".to_string()),
+            Token::TypeBufWriter => Some("BufWriter".to_string()),
+            // V5.2 Network types
+            Token::TypeTcpStream => Some("TcpStream".to_string()),
+            Token::TypeUdpSocket => Some("UdpSocket".to_string()),
+            // V5.2 Time types
+            Token::TypeDuration => Some("Duration".to_string()),
+            Token::TypeInstant => Some("Instant".to_string()),
+            Token::TypeDateTime => Some("DateTime".to_string()),
+            // V5.2 Async types
+            Token::TypeFuture => Some("Future".to_string()),
+            Token::TypeTask => Some("Task".to_string()),
+            // V5.2 Sync types
+            Token::TypeMutex => Some("Mutex".to_string()),
+            Token::TypeAtomic => Some("Atomic".to_string()),
+            _ => None,
+        }
+    }
+
     fn parse_use_statement(&mut self) -> LppoResult<UseStatement> {
         self.expect(Token::Use)?;
         
@@ -66,27 +110,15 @@ impl<'a> Parser<'a> {
         let mut path = Vec::new();
         
         loop {
-            let name = match self.lookahead.clone() {
-                Token::Identifier(name) => name,
-                // Allow type tokens as identifiers in use statements
-                Token::TypeVec => "Vec".to_string(),
-                Token::TypeHashMap => "HashMap".to_string(),
-                Token::TypeHashSet => "HashSet".to_string(),
-                Token::TypeBTreeMap => "BTreeMap".to_string(),
-                Token::TypeBTreeSet => "BTreeSet".to_string(),
-                Token::TypeOption => "Option".to_string(),
-                Token::TypeResult => "Result".to_string(),
-                Token::TypeBox => "Box".to_string(),
-                Token::TypeRc => "Rc".to_string(),
-                Token::TypeArc => "Arc".to_string(),
-                _ => break,
-            };
-            
-            path.push(name);
-            self.advance()?;
-            
-            if self.lookahead == Token::DoubleColon {
+            if let Some(name) = self.token_to_use_name() {
+                path.push(name);
                 self.advance()?;
+                
+                if self.lookahead == Token::DoubleColon {
+                    self.advance()?;
+                } else {
+                    break;
+                }
             } else {
                 break;
             }
@@ -98,27 +130,15 @@ impl<'a> Parser<'a> {
             let mut item_list = Vec::new();
             
             loop {
-                let name = match self.lookahead.clone() {
-                    Token::Identifier(name) => name,
-                    // Allow type tokens as identifiers in use statements
-                    Token::TypeVec => "Vec".to_string(),
-                    Token::TypeHashMap => "HashMap".to_string(),
-                    Token::TypeHashSet => "HashSet".to_string(),
-                    Token::TypeBTreeMap => "BTreeMap".to_string(),
-                    Token::TypeBTreeSet => "BTreeSet".to_string(),
-                    Token::TypeOption => "Option".to_string(),
-                    Token::TypeResult => "Result".to_string(),
-                    Token::TypeBox => "Box".to_string(),
-                    Token::TypeRc => "Rc".to_string(),
-                    Token::TypeArc => "Arc".to_string(),
-                    _ => break,
-                };
-                
-                item_list.push(name);
-                self.advance()?;
-                
-                if self.lookahead == Token::Comma {
+                if let Some(name) = self.token_to_use_name() {
+                    item_list.push(name);
                     self.advance()?;
+                    
+                    if self.lookahead == Token::Comma {
+                        self.advance()?;
+                    } else {
+                        break;
+                    }
                 } else {
                     break;
                 }
