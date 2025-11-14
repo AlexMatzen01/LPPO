@@ -376,6 +376,33 @@ impl<'a> Parser<'a> {
                 self.expect(Token::Greater)?;
                 Ok(TypeAnnotation::Own(Box::new(inner)))
             }
+            // Handle generic type tokens like Vec, HashMap, etc.
+            tok if self.token_as_identifier(tok).is_some() => {
+                let type_name = self.token_as_identifier(tok).unwrap();
+                self.advance()?;
+                
+                // Check for generic parameters: <T, U, ...>
+                if self.lookahead == Token::Less {
+                    self.advance()?;
+                    let mut type_params = Vec::new();
+                    
+                    loop {
+                        type_params.push(self.parse_type()?);
+                        
+                        if self.lookahead == Token::Comma {
+                            self.advance()?;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    self.expect(Token::Greater)?;
+                    Ok(TypeAnnotation::Generic(type_name, type_params))
+                } else {
+                    // Simple custom type (might be a type alias)
+                    Ok(TypeAnnotation::Custom(type_name))
+                }
+            }
             _ => {
                 Err(LppoError::unexpected_token("type annotation", &format!("{:?}", self.lookahead), self.position,
                 ))
