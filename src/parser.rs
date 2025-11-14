@@ -445,6 +445,34 @@ impl<'a> Parser<'a> {
             Token::Scope => self.parse_scope(),
             Token::Unsafe => self.parse_unsafe_block(),
             Token::Eof | Token::RBrace => Err(LppoError::unexpected_eof("statement or closing brace")),
+            Token::Identifier(_) => {
+                // Could be an assignment statement (var = expr;) or indexed assignment (var[i] = expr;)
+                let name = match self.lookahead.clone() {
+                    Token::Identifier(n) => n,
+                    _ => unreachable!(),
+                };
+                self.advance()?;
+                
+                if self.lookahead == Token::LBracket {
+                    // Indexed assignment: var[index] = expr;
+                    self.advance()?;
+                    let index = self.parse_expression()?;
+                    self.expect(Token::RBracket)?;
+                    self.expect(Token::Equals)?;
+                    let expr = self.parse_expression()?;
+                    self.expect(Token::Semicolon)?;
+                    Ok(Statement::IndexedAssignment { name, index, expr })
+                } else if self.lookahead == Token::Equals {
+                    // Simple assignment: var = expr;
+                    self.advance()?;
+                    let expr = self.parse_expression()?;
+                    self.expect(Token::Semicolon)?;
+                    Ok(Statement::Assignment { name, expr })
+                } else {
+                    // Not an assignment - error for now
+                    Err(LppoError::unexpected_token("statement", "identifier without assignment", self.position))
+                }
+            }
             _ => Err(LppoError::unexpected_token("statement", &format!("{:?}", self.lookahead), self.position,
             )),
         }

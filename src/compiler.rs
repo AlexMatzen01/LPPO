@@ -88,10 +88,22 @@ fn compile_statement(statement: Statement) -> Operation {
             // At runtime we just bind the value to the name
             Operation::Let(name, expr)
         }
-        Statement::Alloc { var, typ: _, location: _, size: _ } => {
-            // For now, treat alloc as creating an array of the specified size
+        Statement::Alloc { var, typ: _, location: _, size } => {
+            // Create an array of the specified size, initialized with zeros
             // This is a simplified implementation
-            Operation::Let(var, Expr::Array(vec![]))
+            let array_expr = match size {
+                Expr::Int(n) => {
+                    // If size is a constant, create that many zero elements
+                    let elements = vec![Expr::Int(0); n as usize];
+                    Expr::Array(elements)
+                }
+                _ => {
+                    // For non-constant size, create empty array
+                    // In a full implementation, this would be handled at runtime
+                    Expr::Array(vec![])
+                }
+            };
+            Operation::Let(var, array_expr)
         }
         Statement::Dealloc(var) => {
             // Dealloc is a no-op in our simplified runtime (we rely on Rust's GC)
@@ -124,6 +136,16 @@ fn compile_statement(statement: Statement) -> Operation {
         Statement::StructInit { name: _, typ: _, fields: _ } => {
             // Struct initialization - placeholder for now
             Operation::Nop
+        }
+        Statement::Assignment { name, expr } => {
+            // Assignment to existing variable - same as Let at runtime
+            Operation::Let(name, expr)
+        }
+        Statement::IndexedAssignment { name, index, expr } => {
+            // Indexed assignment needs special handling
+            // For now, we'll create a pseudo-operation
+            // In a full implementation, this would modify the array in place
+            Operation::IndexedAssignment { name, index, expr }
         }
     }
 }

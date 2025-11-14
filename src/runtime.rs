@@ -76,6 +76,12 @@ pub enum Operation {
     },
     /// No operation (placeholder)
     Nop,
+    /// Indexed assignment: var[index] = expr;
+    IndexedAssignment {
+        name: String,
+        index: Expr,
+        expr: Expr,
+    },
 }
 
 /// Runtime value types used during evaluation.
@@ -87,7 +93,7 @@ pub enum Value {
     Array(Vec<Value>),
 }
 
-fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value> {
+fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, executor: Option<&Executor>) -> LppoResult<Value> {
     match expr {
         Expr::Int(i) => Ok(Value::Int(*i)),
         Expr::Str(s) => Ok(Value::Str(s.clone())),
@@ -110,8 +116,8 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 .ok_or_else(|| LppoError::unknown_variable(full_name))
         }
         Expr::BinaryOp { left, op, right } => {
-            let l = eval_expr(left, env)?;
-            let r = eval_expr(right, env)?;
+            let l = eval_expr(left, env, executor)?;
+            let r = eval_expr(right, env, executor)?;
                 match (l, r, op) {
                     (Value::Int(a), Value::Int(b), BinaryOp::Add) => Ok(Value::Int(a + b)),
                     (Value::Int(a), Value::Int(b), BinaryOp::Sub) => Ok(Value::Int(a - b)),
@@ -152,7 +158,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 }
         }
         Expr::UnaryOp { op, operand } => {
-            let val = eval_expr(operand, env)?;
+            let val = eval_expr(operand, env, executor)?;
             match (op, val) {
                 (UnaryOp::Neg, Value::Int(i)) => Ok(Value::Int(-i)),
                 (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
@@ -163,13 +169,13 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         Expr::Array(elements) => {
             let mut values = Vec::new();
             for elem in elements {
-                values.push(eval_expr(elem, env)?);
+                values.push(eval_expr(elem, env, executor)?);
             }
             Ok(Value::Array(values))
         }
         Expr::Index { target, index } => {
-            let target_val = eval_expr(target, env)?;
-            let index_val = eval_expr(index, env)?;
+            let target_val = eval_expr(target, env, executor)?;
+            let index_val = eval_expr(index, env, executor)?;
             match (target_val, index_val) {
                 (Value::Array(arr), Value::Int(idx)) => {
                     let i = if idx < 0 {
@@ -196,11 +202,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
             }
         }
         Expr::MethodCall { target, method, args } => {
-            let target_val = eval_expr(target, env)?;
+            let target_val = eval_expr(target, env, executor)?;
             match (target_val, method.as_str()) {
                 (Value::Array(mut arr), "push") => {
                     for arg in args {
-                        arr.push(eval_expr(arg, env)?);
+                        arr.push(eval_expr(arg, env, executor)?);
                     }
                     Ok(Value::Array(arr))
                 }
@@ -216,7 +222,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                     if args.len() != 1 {
                         return Err(LppoError::type_error("split requires 1 argument".into()));
                     }
-                    let sep = eval_expr(&args[0], env)?;
+                    let sep = eval_expr(&args[0], env, executor)?;
                     if let Value::Str(sep_str) = sep {
                         let parts: Vec<Value> = s
                             .split(&sep_str)
@@ -237,11 +243,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         Expr::Ref { target, lifetime: _, is_mut: _ } => {
             // In our simplified runtime, references are just the value itself
             // Full reference semantics would require borrow checking
-            eval_expr(target, env)
+            eval_expr(target, env, executor)
         }
         Expr::Deref(target) => {
             // Dereference is also just evaluating the target
-            eval_expr(target, env)
+            eval_expr(target, env, executor)
         }
         Expr::SizeOf(typ) => {
             // Return a placeholder size based on type
@@ -266,7 +272,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         }
         Expr::Cast { expr, to_type } => {
             // Simple type casting
-            let val = eval_expr(expr, env)?;
+            let val = eval_expr(expr, env, executor)?;
             match (val, to_type) {
                 (Value::Int(i), crate::ast::TypeAnnotation::Bool) => Ok(Value::Bool(i != 0)),
                 (Value::Int(i), crate::ast::TypeAnnotation::Str) => Ok(Value::Str(i.to_string())),
@@ -281,28 +287,56 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         }
         Expr::Borrow { target, lifetime: _ } => {
             // Simplified: borrow is just like a reference
-            eval_expr(target, env)
+            eval_expr(target, env, executor)
         }
         Expr::FunctionCall { func, args } => {
-            // Function calls in expressions need to be handled by creating a temporary
-            // execution context. For now, we'll return an error suggesting to use 'call' statement
-            // or we could evaluate it inline if we had access to the executor
-            // This is a simplified implementation - full support would require
-            // passing the executor context through eval_expr
-            Err(LppoError::type_error(
-                format!("Function calls in expressions ({}()) are not fully supported yet. Use 'call {}()' as a statement or store result in a variable.", 
-                    if func.path.is_empty() { 
-                        func.name.clone() 
-                    } else { 
-                        format!("{}::{}", func.path.join("::"), func.name)
-                    },
-                    if func.path.is_empty() { 
-                        func.name.clone() 
-                    } else { 
-                        format!("{}::{}", func.path.join("::"), func.name)
-                    }
-                )
-            ))
+            // Evaluate function calls by invoking the procedure and capturing its return value
+            let exec = executor.ok_or_else(|| 
+                LppoError::type_error("Function calls in expressions require executor context".to_string())
+            )?;
+            
+            // Construct the function name (handle qualified names)
+            let func_name = if func.path.is_empty() {
+                func.name.clone()
+            } else {
+                format!("{}::{}", func.path.join("::"), func.name)
+            };
+            
+            // Evaluate argument expressions
+            let mut arg_vals = Vec::new();
+            for a in args {
+                arg_vals.push(eval_expr(a, env, executor)?);
+            }
+            
+            // Find the procedure body
+            let proc = exec
+                .procedures
+                .get(&func_name)
+                .ok_or_else(|| LppoError::unknown_procedure(func_name.clone()))?;
+            
+            // Check arity
+            if proc.params.len() != arg_vals.len() {
+                return Err(LppoError::type_error(format!(
+                    "argument count mismatch for '{}': expected {} got {}",
+                    func_name, proc.params.len(), arg_vals.len()
+                )));
+            }
+            
+            // Bind parameters in a fresh env and execute
+            let mut new_env: HashMap<String, Value> = HashMap::new();
+            for (p, v) in proc.params.iter().zip(arg_vals.into_iter()) {
+                new_env.insert(p.clone(), v);
+            }
+            
+            // Execute the procedure and capture return value
+            let result = exec.execute_procedure_with_env(proc, &mut new_env)?;
+            
+            // If the procedure returned a value, use it; otherwise return unit/void (represented as Int(0))
+            match result {
+                ControlFlow::Return(Some(val)) => Ok(val),
+                ControlFlow::Return(None) => Ok(Value::Int(0)), // Void return
+                _ => Ok(Value::Int(0)), // Normal completion without explicit return
+            }
         }
     }
 }
@@ -326,22 +360,24 @@ impl Executor {
             .get(entry)
             .ok_or_else(|| LppoError::unknown_procedure(entry.to_string()))?;
         let mut env = HashMap::new();
-        self.execute_procedure_with_env(procedure, &mut env)
-    }
-
-    fn execute_procedure_with_env(&self, procedure: &ProcedureBody, env: &mut HashMap<String, Value>) -> LppoResult<()> {
-        let _cf = self.execute_ops(&procedure.operations, env)?;
+        let _cf = self.execute_procedure_with_env(procedure, &mut env)?;
         Ok(())
     }
 
+    fn execute_procedure_with_env(&self, procedure: &ProcedureBody, env: &mut HashMap<String, Value>) -> LppoResult<ControlFlow> {
+        let cf = self.execute_ops(&procedure.operations, env)?;
+        Ok(cf)
+    }
+
     fn execute_ops(&self, ops: &[Operation], env: &mut HashMap<String, Value>) -> LppoResult<ControlFlow> {
+        let executor = Some(self);
         for op in ops {
             match op {
                 Operation::Emit(exprs) => {
                     // evaluate all expressions and join them with spaces
                     let mut parts = Vec::new();
                     for e in exprs {
-                        let v = eval_expr(e, env)?;
+                        let v = eval_expr(e, env, executor)?;
                         parts.push(value_to_string(&v));
                     }
                     println!("{}", parts.join(" "));
@@ -353,7 +389,8 @@ impl Executor {
                             let mut snapshot = env.clone();
                             scope.spawn(move || {
                                 // evaluate in snapshot environment
-                                let v = eval_expr(&e, &mut snapshot).expect("eval in thread");
+                                // Note: parallel expressions can't call functions
+                                let v = eval_expr(&e, &mut snapshot, None).expect("eval in thread");
                                 println!("{}", value_to_string(&v));
                             });
                         }
@@ -364,7 +401,7 @@ impl Executor {
                     
                     // Display prompt if provided
                     if let Some(prompt_expr) = prompt {
-                        let prompt_val = eval_expr(prompt_expr, env)?;
+                        let prompt_val = eval_expr(prompt_expr, env, executor)?;
                         print!("{} ", value_to_string(&prompt_val));
                         io::stdout().flush().unwrap();
                     }
@@ -469,7 +506,7 @@ impl Executor {
                     // Evaluate argument expressions in current env
                     let mut arg_vals = Vec::new();
                     for a in args {
-                        arg_vals.push(eval_expr(a, env)?);
+                        arg_vals.push(eval_expr(a, env, executor)?);
                     }
 
                     // Find the procedure body
@@ -488,14 +525,14 @@ impl Executor {
                     for (p, v) in proc.params.iter().zip(arg_vals.into_iter()) {
                         new_env.insert(p.clone(), v);
                     }
-                    self.execute_procedure_with_env(proc, &mut new_env)?;
+                    let _cf = self.execute_procedure_with_env(proc, &mut new_env)?;
                 }
                 Operation::Let(name, expr) => {
-                    let v = eval_expr(expr, env)?;
+                    let v = eval_expr(expr, env, executor)?;
                     env.insert(name.clone(), v);
                 }
                 Operation::If { cond, then_ops, elifs, else_ops } => {
-                    let cond_v = eval_expr(cond, env)?;
+                    let cond_v = eval_expr(cond, env, executor)?;
                     if is_truthy(&cond_v) {
                         let cf = self.execute_ops(then_ops, env)?;
                         if cf != ControlFlow::None {
@@ -505,7 +542,7 @@ impl Executor {
                     }
                     let mut handled = false;
                     for (econd, estmts) in elifs {
-                        let ev = eval_expr(econd, env)?;
+                        let ev = eval_expr(econd, env, executor)?;
                         if is_truthy(&ev) {
                             let cf = self.execute_ops(estmts, env)?;
                             if cf != ControlFlow::None {
@@ -527,7 +564,7 @@ impl Executor {
                 }
                 Operation::While { cond, ops } => {
                     loop {
-                        let cond_v = eval_expr(cond, env)?;
+                        let cond_v = eval_expr(cond, env, executor)?;
                         if !is_truthy(&cond_v) {
                             break;
                         }
@@ -541,7 +578,7 @@ impl Executor {
                     }
                 }
                 Operation::For { var, iterable, ops } => {
-                    let iter_v = eval_expr(iterable, env)?;
+                    let iter_v = eval_expr(iterable, env, executor)?;
                     let items = match iter_v {
                         Value::Array(ref arr) => arr.clone(),
                         _ => return Err(LppoError::type_error("for loop requires an array".to_string())),
@@ -576,7 +613,7 @@ impl Executor {
                 }
                 Operation::Return(opt_expr) => {
                     let v = if let Some(e) = opt_expr {
-                        Some(eval_expr(e, env)?)
+                        Some(eval_expr(e, env, executor)?)
                     } else {
                         None
                     };
@@ -598,6 +635,35 @@ impl Executor {
                 }
                 Operation::Nop => {
                     // No operation - do nothing
+                }
+                Operation::IndexedAssignment { name, index, expr } => {
+                    // Evaluate index and value
+                    let idx_val = eval_expr(index, env, executor)?;
+                    let val = eval_expr(expr, env, executor)?;
+                    
+                    // Get the array from environment
+                    let arr = env
+                        .get_mut(name)
+                        .ok_or_else(|| LppoError::unknown_variable(name.clone()))?;
+                    
+                    // Update the array element
+                    match (arr, idx_val) {
+                        (Value::Array(ref mut arr_vec), Value::Int(idx)) => {
+                            let i = if idx < 0 {
+                                (arr_vec.len() as i64 + idx) as usize
+                            } else {
+                                idx as usize
+                            };
+                            if i < arr_vec.len() {
+                                arr_vec[i] = val;
+                            } else {
+                                return Err(LppoError::type_error(format!("index {} out of bounds", idx)));
+                            }
+                        }
+                        _ => {
+                            return Err(LppoError::type_error("indexed assignment requires array and integer index".into()));
+                        }
+                    }
                 }
             }
         }

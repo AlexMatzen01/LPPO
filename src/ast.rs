@@ -214,6 +214,17 @@ pub enum Statement {
         typ: TypeAnnotation,
         fields: Vec<(String, Expr)>,
     },
+    /// Assignment to existing variable: var = expr;
+    Assignment {
+        name: String,
+        expr: Expr,
+    },
+    /// Indexed assignment: var[index] = expr;
+    IndexedAssignment {
+        name: String,
+        index: Expr,
+        expr: Expr,
+    },
 }
 
 /// Qualified name for namespaced identifiers like module::submodule::name
