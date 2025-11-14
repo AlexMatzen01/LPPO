@@ -32,10 +32,53 @@ impl<'a> Parser<'a> {
         
         while self.lookahead != Token::Eof {
             match &self.lookahead {
+                Token::Use => {
+                    // Skip use statements for now (not fully implemented)
+                    self.skip_use_statement()?;
+                }
+                Token::Identifier(ref name) if name == "type" => {
+                    // Skip type aliases for now (not fully implemented)
+                    self.skip_type_alias()?;
+                }
+                Token::Enum => {
+                    // Skip enum definitions for now (not fully implemented)
+                    self.skip_enum_definition()?;
+                }
+                Token::Pub => {
+                    // Check what follows pub
+                    self.advance()?;
+                    match &self.lookahead {
+                        Token::Enum => {
+                            // Skip pub enum definitions
+                            self.skip_enum_definition()?;
+                        }
+                        Token::Struct => {
+                            // Skip pub struct definitions
+                            self.skip_struct_definition()?;
+                        }
+                        Token::Proc | Token::Unsafe => {
+                            // Parse pub proc - need to manually handle since we consumed Pub
+                            let is_unsafe = if self.lookahead == Token::Unsafe {
+                                self.advance()?;
+                                true
+                            } else {
+                                false
+                            };
+                            self.expect(Token::Proc)?;
+                            let mut proc = self.parse_procedure_impl()?;
+                            proc.is_public = true;
+                            proc.is_unsafe = is_unsafe;
+                            procedures.push(proc);
+                        }
+                        _ => {
+                            return Err(LppoError::unexpected_token("proc, unsafe, struct, or enum after pub", &format!("{:?}", self.lookahead), self.position));
+                        }
+                    }
+                }
                 Token::Module => {
                     modules.push(self.parse_module()?);
                 }
-                Token::Proc | Token::Pub | Token::Unsafe => {
+                Token::Proc | Token::Unsafe => {
                     procedures.push(self.parse_procedure()?);
                 }
                 _ => {
@@ -99,6 +142,16 @@ impl<'a> Parser<'a> {
         };
         
         self.expect(Token::Proc)?;
+        
+        let mut proc = self.parse_procedure_impl()?;
+        proc.is_public = is_public;
+        proc.is_unsafe = is_unsafe;
+        Ok(proc)
+    }
+    
+    /// Parse procedure implementation (after 'proc' keyword)
+    fn parse_procedure_impl(&mut self) -> LppoResult<Procedure> {
+        // Parse procedure name
         let name = match self.lookahead.clone() {
             Token::Identifier(name) => {
                 self.advance()?;
@@ -190,8 +243,8 @@ impl<'a> Parser<'a> {
             return_type,
             lifetimes,
             statements,
-            is_public,
-            is_unsafe,
+            is_public: false,
+            is_unsafe: false,
         })
     }
     
@@ -219,6 +272,30 @@ impl<'a> Parser<'a> {
                 let inner = self.parse_type()?;
                 self.expect(Token::Greater)?;
                 Ok(TypeAnnotation::Arr(Box::new(inner)))
+            }
+            Token::TypeVec => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                // Vec is a dynamic array, treat as generic type for now
+                Ok(TypeAnnotation::Generic("Vec".to_string(), vec![inner]))
+            }
+            Token::TypeOption => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Option(Box::new(inner)))
+            }
+            Token::TypeResult => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let ok_type = self.parse_type()?;
+                self.expect(Token::Comma)?;
+                let err_type = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Result(Box::new(ok_type), Box::new(err_type)))
             }
             Token::Ref => {
                 self.advance()?;
@@ -1070,6 +1147,99 @@ impl<'a> Parser<'a> {
     fn advance(&mut self) -> LppoResult<()> {
         self.lookahead = self.lexer.next_token()?;
         self.position = self.lexer.position();
+        Ok(())
+    }
+    
+    /// Skip over a use statement (minimal implementation)
+    /// Format: use path::to::module::{Item1, Item2}; or use path::to::Item;
+    fn skip_use_statement(&mut self) -> LppoResult<()> {
+        self.expect(Token::Use)?;
+        
+        // Skip until we find a semicolon
+        while self.lookahead != Token::Semicolon && self.lookahead != Token::Eof {
+            self.advance()?;
+        }
+        
+        // Consume the semicolon if present
+        if self.lookahead == Token::Semicolon {
+            self.advance()?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Skip over a type alias (minimal implementation)
+    /// Format: type Name = Type;
+    fn skip_type_alias(&mut self) -> LppoResult<()> {
+        // Skip "type" identifier
+        self.advance()?;
+        
+        // Skip until we find a semicolon
+        while self.lookahead != Token::Semicolon && self.lookahead != Token::Eof {
+            self.advance()?;
+        }
+        
+        // Consume the semicolon if present
+        if self.lookahead == Token::Semicolon {
+            self.advance()?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Skip over an enum definition (minimal implementation)
+    /// Format: pub enum Name { Variant1, Variant2 }
+    fn skip_enum_definition(&mut self) -> LppoResult<()> {
+        // Skip "enum" identifier or token
+        self.advance()?;
+        
+        // Skip name and generic parameters
+        while self.lookahead != Token::LBrace && self.lookahead != Token::Eof {
+            self.advance()?;
+        }
+        
+        // Skip the body if we found an opening brace
+        if self.lookahead == Token::LBrace {
+            self.advance()?;
+            let mut depth = 1;
+            while depth > 0 && self.lookahead != Token::Eof {
+                match self.lookahead {
+                    Token::LBrace => depth += 1,
+                    Token::RBrace => depth -= 1,
+                    _ => {}
+                }
+                self.advance()?;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Skip over a struct definition (minimal implementation)
+    /// Format: pub struct Name { field1: Type, field2: Type }
+    fn skip_struct_definition(&mut self) -> LppoResult<()> {
+        // Skip "struct" token
+        self.advance()?;
+        
+        // Skip name and generic parameters
+        while self.lookahead != Token::LBrace && self.lookahead != Token::Eof {
+            self.advance()?;
+        }
+        
+        // Skip the body if we found an opening brace
+        if self.lookahead == Token::LBrace {
+            self.advance()?;
+            let mut depth = 1;
+            while depth > 0 && self.lookahead != Token::Eof {
+                match self.lookahead {
+                    Token::LBrace => depth += 1,
+                    Token::RBrace => depth -= 1,
+                    _ => {}
+                }
+                self.advance()?;
+            }
+        }
+        
         Ok(())
     }
 }
