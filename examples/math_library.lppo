@@ -63,13 +63,13 @@ module math {
     }
     
     // Power function (using explicit loop)
-    pub proc power(base: Int64, exp: Int64) -> Void {
+    pub proc power(num: Int64, exponent: Int64) -> Void {
         let mut own result: Int64 = 1;
         let mut own i: Int64 = 0;
         let own one: Int64 = 1;
         
-        while i < exp {
-            let own temp: Int64 = result * base;
+        while i < exponent {
+            let own temp: Int64 = result * num;
             move temp -> result;
             
             let own i_next: Int64 = i + one;
@@ -128,7 +128,7 @@ module math {
 
 module stats {
     // Range (max - min)
-    pub proc range(arr: Arr<Int64>) -> Void {
+    pub proc find_range(arr: Arr<Int64>) -> Void {
         let own zero: Int64 = 0;
         let mut own min_val: Int64 = arr[zero];
         let mut own max_val: Int64 = arr[zero];
@@ -238,7 +238,7 @@ pub proc main() -> Void {
     let own data: Arr<Int64> = [5, 12, 8, 15, 3, 20, 7, 11];
     out "Data:", data;
     
-    call stats::range(data);
+    call stats::find_range(data);
     call stats::count_even(data);
     call stats::count_odd(data);
     
