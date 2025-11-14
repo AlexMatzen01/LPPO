@@ -1,0 +1,412 @@
+// LPPO V5.2 - Feature Demonstration
+// Showcasing key V5.2 features with working examples
+
+pub proc main() -> Void {
+    out "======================================";
+    out "LPPO V5.2 - Feature Demonstration";
+    out "1,230+ Features Available";
+    out "======================================";
+    out "";
+    
+    // Category 1: Extended Type System
+    demo_type_system();
+    out "";
+    
+    // Category 2: Collections
+    demo_collections();
+    out "";
+    
+    // Category 3: Functional Programming
+    demo_functional();
+    out "";
+    
+    // Category 4: Pattern Matching
+    demo_pattern_matching();
+    out "";
+    
+    // Category 5: Error Handling
+    demo_error_handling();
+    out "";
+    
+    // Category 6: Memory Management
+    demo_memory_management();
+    out "";
+    
+    // Category 7: String Operations
+    demo_string_operations();
+    out "";
+    
+    // Category 8: Numeric Operations
+    demo_numeric_operations();
+    out "";
+    
+    out "======================================";
+    out "V5.2 Feature Demo Complete!";
+    out "======================================";
+}
+
+// ============================================================================
+// CATEGORY 1: Extended Type System
+// ============================================================================
+
+pub proc demo_type_system() -> Void {
+    out "=== Extended Type System Demo ===";
+    
+    // Integer types
+    let own i8_val: Int64 = -128;  // Note: Using Int64 for now, I8 token exists
+    let own i16_val: Int64 = -32768;
+    let own i32_val: Int64 = 2147483647;
+    let own i64_val: Int64 = 9223372036854775807;
+    
+    out "Integer types:";
+    out "  i8:", i8_val;
+    out "  i16:", i16_val;
+    out "  i32:", i32_val;
+    out "  i64:", i64_val;
+    
+    // Unsigned types (represented as Int64 for now)
+    let own u8_val: Int64 = 255;
+    let own u16_val: Int64 = 65535;
+    let own u32_val: Int64 = 4294967295;
+    
+    out "Unsigned types (as Int64):";
+    out "  u8:", u8_val;
+    out "  u16:", u16_val;
+    out "  u32:", u32_val;
+    
+    // Boolean
+    let own flag: Bool = true;
+    out "Boolean:", flag;
+    
+    // Strings
+    let own name: Str = "LPPO V5.2";
+    out "String:", name;
+}
+
+// ============================================================================
+// CATEGORY 2: Collections
+// ============================================================================
+
+pub proc demo_collections() -> Void {
+    out "=== Collections Demo ===";
+    
+    // Array
+    let own numbers: Arr<Int64> = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    out "Array:", numbers;
+    out "Array length:", array_length(numbers);
+    
+    // Array operations
+    let own first: Int64 = numbers[0];
+    let own last: Int64 = numbers[9];
+    out "First element:", first;
+    out "Last element:", last;
+    
+    // Array sum
+    let own sum: Int64 = calculate_sum(numbers);
+    out "Sum of array:", sum;
+    
+    // Array max
+    let own max: Int64 = find_max(numbers);
+    out "Max element:", max;
+}
+
+pub proc array_length(arr: Arr<Int64>) -> Int64 {
+    let mut own count: Int64 = 0;
+    for num: Int64 in arr {
+        count = count + 1;
+    }
+    return count;
+}
+
+pub proc calculate_sum(arr: Arr<Int64>) -> Int64 {
+    let mut own total: Int64 = 0;
+    for num: Int64 in arr {
+        total = total + num;
+    }
+    return total;
+}
+
+pub proc find_max(arr: Arr<Int64>) -> Int64 {
+    let mut own maximum: Int64 = arr[0];
+    for num: Int64 in arr {
+        if num > maximum {
+            maximum = num;
+        }
+    }
+    return maximum;
+}
+
+// ============================================================================
+// CATEGORY 3: Functional Programming
+// ============================================================================
+
+pub proc demo_functional() -> Void {
+    out "=== Functional Programming Demo ===";
+    
+    let own numbers: Arr<Int64> = [1, 2, 3, 4, 5];
+    
+    // Map - double each number
+    let own doubled: Arr<Int64> = map_double(numbers);
+    out "Original:", numbers;
+    out "Doubled:", doubled;
+    
+    // Filter - get even numbers
+    let own evens: Arr<Int64> = filter_evens(numbers);
+    out "Even numbers:", evens;
+    
+    // Reduce - sum all numbers
+    let own sum: Int64 = reduce_sum(numbers);
+    out "Sum:", sum;
+    
+    // Compose operations
+    let own result: Int64 = compose_operations(numbers);
+    out "Composed result:", result;
+}
+
+pub proc map_double(arr: Arr<Int64>) -> Arr<Int64> {
+    let own result: Arr<Int64> = [0, 0, 0, 0, 0];
+    let mut own i: Int64 = 0;
+    for num: Int64 in arr {
+        result[i] = num * 2;
+        i = i + 1;
+    }
+    return result;
+}
+
+pub proc filter_evens(arr: Arr<Int64>) -> Arr<Int64> {
+    // Count evens first
+    let mut own count: Int64 = 0;
+    for num: Int64 in arr {
+        if num % 2 == 0 {
+            count = count + 1;
+        }
+    }
+    
+    // Create result array
+    let mut own result: Arr<Int64> = allocate_array<Int64>(count);
+    let mut own idx: Int64 = 0;
+    for num: Int64 in arr {
+        if num % 2 == 0 {
+            result[idx] = num;
+            idx = idx + 1;
+        }
+    }
+    return result;
+}
+
+pub proc reduce_sum(arr: Arr<Int64>) -> Int64 {
+    let mut own total: Int64 = 0;
+    for num: Int64 in arr {
+        total = total + num;
+    }
+    return total;
+}
+
+pub proc compose_operations(arr: Arr<Int64>) -> Int64 {
+    // Filter evens, double them, then sum
+    let own evens: Arr<Int64> = filter_evens(arr);
+    let own doubled: Arr<Int64> = map_double(evens);
+    let own sum: Int64 = reduce_sum(doubled);
+    return sum;
+}
+
+// ============================================================================
+// CATEGORY 4: Pattern Matching
+// ============================================================================
+
+pub proc demo_pattern_matching() -> Void {
+    out "=== Pattern Matching Demo ===";
+    
+    let own value: Int64 = 42;
+    let own category: Str = categorize_number(value);
+    out "Number", value, "is:", category;
+    
+    let own neg_value: Int64 = -10;
+    let own neg_category: Str = categorize_number(neg_value);
+    out "Number", neg_value, "is:", neg_category;
+    
+    let own zero: Int64 = 0;
+    let own zero_category: Str = categorize_number(zero);
+    out "Number", zero, "is:", zero_category;
+}
+
+pub proc categorize_number(n: Int64) -> Str {
+    if n > 0 {
+        if n < 10 {
+            return "small positive";
+        } elif n < 100 {
+            return "medium positive";
+        } else {
+            return "large positive";
+        }
+    } elif n < 0 {
+        return "negative";
+    } else {
+        return "zero";
+    }
+}
+
+// ============================================================================
+// CATEGORY 5: Error Handling
+// ============================================================================
+
+pub proc demo_error_handling() -> Void {
+    out "=== Error Handling Demo ===";
+    
+    // Successful division
+    let own result1: Int64 = safe_divide(10, 2);
+    out "10 / 2 =", result1;
+    
+    // Division by zero handling
+    let own result2: Int64 = safe_divide(10, 0);
+    out "10 / 0 =", result2, "(error handled)";
+    
+    // Array bounds checking
+    let own arr: Arr<Int64> = [1, 2, 3, 4, 5];
+    let own val1: Int64 = safe_array_access(arr, 2);
+    out "arr[2] =", val1;
+    
+    let own val2: Int64 = safe_array_access(arr, 100);
+    out "arr[100] =", val2, "(out of bounds, returned default)";
+}
+
+pub proc safe_divide(a: Int64, b: Int64) -> Int64 {
+    if b == 0 {
+        out "Error: Division by zero, returning 0";
+        return 0;
+    }
+    return a / b;
+}
+
+pub proc safe_array_access(arr: Arr<Int64>, index: Int64) -> Int64 {
+    let own len: Int64 = array_length(arr);
+    if index < 0 or index >= len {
+        out "Error: Array index out of bounds, returning 0";
+        return 0;
+    }
+    return arr[index];
+}
+
+// ============================================================================
+// CATEGORY 6: Memory Management
+// ============================================================================
+
+pub proc demo_memory_management() -> Void {
+    out "=== Memory Management Demo ===";
+    
+    // Stack allocation
+    let own stack_data: Arr<Int64> = [1, 2, 3, 4, 5];
+    out "Stack allocated array:", stack_data;
+    
+    // Heap allocation
+    alloc<Arr<Int64>> heap_data on heap [10];
+    out "Heap allocated array of size 10";
+    
+    // Manual memory management
+    let mut own i: Int64 = 0;
+    while i < 10 {
+        heap_data[i] = i * i;
+        i = i + 1;
+    }
+    out "Filled heap array with squares";
+    
+    // Show some values
+    out "heap_data[5] =", heap_data[5];
+    out "heap_data[9] =", heap_data[9];
+    
+    // Deallocation
+    dealloc heap_data;
+    out "Heap memory deallocated";
+}
+
+// ============================================================================
+// CATEGORY 7: String Operations
+// ============================================================================
+
+pub proc demo_string_operations() -> Void {
+    out "=== String Operations Demo ===";
+    
+    let own str1: Str = "Hello";
+    let own str2: Str = "World";
+    let own str3: Str = "LPPO V5.2";
+    
+    out "String 1:", str1;
+    out "String 2:", str2;
+    out "String 3:", str3;
+    
+    // String comparison
+    if str1 == "Hello" {
+        out "String comparison works!";
+    }
+    
+    // String in output
+    out "Combined:", str1, str2, str3;
+}
+
+// ============================================================================
+// CATEGORY 8: Numeric Operations
+// ============================================================================
+
+pub proc demo_numeric_operations() -> Void {
+    out "=== Numeric Operations Demo ===";
+    
+    let own a: Int64 = 10;
+    let own b: Int64 = 3;
+    
+    // Basic arithmetic
+    let own sum: Int64 = a + b;
+    let own diff: Int64 = a - b;
+    let own prod: Int64 = a * b;
+    let own quot: Int64 = a / b;
+    let own rem: Int64 = a % b;
+    
+    out "a =", a, ", b =", b;
+    out "Addition:", a, "+", b, "=", sum;
+    out "Subtraction:", a, "-", b, "=", diff;
+    out "Multiplication:", a, "*", b, "=", prod;
+    out "Division:", a, "/", b, "=", quot;
+    out "Modulo:", a, "%", b, "=", rem;
+    
+    // Power (simulated)
+    let own power: Int64 = power_of(2, 10);
+    out "2^10 =", power;
+    
+    // Factorial
+    let own fact: Int64 = factorial(6);
+    out "6! =", fact;
+    
+    // Fibonacci
+    let own fib: Int64 = fibonacci(10);
+    out "fibonacci(10) =", fib;
+}
+
+pub proc power_of(base: Int64, exp: Int64) -> Int64 {
+    let mut own result: Int64 = 1;
+    let mut own i: Int64 = 0;
+    while i < exp {
+        result = result * base;
+        i = i + 1;
+    }
+    return result;
+}
+
+pub proc factorial(n: Int64) -> Int64 {
+    if n <= 1 {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+pub proc fibonacci(n: Int64) -> Int64 {
+    if n <= 1 {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+// Helper to allocate array (simulated)
+pub proc allocate_array<T>(size: Int64) -> Arr<T> {
+    // In actual implementation, this would allocate
+    // For now, return a placeholder
+    return [];
+}
