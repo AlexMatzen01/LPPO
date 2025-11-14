@@ -1,4 +1,4 @@
-use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp, TypeAnnotation, Parameter, QualifiedName, MemoryLocation, OwnershipKind, Module};
+use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp, TypeAnnotation, Parameter, QualifiedName, MemoryLocation, OwnershipKind, Module, UseStatement};
 use crate::error::{LppoError, LppoResult};
 use crate::lexer::{Lexer, Token};
 
@@ -27,11 +27,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_program(&mut self) -> LppoResult<Program> {
+        let mut uses = Vec::new();
         let mut modules = Vec::new();
         let mut procedures = Vec::new();
         
         while self.lookahead != Token::Eof {
             match &self.lookahead {
+                Token::Use => {
+                    uses.push(self.parse_use_statement()?);
+                }
                 Token::Module => {
                     modules.push(self.parse_module()?);
                 }
@@ -39,12 +43,13 @@ impl<'a> Parser<'a> {
                     procedures.push(self.parse_procedure()?);
                 }
                 _ => {
-                    return Err(LppoError::unexpected_token("module or procedure", &format!("{:?}", self.lookahead), self.position,
+                    return Err(LppoError::unexpected_token("use, module or procedure", &format!("{:?}", self.lookahead), self.position,
                     ));
                 }
             }
         }
         Ok(Program { 
+            uses,
             modules, 
             procedures,
             structs: Vec::new(),
@@ -52,6 +57,83 @@ impl<'a> Parser<'a> {
             traits: Vec::new(),
             impls: Vec::new(),
         })
+    }
+    
+    fn parse_use_statement(&mut self) -> LppoResult<UseStatement> {
+        self.expect(Token::Use)?;
+        
+        // Parse the path: std::collections::Vec or std::collections::{Vec, HashMap}
+        let mut path = Vec::new();
+        
+        loop {
+            let name = match self.lookahead.clone() {
+                Token::Identifier(name) => name,
+                // Allow type tokens as identifiers in use statements
+                Token::TypeVec => "Vec".to_string(),
+                Token::TypeHashMap => "HashMap".to_string(),
+                Token::TypeHashSet => "HashSet".to_string(),
+                Token::TypeBTreeMap => "BTreeMap".to_string(),
+                Token::TypeBTreeSet => "BTreeSet".to_string(),
+                Token::TypeOption => "Option".to_string(),
+                Token::TypeResult => "Result".to_string(),
+                Token::TypeBox => "Box".to_string(),
+                Token::TypeRc => "Rc".to_string(),
+                Token::TypeArc => "Arc".to_string(),
+                _ => break,
+            };
+            
+            path.push(name);
+            self.advance()?;
+            
+            if self.lookahead == Token::DoubleColon {
+                self.advance()?;
+            } else {
+                break;
+            }
+        }
+        
+        // Check for specific items import: use std::collections::{Vec, HashMap};
+        let items = if self.lookahead == Token::LBrace {
+            self.advance()?;
+            let mut item_list = Vec::new();
+            
+            loop {
+                let name = match self.lookahead.clone() {
+                    Token::Identifier(name) => name,
+                    // Allow type tokens as identifiers in use statements
+                    Token::TypeVec => "Vec".to_string(),
+                    Token::TypeHashMap => "HashMap".to_string(),
+                    Token::TypeHashSet => "HashSet".to_string(),
+                    Token::TypeBTreeMap => "BTreeMap".to_string(),
+                    Token::TypeBTreeSet => "BTreeSet".to_string(),
+                    Token::TypeOption => "Option".to_string(),
+                    Token::TypeResult => "Result".to_string(),
+                    Token::TypeBox => "Box".to_string(),
+                    Token::TypeRc => "Rc".to_string(),
+                    Token::TypeArc => "Arc".to_string(),
+                    _ => break,
+                };
+                
+                item_list.push(name);
+                self.advance()?;
+                
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                } else {
+                    break;
+                }
+            }
+            
+            self.expect(Token::RBrace)?;
+            Some(item_list)
+        } else {
+            None
+        };
+        
+        // Expect semicolon at the end
+        self.expect(Token::Semicolon)?;
+        
+        Ok(UseStatement { path, items })
     }
     
     fn parse_module(&mut self) -> LppoResult<Module> {
@@ -220,6 +302,60 @@ impl<'a> Parser<'a> {
                 self.expect(Token::Greater)?;
                 Ok(TypeAnnotation::Arr(Box::new(inner)))
             }
+            Token::TypeOption => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Option(Box::new(inner)))
+            }
+            Token::TypeResult => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let ok_type = self.parse_type()?;
+                self.expect(Token::Comma)?;
+                let err_type = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Result(Box::new(ok_type), Box::new(err_type)))
+            }
+            // V5.2 Generic container types - Vec, HashMap, etc.
+            Token::TypeVec | Token::TypeHashMap | Token::TypeHashSet | 
+            Token::TypeBTreeMap | Token::TypeBTreeSet | Token::TypeBox |
+            Token::TypeRc | Token::TypeArc => {
+                let type_name = match &self.lookahead {
+                    Token::TypeVec => "Vec",
+                    Token::TypeHashMap => "HashMap",
+                    Token::TypeHashSet => "HashSet",
+                    Token::TypeBTreeMap => "BTreeMap",
+                    Token::TypeBTreeSet => "BTreeSet",
+                    Token::TypeBox => "Box",
+                    Token::TypeRc => "Rc",
+                    Token::TypeArc => "Arc",
+                    _ => unreachable!(),
+                };
+                self.advance()?;
+                
+                // Check for generic parameters
+                if self.lookahead == Token::Less {
+                    self.advance()?;
+                    let mut type_params = Vec::new();
+                    
+                    loop {
+                        type_params.push(self.parse_type()?);
+                        
+                        if self.lookahead == Token::Comma {
+                            self.advance()?;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    self.expect(Token::Greater)?;
+                    Ok(TypeAnnotation::Generic(type_name.to_string(), type_params))
+                } else {
+                    Ok(TypeAnnotation::Custom(type_name.to_string()))
+                }
+            }
             Token::Ref => {
                 self.advance()?;
                 let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
@@ -247,6 +383,31 @@ impl<'a> Parser<'a> {
                 let inner = self.parse_type()?;
                 self.expect(Token::Greater)?;
                 Ok(TypeAnnotation::Own(Box::new(inner)))
+            }
+            Token::Identifier(name) => {
+                let name = name.clone();
+                self.advance()?;
+                
+                // Check for generic parameters
+                if self.lookahead == Token::Less {
+                    self.advance()?;
+                    let mut type_params = Vec::new();
+                    
+                    loop {
+                        type_params.push(self.parse_type()?);
+                        
+                        if self.lookahead == Token::Comma {
+                            self.advance()?;
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    self.expect(Token::Greater)?;
+                    Ok(TypeAnnotation::Generic(name, type_params))
+                } else {
+                    Ok(TypeAnnotation::Custom(name))
+                }
             }
             _ => {
                 Err(LppoError::unexpected_token("type annotation", &format!("{:?}", self.lookahead), self.position,

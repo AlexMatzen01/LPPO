@@ -1,6 +1,14 @@
+/// Represents a use/import statement for bringing items into scope
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UseStatement {
+    pub path: Vec<String>, // e.g., ["std", "collections", "Vec"]
+    pub items: Option<Vec<String>>, // None for wildcard import, Some for specific items
+}
+
 /// Represents a complete LPPO program consisting of zero or more modules and procedures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
+    pub uses: Vec<UseStatement>,
     pub modules: Vec<Module>,
     pub procedures: Vec<Procedure>,
     pub structs: Vec<StructDef>,
