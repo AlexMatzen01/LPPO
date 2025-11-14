@@ -879,13 +879,9 @@ impl<'a> Parser<'a> {
         let typ = self.parse_type()?;
         
         // Optional prompt with "with" keyword
-        let prompt = if let Token::Identifier(id) = &self.lookahead {
-            if id == "with" {
-                self.advance()?; // consume "with"
-                Some(self.parse_expression()?)
-            } else {
-                None
-            }
+        let prompt = if self.lookahead == Token::With {
+            self.advance()?; // consume "with"
+            Some(self.parse_expression()?)
         } else {
             None
         };
