@@ -47,6 +47,7 @@ pub enum Token {
     Caret,
     Tilde,
     Arrow,
+    Bang, // ! for macros like vec![...]
     // Type system tokens
     Colon,
     DoubleColon,
@@ -960,7 +961,7 @@ impl<'a> Lexer<'a> {
                         self.bump();
                         Token::NotEq
                     } else {
-                        return Err(LppoError::unexpected_char('!', self.position));
+                        Token::Bang
                     }
                 }
                 b',' => Token::Comma,

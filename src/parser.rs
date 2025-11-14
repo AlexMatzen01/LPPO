@@ -1076,15 +1076,63 @@ impl<'a> Parser<'a> {
                 self.advance()?; 
                 Ok(Expr::Bool(false)) 
             }
-            Token::Identifier(_) => {
-                // Check if this is a qualified name
-                let qualified = self.parse_qualified_name()?;
+            Token::Identifier(name) => {
+                let saved_name = name.clone();
+                self.advance()?; // consume identifier
                 
-                // If it's just a simple name, return Var, otherwise QualifiedVar
-                if qualified.path.is_empty() {
-                    Ok(Expr::Var(qualified.name))
+                // Check if this is a macro call: identifier![...]
+                if saved_name == "vec" && self.lookahead == Token::Bang {
+                    self.advance()?; // consume '!'
+                    self.expect(Token::LBracket)?;
+                    
+                    // Parse array elements
+                    let mut elements = Vec::new();
+                    if self.lookahead != Token::RBracket {
+                        loop {
+                            elements.push(self.parse_expression()?);
+                            if self.lookahead == Token::Comma {
+                                self.advance()?;
+                                continue;
+                            }
+                            break;
+                        }
+                    }
+                    self.expect(Token::RBracket)?;
+                    // Return array - runtime will treat it as Vec
+                    return Ok(Expr::Array(elements));
+                }
+                
+                // Check if this is a qualified name (we already consumed the first identifier)
+                // We need to back up and reparse
+                // For simplicity, handle common cases
+                if self.lookahead == Token::DoubleColon {
+                    // It's a qualified name, need to parse rest of path
+                    let mut path = Vec::new();
+                    let mut name = saved_name;
+                    
+                    while self.lookahead == Token::DoubleColon {
+                        path.push(name);
+                        self.advance()?; // consume ::
+                        
+                        name = match self.lookahead.clone() {
+                            Token::Identifier(n) => {
+                                self.advance()?;
+                                n
+                            }
+                            _ => {
+                                return Err(LppoError::unexpected_token("identifier after ::", &format!("{:?}", self.lookahead), self.position));
+                            }
+                        };
+                    }
+                    
+                    if path.is_empty() {
+                        Ok(Expr::Var(name))
+                    } else {
+                        Ok(Expr::QualifiedVar(QualifiedName { path, name }))
+                    }
                 } else {
-                    Ok(Expr::QualifiedVar(qualified))
+                    // Simple identifier
+                    Ok(Expr::Var(saved_name))
                 }
             }
             Token::LParen => { 
