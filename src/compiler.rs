@@ -125,6 +125,10 @@ fn compile_statement(statement: Statement) -> Operation {
             // Struct initialization - placeholder for now
             Operation::Nop
         }
+        Statement::ExprStatement(expr) => {
+            // Expression statement - evaluate expression for side effects
+            Operation::ExprStatement(expr)
+        }
     }
 }
 

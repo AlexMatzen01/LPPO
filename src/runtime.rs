@@ -76,6 +76,8 @@ pub enum Operation {
     },
     /// No operation (placeholder)
     Nop,
+    /// Expression statement - evaluate for side effects
+    ExprStatement(Expr),
 }
 
 /// Runtime value types used during evaluation.
@@ -85,6 +87,71 @@ pub enum Value {
     Bool(bool),
     Str(String),
     Array(Vec<Value>),
+}
+
+fn pattern_matches(pattern: &crate::ast::Pattern, value: &Value, env: &mut HashMap<String, Value>) -> LppoResult<bool> {
+    use crate::ast::Pattern;
+    
+    match pattern {
+        Pattern::Wildcard => Ok(true),
+        Pattern::Literal(expr) => {
+            // Compare the value with the literal
+            let lit_val = eval_expr(expr, env)?;
+            Ok(values_equal(&lit_val, value))
+        }
+        Pattern::Variable(name) => {
+            // Bind the variable to the value
+            env.insert(name.clone(), value.clone());
+            Ok(true)
+        }
+        Pattern::EnumVariant { variant, fields, .. } => {
+            // For now, handle Some and None patterns for Option
+            match variant.as_str() {
+                "Some" => {
+                    // Check if value is not the special "None" value
+                    // For simplicity, we'll treat any non-null value as Some
+                    if fields.len() == 1 {
+                        // Bind the inner value
+                        pattern_matches(&fields[0], value, env)
+                    } else {
+                        Ok(true)
+                    }
+                }
+                "None" => {
+                    // Check if value is the special "None" value
+                    // For now, we'll use Int(0) as None
+                    Ok(matches!(value, Value::Int(0)))
+                }
+                "Ok" => {
+                    // Similar to Some
+                    if fields.len() == 1 {
+                        pattern_matches(&fields[0], value, env)
+                    } else {
+                        Ok(true)
+                    }
+                }
+                "Err" => {
+                    // For now, treat negative numbers as errors
+                    Ok(matches!(value, Value::Int(n) if *n < 0))
+                }
+                _ => Ok(false),
+            }
+        }
+        _ => {
+            // TODO: Implement other patterns
+            Ok(false)
+        }
+    }
+}
+
+fn values_equal(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Int(a), Value::Int(b)) => a == b,
+        (Value::Bool(a), Value::Bool(b)) => a == b,
+        (Value::Str(a), Value::Str(b)) => a == b,
+        (Value::Array(a), Value::Array(b)) => a == b,
+        _ => false,
+    }
 }
 
 fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value> {
@@ -282,6 +349,44 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         Expr::Borrow { target, lifetime: _ } => {
             // Simplified: borrow is just like a reference
             eval_expr(target, env)
+        }
+        Expr::Closure { params: _, return_type: _, body: _ } => {
+            // TODO: Implement closure support
+            // For now, return a placeholder
+            Err(LppoError::type_error("closures not yet implemented in runtime".into()))
+        }
+        Expr::Call { func: _, args: _ } => {
+            // TODO: Implement function calls
+            // For now, return a placeholder
+            Err(LppoError::type_error("function calls not yet implemented in runtime".into()))
+        }
+        Expr::Range { start: _, end: _, inclusive: _ } => {
+            // TODO: Implement range expressions
+            // For now, return a placeholder
+            Err(LppoError::type_error("range expressions not yet implemented in runtime".into()))
+        }
+        Expr::MatchExpr { expr, arms } => {
+            // Evaluate the match expression
+            let val = eval_expr(expr, env)?;
+            
+            // Try each arm in order
+            for arm in arms {
+                if pattern_matches(&arm.pattern, &val, env)? {
+                    // Check guard if present
+                    if let Some(ref guard) = arm.guard {
+                        let guard_val = eval_expr(guard, env)?;
+                        if !is_truthy(&guard_val) {
+                            continue;
+                        }
+                    }
+                    
+                    // Execute the arm body
+                    return eval_expr(&arm.body, env);
+                }
+            }
+            
+            // No pattern matched
+            Err(LppoError::type_error("no pattern matched in match expression".into()))
         }
     }
 }
@@ -577,6 +682,10 @@ impl Executor {
                 }
                 Operation::Nop => {
                     // No operation - do nothing
+                }
+                Operation::ExprStatement(expr) => {
+                    // Evaluate expression for side effects (e.g., method calls)
+                    let _ = eval_expr(expr, env)?;
                 }
             }
         }

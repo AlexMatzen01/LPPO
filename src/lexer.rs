@@ -47,6 +47,7 @@ pub enum Token {
     Caret,
     Tilde,
     Arrow,
+    Bang, // ! for macros like vec![...]
     // Type system tokens
     Colon,
     DoubleColon,
@@ -951,6 +952,9 @@ impl<'a> Lexer<'a> {
                     if self.peek() == Some(b'=') {
                         self.bump();
                         Token::EqEq
+                    } else if self.peek() == Some(b'>') {
+                        self.bump();
+                        Token::FatArrow
                     } else {
                         Token::Equals
                     }
@@ -960,7 +964,7 @@ impl<'a> Lexer<'a> {
                         self.bump();
                         Token::NotEq
                     } else {
-                        return Err(LppoError::unexpected_char('!', self.position));
+                        Token::Bang
                     }
                 }
                 b',' => Token::Comma,
@@ -1090,7 +1094,7 @@ impl<'a> Lexer<'a> {
                     "STACKCHK" => Token::StackChk,
                     "HEAPCHK" => Token::HeapChk,
                     // V4.0: Advanced type system
-                    "TYPDEF" => Token::TypeDef,
+                    "TYPDEF" | "type" => Token::TypeDef,
                     "CONSTEXPR" => Token::ConstExpr,
                     "GENRC" => Token::GenRc,
                     "UNIONDEF" => Token::UnionDef,
@@ -1291,8 +1295,8 @@ impl<'a> Lexer<'a> {
                     "switch" => Token::Switch,
                     "fallthrough" => Token::Fallthrough,
                     "goto" => Token::Goto,
-                    "label" => Token::Label,
-                    "target" => Token::Target,
+                    // "label" => Token::Label,  // Commented out - conflicts with common variable name
+                    // "target" => Token::Target,  // Commented out - conflicts with common variable name
                     "jump" => Token::Jump,
                     "skip" => Token::Skip,
                     "defer" => Token::Defer,
