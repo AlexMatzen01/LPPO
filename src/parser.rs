@@ -1,4 +1,4 @@
-use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp, TypeAnnotation, Parameter, QualifiedName, MemoryLocation, OwnershipKind, Module, UseDeclaration, UseItems, TypeAlias};
+use crate::ast::{Procedure, Program, Statement, Expr, BinaryOp, UnaryOp, TypeAnnotation, Parameter, QualifiedName, MemoryLocation, OwnershipKind, Module, UseDeclaration, UseItems, TypeAlias, StructDef, StructField, EnumDef, EnumVariant, TraitDef, TraitMethod, ImplBlock};
 use crate::error::{LppoError, LppoResult};
 use crate::lexer::{Lexer, Token};
 
@@ -26,13 +26,178 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_struct(&mut self, is_public: bool) -> LppoResult<StructDef> {
+        self.expect(Token::Struct)?;
+        let name = self.parse_name("struct name")?;
+        let generic_params = self.parse_generic_params()?;
+        self.expect(Token::LBrace)?;
+        let mut fields = Vec::new();
+        while self.lookahead != Token::RBrace {
+            self.skip_attributes()?;
+            if self.lookahead == Token::RBrace {
+                break;
+            }
+            let field_public = if self.lookahead == Token::Pub {
+                self.advance()?;
+                true
+            } else {
+                false
+            };
+            let field_name = self.parse_name("field name")?;
+            self.expect(Token::Colon)?;
+            let typ = self.parse_type()?;
+            if self.lookahead == Token::Comma || self.lookahead == Token::Semicolon {
+                self.advance()?;
+            }
+            fields.push(StructField { name: field_name, typ, is_public: field_public });
+        }
+        self.expect(Token::RBrace)?;
+        Ok(StructDef {
+            name,
+            fields,
+            methods: Vec::new(),
+            is_public,
+            generic_params,
+        })
+    }
+
+    fn parse_enum(&mut self, is_public: bool) -> LppoResult<EnumDef> {
+        self.expect(Token::Enum)?;
+        let name = self.parse_name("enum name")?;
+        let generic_params = self.parse_generic_params()?;
+        self.expect(Token::LBrace)?;
+        let mut variants = Vec::new();
+        while self.lookahead != Token::RBrace {
+            self.skip_attributes()?;
+            if self.lookahead == Token::RBrace {
+                break;
+            }
+            let variant_name = self.parse_name("enum variant")?;
+            let mut fields = Vec::new();
+            if self.lookahead == Token::LParen {
+                self.advance()?;
+                if self.lookahead != Token::RParen {
+                    loop {
+                        fields.push(self.parse_type()?);
+                        if self.lookahead == Token::Comma {
+                            self.advance()?;
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                self.expect(Token::RParen)?;
+            }
+            if self.lookahead == Token::Comma {
+                self.advance()?;
+            }
+            variants.push(EnumVariant { name: variant_name, fields });
+        }
+        self.expect(Token::RBrace)?;
+        Ok(EnumDef {
+            name,
+            variants,
+            is_public,
+            generic_params,
+        })
+    }
+
+    fn parse_trait(&mut self, is_public: bool) -> LppoResult<TraitDef> {
+        self.expect(Token::Trait)?;
+        let name = self.parse_name("trait name")?;
+        self.expect(Token::LBrace)?;
+        let mut methods = Vec::new();
+        while self.lookahead != Token::RBrace {
+            self.skip_attributes()?;
+            if self.lookahead == Token::RBrace {
+                break;
+            }
+            if self.lookahead == Token::Pub {
+                self.advance()?; // visibility inside trait method is redundant, ignore
+            }
+            self.expect(Token::Proc)?;
+            let method_name = self.parse_name("trait method name")?;
+            let params = self.parse_parameter_list()?;
+            let return_type = if self.lookahead == Token::Arrow {
+                self.advance()?;
+                self.parse_type()?
+            } else {
+                TypeAnnotation::Void
+            };
+            self.expect(Token::Semicolon)?;
+            methods.push(TraitMethod { name: method_name, params, return_type });
+        }
+        self.expect(Token::RBrace)?;
+        Ok(TraitDef { name, methods, is_public })
+    }
+
+    fn parse_effect(&mut self, is_public: bool) -> LppoResult<TraitDef> {
+        self.expect(Token::Effect)?;
+        let name = self.parse_name("effect name")?;
+        self.expect(Token::LBrace)?;
+        let mut methods = Vec::new();
+        while self.lookahead != Token::RBrace {
+            self.skip_attributes()?;
+            if self.lookahead == Token::RBrace {
+                break;
+            }
+            if self.lookahead == Token::Pub {
+                self.advance()?;
+            }
+            self.expect(Token::Proc)?;
+            let method_name = self.parse_name("effect procedure name")?;
+            let params = self.parse_parameter_list()?;
+            let return_type = if self.lookahead == Token::Arrow {
+                self.advance()?;
+                self.parse_type()?
+            } else {
+                TypeAnnotation::Void
+            };
+            if self.lookahead == Token::Semicolon {
+                self.advance()?;
+            }
+            methods.push(TraitMethod { name: method_name, params, return_type });
+        }
+        self.expect(Token::RBrace)?;
+        Ok(TraitDef { name, methods, is_public })
+    }
+
+    fn parse_impl(&mut self, _is_public: bool) -> LppoResult<ImplBlock> {
+        self.expect(Token::Impl)?;
+        let target_or_trait = self.parse_name("impl target")?;
+        let (trait_name, type_name) = if self.lookahead == Token::For {
+            self.advance()?;
+            let typ = self.parse_type()?;
+            let type_name = self.type_to_string(&typ);
+            (Some(target_or_trait), type_name)
+        } else {
+            (None, target_or_trait)
+        };
+        self.expect(Token::LBrace)?;
+        let mut methods = Vec::new();
+        while self.lookahead != Token::RBrace {
+            self.skip_attributes()?;
+            if self.lookahead == Token::RBrace {
+                break;
+            }
+            methods.push(self.parse_procedure(false)?);
+        }
+        self.expect(Token::RBrace)?;
+        Ok(ImplBlock { trait_name, type_name, methods })
+    }
+
     fn parse_program(&mut self) -> LppoResult<Program> {
         let mut use_declarations = Vec::new();
         let mut type_aliases = Vec::new();
         let mut modules = Vec::new();
         let mut procedures = Vec::new();
+        let mut structs = Vec::new();
+        let mut enums = Vec::new();
+        let mut traits = Vec::new();
+        let mut impls = Vec::new();
         
         while self.lookahead != Token::Eof {
+            self.skip_attributes()?;
             match &self.lookahead {
                 Token::Use => {
                     use_declarations.push(self.parse_use_declaration()?);
@@ -43,8 +208,42 @@ impl<'a> Parser<'a> {
                 Token::Module => {
                     modules.push(self.parse_module()?);
                 }
-                Token::Proc | Token::Pub | Token::Unsafe => {
-                    procedures.push(self.parse_procedure()?);
+                Token::Struct => {
+                    structs.push(self.parse_struct(false)?);
+                }
+                Token::Enum => {
+                    enums.push(self.parse_enum(false)?);
+                }
+                Token::Trait => {
+                    traits.push(self.parse_trait(false)?);
+                }
+                Token::Effect => {
+                    traits.push(self.parse_effect(false)?);
+                }
+                Token::Impl => {
+                    impls.push(self.parse_impl(false)?);
+                }
+                Token::Pub => {
+                    self.advance()?;
+                    self.skip_attributes()?;
+                    match self.lookahead {
+                        Token::Struct => structs.push(self.parse_struct(true)?),
+                        Token::Enum => enums.push(self.parse_enum(true)?),
+                        Token::Trait => traits.push(self.parse_trait(true)?),
+                        Token::Effect => traits.push(self.parse_effect(true)?),
+                        Token::Impl => impls.push(self.parse_impl(true)?),
+                        Token::Proc | Token::Unsafe | Token::Async => procedures.push(self.parse_procedure(true)?),
+                        _ => {
+                            return Err(LppoError::unexpected_token_at(
+                                "declaration after pub",
+                                &format!("{:?}", self.lookahead),
+                                self.position.clone(),
+                            ));
+                        }
+                    }
+                }
+                Token::Proc | Token::Unsafe | Token::Async => {
+                    procedures.push(self.parse_procedure(false)?);
                 }
                 _ => {
                     return Err(LppoError::unexpected_token_at("use, type, module or procedure", &format!("{:?}", self.lookahead), self.position.clone()));
@@ -56,10 +255,10 @@ impl<'a> Parser<'a> {
             type_aliases,
             modules, 
             procedures,
-            structs: Vec::new(),
-            enums: Vec::new(),
-            traits: Vec::new(),
-            impls: Vec::new(),
+            structs,
+            enums,
+            traits,
+            impls,
         })
     }
     
@@ -77,16 +276,46 @@ impl<'a> Parser<'a> {
         
         self.expect(Token::LBrace)?;
         let mut procedures = Vec::new();
+        let mut structs = Vec::new();
+        let mut enums = Vec::new();
         while self.lookahead != Token::RBrace {
-            procedures.push(self.parse_procedure()?);
+            self.skip_attributes()?;
+            match self.lookahead {
+                Token::Struct => structs.push(self.parse_struct(false)?),
+                Token::Enum => enums.push(self.parse_enum(false)?),
+                Token::Pub => {
+                    self.advance()?;
+                    self.skip_attributes()?;
+                    match self.lookahead {
+                        Token::Struct => structs.push(self.parse_struct(true)?),
+                        Token::Enum => enums.push(self.parse_enum(true)?),
+                        Token::Proc | Token::Unsafe | Token::Async => procedures.push(self.parse_procedure(true)?),
+                        _ => {
+                            return Err(LppoError::unexpected_token_at(
+                                "module declaration after pub",
+                                &format!("{:?}", self.lookahead),
+                                self.position.clone(),
+                            ));
+                        }
+                    }
+                }
+                Token::Proc | Token::Unsafe | Token::Async => procedures.push(self.parse_procedure(false)?),
+                _ => {
+                    return Err(LppoError::unexpected_token_at(
+                        "module declaration",
+                        &format!("{:?}", self.lookahead),
+                        self.position.clone(),
+                    ));
+                }
+            }
         }
         self.expect(Token::RBrace)?;
         
         Ok(Module { 
             name, 
             procedures,
-            structs: Vec::new(),
-            enums: Vec::new(),
+            structs,
+            enums,
         })
     }
     
@@ -208,14 +437,13 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_procedure(&mut self) -> LppoResult<Procedure> {
+    fn parse_procedure(&mut self, pre_pub: bool) -> LppoResult<Procedure> {
         // Check for pub and unsafe modifiers
-        let is_public = if self.lookahead == Token::Pub {
+        let mut is_public = pre_pub;
+        if !is_public && self.lookahead == Token::Pub {
             self.advance()?;
-            true
-        } else {
-            false
-        };
+            is_public = true;
+        }
         
         let is_unsafe = if self.lookahead == Token::Unsafe {
             self.advance()?;
@@ -224,13 +452,13 @@ impl<'a> Parser<'a> {
             false
         };
         
-        self.expect(Token::Proc)?;
-        let name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+        // Optional async modifier (currently ignored at runtime)
+        if self.lookahead == Token::Async {
             self.advance()?;
-            n
-        } else {
-            return Err(LppoError::unexpected_token_at("procedure name", &format!("{:?}", self.lookahead), self.position.clone()));
-        };
+        }
+        
+        self.expect(Token::Proc)?;
+        let name = self.parse_name("procedure name")?;
         
         // Parse lifetime parameters <'a, 'b>
         let mut lifetimes = Vec::new();
@@ -255,48 +483,7 @@ impl<'a> Parser<'a> {
             self.expect(Token::Greater)?;
         }
         
-        // Parameter list - support both old and new syntax
-        let mut params = Vec::new();
-        if self.lookahead == Token::LParen {
-            self.advance()?;  // consume '('
-            if self.lookahead != Token::RParen {
-                loop {
-                    let name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
-                        self.advance()?;
-                        n
-                    } else {
-                        return Err(LppoError::unexpected_token_at("parameter name", &format!("{:?}", self.lookahead), self.position.clone()));
-                    };
-                    
-                    // Optional colon and type (for old syntax compatibility)
-                    let typ = if self.lookahead == Token::Colon {
-                        self.advance()?;
-                        self.parse_type()?
-                    } else {
-                        // Default to Void for old syntax without types
-                        TypeAnnotation::Void
-                    };
-                    
-                    // Optional lifetime
-                    let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
-                        let lt = lt.clone();
-                        self.advance()?;
-                        Some(lt)
-                    } else {
-                        None
-                    };
-                    
-                    params.push(Parameter { name, typ, lifetime });
-                    
-                    if self.lookahead == Token::Comma {
-                        self.advance()?;
-                        continue;
-                    }
-                    break;
-                }
-            }
-            self.expect(Token::RParen)?;
-        }
+        let params = self.parse_parameter_list()?;
         
         // Optional return type annotation (for old syntax compatibility)
         let return_type = if self.lookahead == Token::Arrow {
@@ -349,6 +536,22 @@ impl<'a> Parser<'a> {
                 self.expect(Token::Greater)?;
                 Ok(TypeAnnotation::Arr(Box::new(inner)))
             }
+            Token::TypeOption => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Option(Box::new(inner)))
+            }
+            Token::TypeResult => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let ok = self.parse_type()?;
+                self.expect(Token::Comma)?;
+                let err = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Result(Box::new(ok), Box::new(err)))
+            }
             Token::Ref => {
                 self.advance()?;
                 let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
@@ -358,23 +561,38 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                self.expect(Token::Less)?;
-                let inner = self.parse_type()?;
-                self.expect(Token::Greater)?;
+                let inner = if self.lookahead == Token::Less {
+                    self.advance()?;
+                    let inner = self.parse_type()?;
+                    self.expect(Token::Greater)?;
+                    inner
+                } else {
+                    self.parse_type()?
+                };
                 Ok(TypeAnnotation::Ref(Box::new(inner), lifetime))
             }
             Token::Mut => {
                 self.advance()?;
-                self.expect(Token::Less)?;
-                let inner = self.parse_type()?;
-                self.expect(Token::Greater)?;
+                let inner = if self.lookahead == Token::Less {
+                    self.advance()?;
+                    let inner = self.parse_type()?;
+                    self.expect(Token::Greater)?;
+                    inner
+                } else {
+                    self.parse_type()?
+                };
                 Ok(TypeAnnotation::Mut(Box::new(inner)))
             }
             Token::Own => {
                 self.advance()?;
-                self.expect(Token::Less)?;
-                let inner = self.parse_type()?;
-                self.expect(Token::Greater)?;
+                let inner = if self.lookahead == Token::Less {
+                    self.advance()?;
+                    let inner = self.parse_type()?;
+                    self.expect(Token::Greater)?;
+                    inner
+                } else {
+                    self.parse_type()?
+                };
                 Ok(TypeAnnotation::Own(Box::new(inner)))
             }
             // Handle generic type tokens like Vec, HashMap, etc.
@@ -634,8 +852,125 @@ impl<'a> Parser<'a> {
         let size = self.parse_expression()?;
         self.expect(Token::RBracket)?;
         self.expect(Token::Semicolon)?;
-        
         Ok(Statement::Alloc { var, typ, location, size })
+    }
+
+    fn parse_generic_params(&mut self) -> LppoResult<Vec<String>> {
+        let mut params = Vec::new();
+        if self.lookahead == Token::Less {
+            self.advance()?;
+            loop {
+                params.push(self.parse_name("generic parameter")?);
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                    continue;
+                }
+                break;
+            }
+            self.expect(Token::Greater)?;
+        }
+        Ok(params)
+    }
+
+    fn parse_parameter_list(&mut self) -> LppoResult<Vec<Parameter>> {
+        let mut params = Vec::new();
+        self.expect(Token::LParen)?;
+        if self.lookahead != Token::RParen {
+            loop {
+                let name = self.parse_name("parameter name")?;
+                let typ = if self.lookahead == Token::Colon {
+                    self.advance()?;
+                    self.parse_type()?
+                } else {
+                    TypeAnnotation::Void
+                };
+                let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
+                    let lt = lt.clone();
+                    self.advance()?;
+                    Some(lt)
+                } else {
+                    None
+                };
+                params.push(Parameter { name, typ, lifetime });
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect(Token::RParen)?;
+        Ok(params)
+    }
+
+    fn parse_name(&mut self, context: &str) -> LppoResult<String> {
+        if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+            self.advance()?;
+            Ok(n)
+        } else {
+            Err(LppoError::unexpected_token_at(context, &format!("{:?}", self.lookahead), self.position.clone()))
+        }
+    }
+
+    fn skip_attributes(&mut self) -> LppoResult<()> {
+        while self.lookahead == Token::Hash {
+            self.advance()?;
+            self.expect(Token::LBracket)?;
+            let mut depth = 1;
+            while depth > 0 {
+                match self.lookahead {
+                    Token::LBracket => {
+                        depth += 1;
+                        self.advance()?;
+                    }
+                    Token::RBracket => {
+                        depth -= 1;
+                        self.advance()?;
+                    }
+                    Token::Eof => {
+                        return Err(LppoError::unexpected_eof("attribute list"));
+                    }
+                    _ => {
+                        self.advance()?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn type_to_string(&self, typ: &TypeAnnotation) -> String {
+        match typ {
+            TypeAnnotation::Int64 => "Int64".to_string(),
+            TypeAnnotation::Bool => "Bool".to_string(),
+            TypeAnnotation::Str => "Str".to_string(),
+            TypeAnnotation::Arr(inner) => format!("Arr<{}>", self.type_to_string(inner)),
+            TypeAnnotation::Void => "Void".to_string(),
+            TypeAnnotation::Ref(inner, lifetime) => {
+                if let Some(lt) = lifetime {
+                    format!("ref<'{}> {}", lt, self.type_to_string(inner))
+                } else {
+                    format!("ref {}", self.type_to_string(inner))
+                }
+            }
+            TypeAnnotation::Own(inner) => format!("own {}", self.type_to_string(inner)),
+            TypeAnnotation::Mut(inner) => format!("mut {}", self.type_to_string(inner)),
+            TypeAnnotation::Custom(name) => name.clone(),
+            TypeAnnotation::Generic(name, params) => {
+                if params.is_empty() {
+                    name.clone()
+                } else {
+                    let rendered: Vec<String> = params.iter().map(|p| self.type_to_string(p)).collect();
+                    format!("{}<{}>", name, rendered.join(", "))
+                }
+            }
+            TypeAnnotation::Tuple(items) => {
+                let rendered: Vec<String> = items.iter().map(|p| self.type_to_string(p)).collect();
+                format!("({})", rendered.join(", "))
+            }
+            TypeAnnotation::Option(inner) => format!("Option<{}>", self.type_to_string(inner)),
+            TypeAnnotation::Result(ok, err) => format!("Result<{}, {}>", self.type_to_string(ok), self.type_to_string(err)),
+        }
     }
     
     fn parse_dealloc(&mut self) -> LppoResult<Statement> {
@@ -1572,9 +1907,26 @@ impl<'a> Parser<'a> {
             Token::TypeBox => Some("Box".to_string()),
             Token::TypeRc => Some("Rc".to_string()),
             Token::TypeArc => Some("Arc".to_string()),
+            Token::TypeU8 => Some("U8".to_string()),
+            Token::TypeU16 => Some("U16".to_string()),
+            Token::TypeU32 => Some("U32".to_string()),
+            Token::TypeU64 => Some("U64".to_string()),
+            Token::TypeU128 => Some("U128".to_string()),
+            Token::TypeI8 => Some("I8".to_string()),
+            Token::TypeI16 => Some("I16".to_string()),
+            Token::TypeI32 => Some("I32".to_string()),
+            Token::TypeI128 => Some("I128".to_string()),
+            Token::TypeF32 => Some("F32".to_string()),
+            Token::TypeF64 => Some("F64".to_string()),
             Token::TypeOption => Some("Option".to_string()),
             Token::TypeResult => Some("Result".to_string()),
             Token::TypeString => Some("String".to_string()),
+            Token::TypePath => Some("Path".to_string()),
+            Token::TypePathBuf => Some("PathBuf".to_string()),
+            Token::TypeBytes => Some("Bytes".to_string()),
+            Token::TypeByteString => Some("ByteString".to_string()),
+            Token::TypeRawStr => Some("RawStr".to_string()),
+            Token::TypeInterpolated => Some("InterpolatedString".to_string()),
             Token::TypeFile => Some("File".to_string()),
             Token::TypeBufReader => Some("BufReader".to_string()),
             Token::TypeBufWriter => Some("BufWriter".to_string()),
@@ -1589,6 +1941,8 @@ impl<'a> Parser<'a> {
             Token::TypeAtomic => Some("Atomic".to_string()),
             Token::Async => Some("async".to_string()),
             Token::Await => Some("await".to_string()),
+            Token::SelfType => Some("Self".to_string()),
+            Token::SelfValue => Some("self".to_string()),
             // Enum variant tokens for pattern matching
             Token::Some => Some("Some".to_string()),
             Token::None => Some("None".to_string()),

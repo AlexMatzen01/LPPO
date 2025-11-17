@@ -1018,6 +1018,7 @@ impl<'a> Lexer<'a> {
                 b'%' => Token::Modulo,
                 b'^' => Token::Caret,
                 b'~' => Token::Tilde,
+                b'#' => Token::Hash,
                 b'&' => Token::Amp,
                 b'|' => Token::Pipe,
                 b'<' => {

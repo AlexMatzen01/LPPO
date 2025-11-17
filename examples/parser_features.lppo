@@ -1,0 +1,28 @@
+// Parser regression exercise for V5.1+ constructs
+
+type UserId = U64;
+
+pub enum Toggle {
+    On,
+    Off,
+}
+
+pub struct Point {
+    pub x: Int64,
+    pub y: Int64,
+}
+
+pub trait Drawable {
+    pub proc draw(self: ref Self) -> Void;
+}
+
+impl Point {
+    pub proc describe_origin() -> Void {
+        out "origin at 0,0";
+    }
+}
+
+pub proc main() -> Void {
+    let own id: UserId = 42;
+    out "Parser smoke test", id;
+}
