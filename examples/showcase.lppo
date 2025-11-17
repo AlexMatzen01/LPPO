@@ -1,14 +1,14 @@
 // LPPO Feature Showcase - Everything in one program!
 
-proc main {
+proc main() -> Void {
     out "╔═══════════════════════════════════╗";
     out "║   LPPO Language Feature Showcase  ║";
     out "╚═══════════════════════════════════╝";
     out "";
     
     // Variables and expressions
-    let x = 42;
-    let y = 8;
+    let x: Int64 = 42;
+    let y: Int64 = 8;
     call math_demo(x, y);
     
     // Arrays
@@ -33,7 +33,7 @@ proc main {
     out "✓ All features demonstrated successfully!";
 }
 
-proc math_demo(a, b) {
+proc math_demo(a: Int64, b: Int64) -> Void {
     out "";
     out "► Arithmetic & Operators:";
     out "  a =", a, ", b =", b;
@@ -56,10 +56,10 @@ proc math_demo(a, b) {
     out "  ~b =", ~b;
 }
 
-proc array_demo {
+proc array_demo() -> Void {
     out "";
     out "► Arrays & Indexing:";
-    let arr = [10, 20, 30, 40, 50];
+    let arr: Arr<Int64> = [10, 20, 30, 40, 50];
     out "  Array:", arr;
     out "  Length:", arr.len();
     out "  First:", arr[0];
@@ -67,36 +67,36 @@ proc array_demo {
     out "  Third:", arr[2];
     
     // Array operations
-    let more = [60, 70];
-    let combined = arr + more;
+    let more: Arr<Int64> = [60, 70];
+    let combined: Arr<Int64> = arr + more;
     out "  Combined:", combined;
     
     // Iterate
     out "  Iterating:";
-    for val in [1, 2, 3] {
+    for val: Int64 in [1, 2, 3] {
         out "    •", val;
     }
 }
 
-proc loop_demo {
+proc loop_demo() -> Void {
     out "";
     out "► Loop Control:";
     
     // While with break
     out "  While with break:";
-    let i = 0;
+    let i: Int64 = 0;
     while i < 10 {
         if i == 3 {
             out "    Breaking at", i;
             break;
         }
         out "    i =", i;
-        let i = i + 1;
+        let i: Int64 = i + 1;
     }
     
     // For with continue
     out "  For with continue (odds only):";
-    for n in [1, 2, 3, 4, 5, 6] {
+    for n: Int64 in [1, 2, 3, 4, 5, 6] {
         if n % 2 == 0 {
             continue;
         }
@@ -105,30 +105,30 @@ proc loop_demo {
     
     // Infinite loop
     out "  Loop with counter:";
-    let count = 0;
+    let count: Int64 = 0;
     loop {
         out "    Count:", count;
-        let count = count + 1;
+        let count: Int64 = count + 1;
         if count >= 2 {
             break;
         }
     }
 }
 
-proc string_demo {
+proc string_demo() -> Void {
     out "";
     out "► String Operations:";
-    let msg = "Hello LPPO World";
+    let msg: Str = "Hello LPPO World";
     out "  Original:", msg;
     out "  Length:", msg.len();
     out "  Uppercase:", msg.upper();
     out "  Lowercase:", msg.lower();
     
-    let csv = "apple,banana,cherry";
-    let fruits = csv.split(",");
+    let data: Str = "apple,banana,cherry";
+    let fruits: Arr<Str> = data.split(",");
     out "  Split CSV:", fruits;
     
     // Concatenation
-    let greeting = "Hello" + " " + "from" + " " + "LPPO!";
+    let greeting: Str = "Hello" + " " + "from" + " " + "LPPO!";
     out "  Concatenated:", greeting;
 }

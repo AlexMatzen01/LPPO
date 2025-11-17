@@ -18,9 +18,9 @@ pub proc main() -> Void {
         
         out "Math:", sum, diff, product, quotient, remainder;
         
-        let own base: Int64 = 2;
-        let own exp: Int64 = 8;
-        let own power_result: Int64 = base ** exp;
+        let own num: Int64 = 2;
+        let own exponent: Int64 = 8;
+        let own power_result: Int64 = num ** exponent;
         out "Power:", power_result;
     }
     

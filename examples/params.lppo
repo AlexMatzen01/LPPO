@@ -1,8 +1,8 @@
-proc add(a, b) {
+proc add(a: Int64, b: Int64) -> Void {
     out "add called with:", a, b;
     out "sum:", a + b;
 }
 
-proc main {
+proc main() -> Void {
     call add(5, 7);
 }

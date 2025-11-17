@@ -4,7 +4,7 @@
 
 pub proc main() -> Void {
     out "=== Array Basics ===";
-    let arr = [1, 2, 3, 4, 5];
+    let arr: Arr<Int64> = [1, 2, 3, 4, 5];
     out "Array:", arr;
     out "Length:", arr.len();
     out "First:", arr[0];
@@ -12,14 +12,14 @@ pub proc main() -> Void {
     
     out "";
     out "=== String Operations ===";
-    let msg = "Hello LPPO";
+    let msg: Str = "Hello LPPO";
     out "String:", msg;
     out "Length:", msg.len();
     out "Uppercase:", msg.upper();
     out "Lowercase:", msg.lower();
     
-    let text = "one,two,three";
-    let parts = text.split(",");
+    let text: Str = "one,two,three";
+    let parts: Arr<Str> = text.split(",");
     out "Split result:", parts;
     
     out "";
@@ -33,20 +33,20 @@ pub proc main() -> Void {
     
     out "";
     out "=== Unary Operators ===";
-    let x = 42;
+    let x: Int64 = 42;
     out "Negation: -x =", -x;
-    let flag = true;
+    let flag: Bool = true;
     out "Logical NOT: !flag =", not flag;
     
     out "";
     out "=== Array Concatenation ===";
-    let a1 = [1, 2, 3];
-    let a2 = [4, 5, 6];
+    let a1: Arr<Int64> = [1, 2, 3];
+    let a2: Arr<Int64> = [4, 5, 6];
     out "a1 + a2 =", a1 + a2;
     
     out "";
     out "=== String Concatenation ===";
-    let s1 = "Hello";
-    let s2 = "World";
+    let s1: Str = "Hello";
+    let s2: Str = "World";
     out "s1 + s2 =", s1 + " " + s2;
 }

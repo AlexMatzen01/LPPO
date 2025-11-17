@@ -203,9 +203,9 @@ pub proc main() -> Void {
         out str_label, text_len, upper_text, lower_text;
         
         // String splitting with explicit types
-        let own csv: Str = "alpha,beta,gamma";
+        let own comma_data: Str = "alpha,beta,gamma";
         let own separator: Str = ",";
-        let own parts: Arr<Str> = csv.split(separator);
+        let own parts: Arr<Str> = comma_data.split(separator);
         let own split_label: Str = "Split result:";
         out split_label, parts;
         
@@ -214,9 +214,9 @@ pub proc main() -> Void {
         let own space: Str = " ";
         let own word2: Str = "Language";
         let own temp: Str = word1 + space;
-        let own final: Str = temp + word2;
+        let own result_str: Str = temp + word2;
         let own concat_str_label: Str = "Concatenated string:";
-        out concat_str_label, final;
+        out concat_str_label, result_str;
     }
     
     // Section 7: Operator Showcase with Explicit Types
@@ -284,19 +284,14 @@ pub proc main() -> Void {
         
         scope parallel_block {
             parallel {
-                let own task1: Str = "Parallel Task 1";
-                out task1;
-                
-                let own task2: Str = "Parallel Task 2";
-                out task2;
-                
-                let own task3: Str = "Parallel Task 3";
-                out task3;
+                out "Parallel Task 1";
+                out "Parallel Task 2";
+                out "Parallel Task 3";
             }
         }
         
-        let own resume: Str = "Resumed after parallel execution";
-        out resume;
+        let own resume_msg: Str = "Resumed after parallel execution";
+        out resume_msg;
     }
     
     // Section 9: Procedure Call Demo
@@ -322,7 +317,7 @@ pub proc main() -> Void {
         out header10;
         
         // Unsafe blocks allow potentially dangerous operations
-        let own raw_value: Int64 = 0x42;
+        let own raw_value: Int64 = 66;
         let own unsafe_label: Str = "Raw value:";
         out unsafe_label, raw_value;
     }

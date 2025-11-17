@@ -158,22 +158,22 @@ module control_flow_demo {
         let own numbers: Arr<Int64> = [2, 3, 4];
         let own powers: Arr<Int64> = [1, 2, 3];
         
-        for base: Int64 in numbers {
-            for exp: Int64 in powers {
+        for num: Int64 in numbers {
+            for exponent: Int64 in powers {
                 // Calculate power manually
                 let mut own result: Int64 = 1;
                 let mut own i: Int64 = 0;
                 let own one: Int64 = 1;
                 
-                while i < exp {
-                    let own temp: Int64 = result * base;
+                while i < exponent {
+                    let own temp: Int64 = result * num;
                     move temp -> result;
                     
                     let own i_next: Int64 = i + one;
                     move i_next -> i;
                 }
                 
-                out base, "^", exp, "=", result;
+                out num, "^", exponent, "=", result;
             }
         }
     }
