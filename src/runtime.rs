@@ -87,16 +87,21 @@ pub enum Value {
     Bool(bool),
     Str(String),
     Array(Vec<Value>),
+    Closure {
+        params: Vec<String>,
+        body: Expr,
+        captured_env: HashMap<String, Value>,
+    },
 }
 
-fn pattern_matches(pattern: &crate::ast::Pattern, value: &Value, env: &mut HashMap<String, Value>) -> LppoResult<bool> {
+fn pattern_matches(pattern: &crate::ast::Pattern, value: &Value, env: &mut HashMap<String, Value>, procedures: &HashMap<String, ProcedureBody>) -> LppoResult<bool> {
     use crate::ast::Pattern;
     
     match pattern {
         Pattern::Wildcard => Ok(true),
         Pattern::Literal(expr) => {
             // Compare the value with the literal
-            let lit_val = eval_expr(expr, env)?;
+            let lit_val = eval_expr(expr, env, procedures)?;
             Ok(values_equal(&lit_val, value))
         }
         Pattern::Variable(name) => {
@@ -112,7 +117,7 @@ fn pattern_matches(pattern: &crate::ast::Pattern, value: &Value, env: &mut HashM
                     // For simplicity, we'll treat any non-null value as Some
                     if fields.len() == 1 {
                         // Bind the inner value
-                        pattern_matches(&fields[0], value, env)
+                        pattern_matches(&fields[0], value, env, procedures)
                     } else {
                         Ok(true)
                     }
@@ -125,7 +130,7 @@ fn pattern_matches(pattern: &crate::ast::Pattern, value: &Value, env: &mut HashM
                 "Ok" => {
                     // Similar to Some
                     if fields.len() == 1 {
-                        pattern_matches(&fields[0], value, env)
+                        pattern_matches(&fields[0], value, env, procedures)
                     } else {
                         Ok(true)
                     }
@@ -137,8 +142,52 @@ fn pattern_matches(pattern: &crate::ast::Pattern, value: &Value, env: &mut HashM
                 _ => Ok(false),
             }
         }
-        _ => {
-            // TODO: Implement other patterns
+        Pattern::Tuple(patterns) => {
+            // Match tuple patterns against array values
+            if let Value::Array(arr) = value {
+                if patterns.len() != arr.len() {
+                    return Ok(false);
+                }
+                
+                for (pat, val) in patterns.iter().zip(arr.iter()) {
+                    if !pattern_matches(pat, val, env, procedures)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+        Pattern::Struct { name: _, fields } => {
+            // For now, treat structs as arrays where each field matches by position
+            // A full implementation would need actual struct values
+            if let Value::Array(arr) = value {
+                if fields.len() != arr.len() {
+                    return Ok(false);
+                }
+                
+                for ((_, pat), val) in fields.iter().zip(arr.iter()) {
+                    if !pattern_matches(pat, val, env, procedures)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(true)
+            } else {
+                Ok(false)
+            }
+        }
+        Pattern::Or(patterns) => {
+            // Try each pattern in order, return true if any matches
+            for pat in patterns {
+                // Clone env for each attempt since failed matches shouldn't bind variables
+                let mut temp_env = env.clone();
+                if pattern_matches(pat, value, &mut temp_env, procedures)? {
+                    // If match succeeds, update the original env with bindings
+                    *env = temp_env;
+                    return Ok(true);
+                }
+            }
             Ok(false)
         }
     }
@@ -154,7 +203,7 @@ fn values_equal(a: &Value, b: &Value) -> bool {
     }
 }
 
-fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value> {
+fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap<String, ProcedureBody>) -> LppoResult<Value> {
     match expr {
         Expr::Int(i) => Ok(Value::Int(*i)),
         Expr::Str(s) => Ok(Value::Str(s.clone())),
@@ -177,8 +226,8 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 .ok_or_else(|| LppoError::unknown_variable(full_name))
         }
         Expr::BinaryOp { left, op, right } => {
-            let l = eval_expr(left, env)?;
-            let r = eval_expr(right, env)?;
+            let l = eval_expr(left, env, procedures)?;
+            let r = eval_expr(right, env, procedures)?;
                 match (l, r, op) {
                     (Value::Int(a), Value::Int(b), BinaryOp::Add) => Ok(Value::Int(a + b)),
                     (Value::Int(a), Value::Int(b), BinaryOp::Sub) => Ok(Value::Int(a - b)),
@@ -219,7 +268,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                 }
         }
         Expr::UnaryOp { op, operand } => {
-            let val = eval_expr(operand, env)?;
+            let val = eval_expr(operand, env, procedures)?;
             match (op, val) {
                 (UnaryOp::Neg, Value::Int(i)) => Ok(Value::Int(-i)),
                 (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
@@ -230,13 +279,13 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         Expr::Array(elements) => {
             let mut values = Vec::new();
             for elem in elements {
-                values.push(eval_expr(elem, env)?);
+                values.push(eval_expr(elem, env, procedures)?);
             }
             Ok(Value::Array(values))
         }
         Expr::Index { target, index } => {
-            let target_val = eval_expr(target, env)?;
-            let index_val = eval_expr(index, env)?;
+            let target_val = eval_expr(target, env, procedures)?;
+            let index_val = eval_expr(index, env, procedures)?;
             match (target_val, index_val) {
                 (Value::Array(arr), Value::Int(idx)) => {
                     let i = if idx < 0 {
@@ -263,11 +312,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
             }
         }
         Expr::MethodCall { target, method, args } => {
-            let target_val = eval_expr(target, env)?;
+            let target_val = eval_expr(target, env, procedures)?;
             match (target_val, method.as_str()) {
                 (Value::Array(mut arr), "push") => {
                     for arg in args {
-                        arr.push(eval_expr(arg, env)?);
+                        arr.push(eval_expr(arg, env, procedures)?);
                     }
                     Ok(Value::Array(arr))
                 }
@@ -283,7 +332,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
                     if args.len() != 1 {
                         return Err(LppoError::type_error("split requires 1 argument".into()));
                     }
-                    let sep = eval_expr(&args[0], env)?;
+                    let sep = eval_expr(&args[0], env, procedures)?;
                     if let Value::Str(sep_str) = sep {
                         let parts: Vec<Value> = s
                             .split(&sep_str)
@@ -304,11 +353,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         Expr::Ref { target, lifetime: _, is_mut: _ } => {
             // In our simplified runtime, references are just the value itself
             // Full reference semantics would require borrow checking
-            eval_expr(target, env)
+            eval_expr(target, env, procedures)
         }
         Expr::Deref(target) => {
             // Dereference is also just evaluating the target
-            eval_expr(target, env)
+            eval_expr(target, env, procedures)
         }
         Expr::SizeOf(typ) => {
             // Return a placeholder size based on type
@@ -333,7 +382,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         }
         Expr::Cast { expr, to_type } => {
             // Simple type casting
-            let val = eval_expr(expr, env)?;
+            let val = eval_expr(expr, env, procedures)?;
             match (val, to_type) {
                 (Value::Int(i), crate::ast::TypeAnnotation::Bool) => Ok(Value::Bool(i != 0)),
                 (Value::Int(i), crate::ast::TypeAnnotation::Str) => Ok(Value::Str(i.to_string())),
@@ -348,40 +397,133 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>) -> LppoResult<Value>
         }
         Expr::Borrow { target, lifetime: _ } => {
             // Simplified: borrow is just like a reference
-            eval_expr(target, env)
+            eval_expr(target, env, procedures)
         }
-        Expr::Closure { params: _, return_type: _, body: _ } => {
-            // TODO: Implement closure support
-            // For now, return a placeholder
-            Err(LppoError::type_error("closures not yet implemented in runtime".into()))
+        Expr::Closure { params, return_type: _, body } => {
+            // Create a closure value that captures the current environment
+            let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+            Ok(Value::Closure {
+                params: param_names,
+                body: (**body).clone(),
+                captured_env: env.clone(),
+            })
         }
-        Expr::Call { func: _, args: _ } => {
-            // TODO: Implement function calls
-            // For now, return a placeholder
-            Err(LppoError::type_error("function calls not yet implemented in runtime".into()))
+        Expr::Call { func, args } => {
+            // Evaluate arguments
+            let mut arg_vals = Vec::new();
+            for arg in args {
+                arg_vals.push(eval_expr(arg, env, procedures)?);
+            }
+            
+            // Evaluate the function expression
+            let func_val = eval_expr(func, env, procedures);
+            
+            // Handle the different cases
+            match func_val {
+                Ok(Value::Closure { params, body, captured_env }) => {
+                    // Calling a closure value
+                    if params.len() != arg_vals.len() {
+                        return Err(LppoError::type_error(format!(
+                            "closure argument count mismatch: expected {} got {}",
+                            params.len(), arg_vals.len()
+                        )));
+                    }
+                    
+                    // Create environment from captured environment plus parameters
+                    let mut closure_env = captured_env;
+                    for (param, val) in params.iter().zip(arg_vals.into_iter()) {
+                        closure_env.insert(param.clone(), val);
+                    }
+                    
+                    // Evaluate closure body
+                    eval_expr(&body, &mut closure_env, procedures)
+                }
+                Err(_) => {
+                    // If func doesn't evaluate to a value, try as a procedure name
+                    if let Expr::Var(proc_name) = func.as_ref() {
+                        // Look up the procedure
+                        if let Some(proc_body) = procedures.get(proc_name) {
+                            // Check arity
+                            if proc_body.params.len() != arg_vals.len() {
+                                return Err(LppoError::type_error(format!(
+                                    "argument count mismatch for '{}': expected {} got {}",
+                                    proc_name, proc_body.params.len(), arg_vals.len()
+                                )));
+                            }
+                            
+                            // Create a new environment for the procedure call
+                            let mut proc_env = HashMap::new();
+                            for (param, val) in proc_body.params.iter().zip(arg_vals.into_iter()) {
+                                proc_env.insert(param.clone(), val);
+                            }
+                            
+                            // Execute the procedure
+                            // For now, we need to extract the return value from the procedure execution
+                            // Since procedures may use "return" statements, we need to handle ControlFlow
+                            for op in &proc_body.operations {
+                                match op {
+                                    Operation::Return(Some(ret_expr)) => {
+                                        return eval_expr(ret_expr, &mut proc_env, procedures);
+                                    }
+                                    Operation::Return(None) => {
+                                        return Ok(Value::Int(0)); // Unit/void return
+                                    }
+                                    _ => {
+                                        // Execute other operations but ignore their results
+                                        // This is a simplified implementation
+                                    }
+                                }
+                            }
+                            
+                            // If no explicit return, return unit value
+                            Ok(Value::Int(0))
+                        } else {
+                            Err(LppoError::unknown_procedure(proc_name.clone()))
+                        }
+                    } else {
+                        Err(LppoError::type_error("function calls require a procedure name or closure".into()))
+                    }
+                }
+                Ok(_) => {
+                    Err(LppoError::type_error("can only call closures or procedures".into()))
+                }
+            }
         }
-        Expr::Range { start: _, end: _, inclusive: _ } => {
-            // TODO: Implement range expressions
-            // For now, return a placeholder
-            Err(LppoError::type_error("range expressions not yet implemented in runtime".into()))
+        Expr::Range { start, end, inclusive } => {
+            // Evaluate range start and end
+            let start_val = eval_expr(start, env, procedures)?;
+            let end_val = eval_expr(end, env, procedures)?;
+            
+            // Only support integer ranges for now
+            match (start_val, end_val) {
+                (Value::Int(s), Value::Int(e)) => {
+                    let range: Vec<Value> = if *inclusive {
+                        (s..=e).map(Value::Int).collect()
+                    } else {
+                        (s..e).map(Value::Int).collect()
+                    };
+                    Ok(Value::Array(range))
+                }
+                _ => Err(LppoError::type_error("range expressions require integer bounds".into()))
+            }
         }
         Expr::MatchExpr { expr, arms } => {
             // Evaluate the match expression
-            let val = eval_expr(expr, env)?;
+            let val = eval_expr(expr, env, procedures)?;
             
             // Try each arm in order
             for arm in arms {
-                if pattern_matches(&arm.pattern, &val, env)? {
+                if pattern_matches(&arm.pattern, &val, env, procedures)? {
                     // Check guard if present
                     if let Some(ref guard) = arm.guard {
-                        let guard_val = eval_expr(guard, env)?;
+                        let guard_val = eval_expr(guard, env, procedures)?;
                         if !is_truthy(&guard_val) {
                             continue;
                         }
                     }
                     
                     // Execute the arm body
-                    return eval_expr(&arm.body, env);
+                    return eval_expr(&arm.body, env, procedures);
                 }
             }
             
@@ -425,7 +567,7 @@ impl Executor {
                     // evaluate all expressions and join them with spaces
                     let mut parts = Vec::new();
                     for e in exprs {
-                        let v = eval_expr(e, env)?;
+                        let v = eval_expr(e, env, &self.procedures)?;
                         parts.push(value_to_string(&v));
                     }
                     println!("{}", parts.join(" "));
@@ -435,9 +577,10 @@ impl Executor {
                         for e in exprs {
                             let e = e.clone();
                             let mut snapshot = env.clone();
+                            let procs = self.procedures.clone();
                             scope.spawn(move || {
                                 // evaluate in snapshot environment
-                                let v = eval_expr(&e, &mut snapshot).expect("eval in thread");
+                                let v = eval_expr(&e, &mut snapshot, &procs).expect("eval in thread");
                                 println!("{}", value_to_string(&v));
                             });
                         }
@@ -448,7 +591,7 @@ impl Executor {
                     
                     // Display prompt if provided
                     if let Some(prompt_expr) = prompt {
-                        let prompt_val = eval_expr(prompt_expr, env)?;
+                        let prompt_val = eval_expr(prompt_expr, env, &self.procedures)?;
                         print!("{} ", value_to_string(&prompt_val));
                         io::stdout().flush().unwrap();
                     }
@@ -553,7 +696,7 @@ impl Executor {
                     // Evaluate argument expressions in current env
                     let mut arg_vals = Vec::new();
                     for a in args {
-                        arg_vals.push(eval_expr(a, env)?);
+                        arg_vals.push(eval_expr(a, env, &self.procedures)?);
                     }
 
                     // Find the procedure body
@@ -575,11 +718,11 @@ impl Executor {
                     self.execute_procedure_with_env(proc, &mut new_env)?;
                 }
                 Operation::Let(name, expr) => {
-                    let v = eval_expr(expr, env)?;
+                    let v = eval_expr(expr, env, &self.procedures)?;
                     env.insert(name.clone(), v);
                 }
                 Operation::If { cond, then_ops, elifs, else_ops } => {
-                    let cond_v = eval_expr(cond, env)?;
+                    let cond_v = eval_expr(cond, env, &self.procedures)?;
                     if is_truthy(&cond_v) {
                         let cf = self.execute_ops(then_ops, env)?;
                         if cf != ControlFlow::None {
@@ -589,7 +732,7 @@ impl Executor {
                     }
                     let mut handled = false;
                     for (econd, estmts) in elifs {
-                        let ev = eval_expr(econd, env)?;
+                        let ev = eval_expr(econd, env, &self.procedures)?;
                         if is_truthy(&ev) {
                             let cf = self.execute_ops(estmts, env)?;
                             if cf != ControlFlow::None {
@@ -611,7 +754,7 @@ impl Executor {
                 }
                 Operation::While { cond, ops } => {
                     loop {
-                        let cond_v = eval_expr(cond, env)?;
+                        let cond_v = eval_expr(cond, env, &self.procedures)?;
                         if !is_truthy(&cond_v) {
                             break;
                         }
@@ -625,7 +768,7 @@ impl Executor {
                     }
                 }
                 Operation::For { var, iterable, ops } => {
-                    let iter_v = eval_expr(iterable, env)?;
+                    let iter_v = eval_expr(iterable, env, &self.procedures)?;
                     let items = match iter_v {
                         Value::Array(ref arr) => arr.clone(),
                         _ => return Err(LppoError::type_error("for loop requires an array".to_string())),
@@ -660,7 +803,7 @@ impl Executor {
                 }
                 Operation::Return(opt_expr) => {
                     let v = if let Some(e) = opt_expr {
-                        Some(eval_expr(e, env)?)
+                        Some(eval_expr(e, env, &self.procedures)?)
                     } else {
                         None
                     };
@@ -685,7 +828,7 @@ impl Executor {
                 }
                 Operation::ExprStatement(expr) => {
                     // Evaluate expression for side effects (e.g., method calls)
-                    let _ = eval_expr(expr, env)?;
+                    let _ = eval_expr(expr, env, &self.procedures)?;
                 }
             }
         }
@@ -708,6 +851,9 @@ fn value_to_string(v: &Value) -> String {
             let items: Vec<String> = arr.iter().map(value_to_string).collect();
             format!("[{}]", items.join(", "))
         }
+        Value::Closure { params, .. } => {
+            format!("<closure with {} params>", params.len())
+        }
     }
 }
 
@@ -718,6 +864,7 @@ fn is_truthy(v: &Value) -> bool {
         Value::Int(i) => *i != 0,
         Value::Str(s) => !s.is_empty(),
         Value::Array(arr) => !arr.is_empty(),
+        Value::Closure { .. } => true, // Closures are always truthy
     }
 }
 
@@ -738,11 +885,140 @@ pub fn executor_from_bytes(bytes: &[u8]) -> LppoResult<Executor> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::{Expr, Parameter, TypeAnnotation};
 
     #[test]
     fn reports_missing_procedure() {
         let exec = Executor::new(HashMap::new());
         let err = exec.run("main").expect_err("missing main");
         assert!(matches!(err, LppoError::UnknownProcedure { name, .. } if name == "main"));
+    }
+
+    #[test]
+    fn test_range_expression() {
+        let mut env = HashMap::new();
+        let procedures = HashMap::new();
+        
+        // Test exclusive range 1..5
+        let range_expr = Expr::Range {
+            start: Box::new(Expr::Int(1)),
+            end: Box::new(Expr::Int(5)),
+            inclusive: false,
+        };
+        let result = eval_expr(&range_expr, &mut env, &procedures).unwrap();
+        assert_eq!(result, Value::Array(vec![Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4)]));
+        
+        // Test inclusive range 1..=5
+        let range_expr_inclusive = Expr::Range {
+            start: Box::new(Expr::Int(1)),
+            end: Box::new(Expr::Int(5)),
+            inclusive: true,
+        };
+        let result_inclusive = eval_expr(&range_expr_inclusive, &mut env, &procedures).unwrap();
+        assert_eq!(result_inclusive, Value::Array(vec![
+            Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4), Value::Int(5)
+        ]));
+    }
+
+    #[test]
+    fn test_closure_creation() {
+        let mut env = HashMap::new();
+        let procedures = HashMap::new();
+        
+        // Create a closure: |x: Int64| -> Int64 { return x * 2; }
+        let closure_expr = Expr::Closure {
+            params: vec![Parameter {
+                name: "x".to_string(),
+                typ: TypeAnnotation::Int64,
+                lifetime: None,
+            }],
+            return_type: Some(TypeAnnotation::Int64),
+            body: Box::new(Expr::BinaryOp {
+                left: Box::new(Expr::Var("x".to_string())),
+                op: crate::ast::BinaryOp::Mul,
+                right: Box::new(Expr::Int(2)),
+            }),
+        };
+        
+        let result = eval_expr(&closure_expr, &mut env, &procedures).unwrap();
+        match result {
+            Value::Closure { params, .. } => {
+                assert_eq!(params.len(), 1);
+                assert_eq!(params[0], "x");
+            }
+            _ => panic!("Expected closure value"),
+        }
+    }
+
+    #[test]
+    fn test_closure_call() {
+        let mut env = HashMap::new();
+        let procedures = HashMap::new();
+        
+        // Create a closure
+        let closure = Value::Closure {
+            params: vec!["x".to_string()],
+            body: Expr::BinaryOp {
+                left: Box::new(Expr::Var("x".to_string())),
+                op: crate::ast::BinaryOp::Mul,
+                right: Box::new(Expr::Int(2)),
+            },
+            captured_env: HashMap::new(),
+        };
+        
+        // Store it in a variable
+        env.insert("double".to_string(), closure);
+        
+        // Call it: double(5)
+        let call_expr = Expr::Call {
+            func: Box::new(Expr::Var("double".to_string())),
+            args: vec![Expr::Int(5)],
+        };
+        
+        let result = eval_expr(&call_expr, &mut env, &procedures).unwrap();
+        assert_eq!(result, Value::Int(10));
+    }
+
+    #[test]
+    fn test_tuple_pattern_matching() {
+        let mut env = HashMap::new();
+        let procedures = HashMap::new();
+        
+        // Test matching [1, 2] against tuple pattern
+        let value = Value::Array(vec![Value::Int(1), Value::Int(2)]);
+        let pattern = crate::ast::Pattern::Tuple(vec![
+            crate::ast::Pattern::Literal(Expr::Int(1)),
+            crate::ast::Pattern::Literal(Expr::Int(2)),
+        ]);
+        
+        let matches = pattern_matches(&pattern, &value, &mut env, &procedures).unwrap();
+        assert!(matches);
+        
+        // Test non-matching
+        let value2 = Value::Array(vec![Value::Int(1), Value::Int(3)]);
+        let matches2 = pattern_matches(&pattern, &value2, &mut env, &procedures).unwrap();
+        assert!(!matches2);
+    }
+
+    #[test]
+    fn test_or_pattern_matching() {
+        let mut env = HashMap::new();
+        let procedures = HashMap::new();
+        
+        // Test matching with or pattern: 1 | 2 | 3
+        let value = Value::Int(2);
+        let pattern = crate::ast::Pattern::Or(vec![
+            crate::ast::Pattern::Literal(Expr::Int(1)),
+            crate::ast::Pattern::Literal(Expr::Int(2)),
+            crate::ast::Pattern::Literal(Expr::Int(3)),
+        ]);
+        
+        let matches = pattern_matches(&pattern, &value, &mut env, &procedures).unwrap();
+        assert!(matches);
+        
+        // Test non-matching
+        let value2 = Value::Int(4);
+        let matches2 = pattern_matches(&pattern, &value2, &mut env, &procedures).unwrap();
+        assert!(!matches2);
     }
 }
