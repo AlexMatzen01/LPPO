@@ -1598,6 +1598,20 @@ impl<'a> Parser<'a> {
                     // Could be either:
                     // 1. Generic function call: func<T>(args)
                     // 2. CUDA kernel launch: func<<<grid, block>>>(args)
+                    // 3. Comparison operator (should not be in postfix context)
+                    //
+                    // Heuristic: Only treat as generic/CUDA if:
+                    // - node is a simple identifier/qualified name
+                    // - followed by << or by type-like token
+                    
+                    // Check if node could be a function name
+                    let is_function_name = matches!(node, Expr::Var(_) | Expr::QualifiedVar(_));
+                    if !is_function_name {
+                        // Not a function name, so < is probably comparison
+                        // Don't consume it, let comparison parser handle it
+                        break;
+                    }
+                    
                     self.advance()?; // consume first <
                     
                     if self.lookahead == Token::Less {
