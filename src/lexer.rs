@@ -798,7 +798,7 @@ pub enum Token {
     // At, Hash already defined above or cause conflicts
     
     Number(i64),
-    // Float removed - f64 doesn't implement Eq
+    FloatLiteral(String), // Store as string to maintain Eq
     Plus,
     Minus,
     Star,
@@ -961,17 +961,48 @@ impl<'a> Lexer<'a> {
                 Token::StringLiteral(string)
             }
                 b'0'..=b'9' => {
-                    // read number (integer)
-                    let mut num = (ch - b'0') as i64;
+                    // read number (integer or float)
+                    let mut num_str = String::new();
+                    num_str.push(ch as char);
+                    let mut is_float = false;
+                    
                     while let Some(d) = self.peek() {
                         if (b'0'..=b'9').contains(&d) {
                             self.bump();
-                            num = num * 10 + (d - b'0') as i64;
+                            num_str.push(d as char);
+                        } else if d == b'.' && !is_float {
+                            // Check if this is a decimal point (not method call)
+                            // Peek ahead to see if followed by digit
+                            self.bump(); // consume '.'
+                            if let Some(next) = self.peek() {
+                                if (b'0'..=b'9').contains(&next) {
+                                    is_float = true;
+                                    num_str.push('.');
+                                } else {
+                                    // Not a float, it's a method call or range
+                                    // Put the dot back by decrementing position
+                                    self.position -= 1;
+                                    self.current -= 1;
+                                    self.column -= 1;
+                                    break;
+                                }
+                            } else {
+                                // EOF after dot, not a float
+                                self.position -= 1;
+                                self.current -= 1;
+                                self.column -= 1;
+                                break;
+                            }
                         } else {
                             break;
                         }
                     }
-                    Token::Number(num)
+                    
+                    if is_float {
+                        Token::FloatLiteral(num_str)
+                    } else {
+                        Token::Number(num_str.parse().unwrap())
+                    }
                 }
                 b'=' => {
                     if self.peek() == Some(b'=') {

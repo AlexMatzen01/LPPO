@@ -834,8 +834,42 @@ impl<'a> Parser<'a> {
                 Ok(Statement::ExprStatement(expr))
             }
             _ => {
-                // Try to parse as expression statement
+                // Try to parse as expression statement or assignment
+                // Parse the first expression/identifier
                 let expr = self.parse_expression()?;
+                
+                // Check if this is an assignment
+                if self.lookahead == Token::Equals {
+                    // It's an assignment: var = expr or arr[i] = expr
+                    self.advance()?; // consume =
+                    let value = self.parse_expression()?;
+                    self.expect(Token::Semicolon)?;
+                    
+                    // Handle different assignment targets
+                    match expr {
+                        Expr::Var(name) => {
+                            return Ok(Statement::Assignment {
+                                target: name,
+                                value,
+                            });
+                        }
+                        Expr::Index { target, index } => {
+                            // Indexed assignment: arr[i] = value
+                            // Store as a special indexed assignment statement
+                            return Ok(Statement::IndexedAssignment {
+                                target,
+                                index,
+                                value,
+                            });
+                        }
+                        _ => {
+                            // Other expressions can't be assigned to
+                            return Err(LppoError::unexpected_token_at("valid assignment target", "complex expression", self.position.clone()));
+                        }
+                    }
+                }
+                
+                // Not an assignment, treat as expression statement
                 self.expect(Token::Semicolon)?;
                 Ok(Statement::ExprStatement(expr))
             }
@@ -1591,6 +1625,10 @@ impl<'a> Parser<'a> {
             Token::Number(n) => { 
                 self.advance()?; 
                 Ok(Expr::Int(n)) 
+            }
+            Token::FloatLiteral(f) => {
+                self.advance()?;
+                Ok(Expr::Float(f))
             }
             Token::StringLiteral(s) => { 
                 self.advance()?; 

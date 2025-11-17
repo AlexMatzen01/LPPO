@@ -237,6 +237,17 @@ pub enum Statement {
     },
     /// Expression statement: expr;
     ExprStatement(Expr),
+    /// Assignment: var = expr;
+    Assignment {
+        target: String,
+        value: Expr,
+    },
+    /// Indexed assignment: arr[i] = expr;
+    IndexedAssignment {
+        target: Box<Expr>,
+        index: Box<Expr>,
+        value: Expr,
+    },
 }
 
 /// Qualified name for namespaced identifiers like module::submodule::name
@@ -300,6 +311,7 @@ pub enum Pattern {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Expr {
     Int(i64),
+    Float(String), // Store as string to maintain Eq
     Str(String),
     Bool(bool),
     Var(String),
