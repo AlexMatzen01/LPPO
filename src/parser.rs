@@ -30,6 +30,7 @@ impl<'a> Parser<'a> {
         self.expect(Token::Struct)?;
         let name = self.parse_name("struct name")?;
         let generic_params = self.parse_generic_params()?;
+        self.skip_where_clause()?;
         self.expect(Token::LBrace)?;
         let mut fields = Vec::new();
         while self.lookahead != Token::RBrace {
@@ -65,6 +66,7 @@ impl<'a> Parser<'a> {
         self.expect(Token::Enum)?;
         let name = self.parse_name("enum name")?;
         let generic_params = self.parse_generic_params()?;
+        self.skip_where_clause()?;
         self.expect(Token::LBrace)?;
         let mut variants = Vec::new();
         while self.lookahead != Token::RBrace {
@@ -652,24 +654,37 @@ impl<'a> Parser<'a> {
             let mut exprs = Vec::new();
             loop {
                 exprs.push(self.parse_expression()?);
-                if self.lookahead == Token::Comma && exprs.len() < 10 {
-                    // Check if this is the arm separator or part of the out args
-                    // Peek ahead - if next is a pattern start, break
-                    self.advance()?;
-                    
-                    // If we see tokens that start a pattern (identifiers, Some, None, etc.), break
-                    match self.lookahead {
-                        Token::Identifier(_) | Token::Some | Token::None | Token::Underscore | Token::RBrace => {
-                            // This comma is the arm separator, not part of out
+                // For out in match arms, continue until we see comma followed by a pattern-like token
+                // or no comma at all
+                if self.lookahead != Token::Comma {
+                    break;
+                }
+                // We have a comma - need to decide if it's part of out args or arm separator
+                // Save position and look ahead
+                self.advance()?; // consume comma
+                
+                // Check what follows the comma
+                match &self.lookahead {
+                    // These tokens clearly start a new pattern/arm
+                    Token::Some | Token::None | Token::Ok | Token::Err | Token::Underscore | Token::RBrace => {
+                        // This comma was the arm separator
+                        break;
+                    }
+                    // Identifier could be either - check context
+                    Token::Identifier(_) => {
+                        // Could be a variable in out or a pattern
+                        // Simple heuristic: if we already have multiple exprs, likely end of out
+                        // Otherwise, continue
+                        if exprs.len() >= 2 {
                             break;
-                        }
-                        _ => {
-                            // Continue parsing out arguments
+                        } else {
                             continue;
                         }
                     }
-                } else {
-                    break;
+                    _ => {
+                        // Continue parsing out arguments
+                        continue;
+                    }
                 }
             }
             
@@ -809,6 +824,15 @@ impl<'a> Parser<'a> {
             Token::Scope => self.parse_scope(),
             Token::Unsafe => self.parse_unsafe_block(),
             Token::Eof | Token::RBrace => Err(LppoError::unexpected_eof("statement or closing brace")),
+            Token::Match => {
+                // Match expressions can be used as statements without semicolons
+                let expr = self.parse_expression()?;
+                // Semicolon is optional for match expressions
+                if self.lookahead == Token::Semicolon {
+                    self.advance()?;
+                }
+                Ok(Statement::ExprStatement(expr))
+            }
             _ => {
                 // Try to parse as expression statement
                 let expr = self.parse_expression()?;
@@ -934,6 +958,17 @@ impl<'a> Parser<'a> {
                         self.advance()?;
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn skip_where_clause(&mut self) -> LppoResult<()> {
+        if self.lookahead == Token::Where {
+            self.advance()?;
+            // Skip until we hit '{' or other structural tokens
+            while !matches!(self.lookahead, Token::LBrace | Token::Semicolon | Token::Eof) {
+                self.advance()?;
             }
         }
         Ok(())
@@ -1439,6 +1474,11 @@ impl<'a> Parser<'a> {
                     lifetime,
                 })
             }
+            Token::Await => {
+                self.advance()?;
+                let expr = self.parse_unary()?;
+                Ok(Expr::Await(Box::new(expr)))
+            }
             Token::SizeOf => {
                 self.advance()?;
                 self.expect(Token::Less)?;
@@ -1602,14 +1642,11 @@ impl<'a> Parser<'a> {
                         path.push(name);
                         self.advance()?; // consume ::
                         
-                        name = match self.lookahead.clone() {
-                            Token::Identifier(n) => {
-                                self.advance()?;
-                                n
-                            }
-                            _ => {
-                                return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
-                            }
+                        name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+                            self.advance()?;
+                            n
+                        } else {
+                            return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
                         };
                     }
                     
@@ -1659,18 +1696,11 @@ impl<'a> Parser<'a> {
                         path.push(name);
                         self.advance()?; // consume ::
                         
-                        name = match self.lookahead.clone() {
-                            Token::Identifier(n) => {
-                                self.advance()?;
-                                n
-                            }
-                            Token::New => {
-                                self.advance()?;
-                                "new".to_string()
-                            }
-                            _ => {
-                                return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
-                            }
+                        name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+                            self.advance()?;
+                            n
+                        } else {
+                            return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
                         };
                     }
                     
@@ -1994,6 +2024,8 @@ impl<'a> Parser<'a> {
             Token::Alloc => Some("alloc".to_string()),
             Token::Range => Some("range".to_string()),
             Token::Reduce => Some("reduce".to_string()),
+            Token::Phantom => Some("phantom".to_string()),
+            Token::New => Some("new".to_string()),
             // Allow most soft keywords to be used as identifiers
             _ => None,
         }

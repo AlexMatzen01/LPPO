@@ -376,6 +376,8 @@ pub enum Expr {
         expr: Box<Expr>,
         arms: Vec<MatchArm>,
     },
+    /// Await expression: await expr
+    Await(Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

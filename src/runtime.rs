@@ -530,6 +530,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
             // No pattern matched
             Err(LppoError::type_error("no pattern matched in match expression".into()))
         }
+        Expr::Await(expr) => {
+            // For now, simply evaluate the expression synchronously
+            // In a real async runtime, this would suspend and resume
+            eval_expr(expr, env, procedures)
+        }
     }
 }
 
