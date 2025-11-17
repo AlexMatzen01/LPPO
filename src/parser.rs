@@ -1594,6 +1594,98 @@ impl<'a> Parser<'a> {
                         node = Expr::FieldAccess { target: Box::new(node), field: name };
                     }
                 }
+                Token::Less => {
+                    // Could be either:
+                    // 1. Generic function call: func<T>(args)
+                    // 2. CUDA kernel launch: func<<<grid, block>>>(args)
+                    self.advance()?; // consume first <
+                    
+                    if self.lookahead == Token::Less {
+                        // Might be <<<, check for third <
+                        self.advance()?; // consume second <
+                        if self.lookahead == Token::Less {
+                            // It's CUDA kernel launch: <<<grid, block>>>
+                            self.advance()?; // consume third <
+                            
+                            // Parse grid and block parameters
+                            let _grid = self.parse_expression()?;
+                            self.expect(Token::Comma)?;
+                            let _block = self.parse_expression()?;
+                            
+                            // Expect three > tokens
+                            self.expect(Token::Greater)?;
+                            self.expect(Token::Greater)?;
+                            self.expect(Token::Greater)?;
+                            
+                            // Now parse the regular function call
+                            self.expect(Token::LParen)?;
+                            let mut args = Vec::new();
+                            if self.lookahead != Token::RParen {
+                                loop {
+                                    args.push(self.parse_expression()?);
+                                    if self.lookahead == Token::Comma {
+                                        self.advance()?;
+                                        continue;
+                                    }
+                                    break;
+                                }
+                            }
+                            self.expect(Token::RParen)?;
+                            
+                            // For now, treat CUDA kernel launch as regular function call
+                            node = Expr::Call {
+                                func: Box::new(node),
+                                args,
+                            };
+                        } else {
+                            // << but not <<<, error
+                            return Err(LppoError::unexpected_token_at("<<< or generic type", &format!("{:?}", self.lookahead), self.position.clone()));
+                        }
+                    } else {
+                        // Single <, this is a generic function call: func<T>(args)
+                        // Skip generic parameters for now - just consume until >
+                        let mut depth = 1;
+                        while depth > 0 {
+                            match self.lookahead {
+                                Token::Less => {
+                                    depth += 1;
+                                    self.advance()?;
+                                }
+                                Token::Greater => {
+                                    depth -= 1;
+                                    self.advance()?;
+                                }
+                                Token::Eof => {
+                                    return Err(LppoError::unexpected_eof("matching >"));
+                                }
+                                _ => {
+                                    self.advance()?;
+                                }
+                            }
+                        }
+                        
+                        // Now should have (args)
+                        self.expect(Token::LParen)?;
+                        let mut args = Vec::new();
+                        if self.lookahead != Token::RParen {
+                            loop {
+                                args.push(self.parse_expression()?);
+                                if self.lookahead == Token::Comma {
+                                    self.advance()?;
+                                    continue;
+                                }
+                                break;
+                            }
+                        }
+                        self.expect(Token::RParen)?;
+                        
+                        // Treat as regular function call (ignoring generic params)
+                        node = Expr::Call {
+                            func: Box::new(node),
+                            args,
+                        };
+                    }
+                }
                 Token::LParen => {
                     // Function call: func(args) or Type::new()
                     self.advance()?;
@@ -1613,6 +1705,13 @@ impl<'a> Parser<'a> {
                         func: Box::new(node),
                         args,
                     };
+                }
+                Token::Question => {
+                    // Error propagation operator: expr?
+                    self.advance()?;
+                    // For now, just treat as identity (no-op)
+                    // In a real implementation, would check for Result type and propagate errors
+                    // Keep node unchanged
                 }
                 _ => break,
             }
