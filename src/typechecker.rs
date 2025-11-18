@@ -9,11 +9,23 @@ use crate::ast::{
 };
 use crate::error::{LppoError, LppoResult};
 
+use crate::ast::OwnershipKind;
+
+/// Ownership state for tracking moves and borrows
+#[derive(Debug, Clone, PartialEq)]
+enum OwnershipState {
+    Owned,
+    Moved,
+    Borrowed { mutable: bool },
+}
+
 /// Type context for tracking variable and procedure types
 #[derive(Debug, Clone)]
 pub struct TypeContext {
     /// Variables in current scope with their types
     variables: HashMap<String, TypeAnnotation>,
+    /// Ownership state of variables
+    ownership: HashMap<String, (OwnershipKind, OwnershipState)>,
     /// Procedure signatures: name -> (param_types, return_type)
     procedures: HashMap<String, (Vec<TypeAnnotation>, TypeAnnotation)>,
     /// Struct definitions
@@ -28,6 +40,7 @@ impl TypeContext {
     pub fn new() -> Self {
         TypeContext {
             variables: HashMap::new(),
+            ownership: HashMap::new(),
             procedures: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
@@ -39,6 +52,7 @@ impl TypeContext {
     pub fn child(&self) -> Self {
         TypeContext {
             variables: HashMap::new(),
+            ownership: HashMap::new(),
             procedures: self.procedures.clone(),
             structs: self.structs.clone(),
             enums: self.enums.clone(),
@@ -46,9 +60,15 @@ impl TypeContext {
         }
     }
 
-    /// Add a variable to current scope
+    /// Add a variable to current scope with ownership tracking
     pub fn add_variable(&mut self, name: String, typ: TypeAnnotation) {
-        self.variables.insert(name, typ);
+        self.add_variable_with_ownership(name, typ, OwnershipKind::Own);
+    }
+
+    /// Add a variable with explicit ownership
+    pub fn add_variable_with_ownership(&mut self, name: String, typ: TypeAnnotation, ownership_kind: OwnershipKind) {
+        self.variables.insert(name.clone(), typ);
+        self.ownership.insert(name, (ownership_kind, OwnershipState::Owned));
     }
 
     /// Look up a variable type
@@ -56,6 +76,53 @@ impl TypeContext {
         self.variables.get(name).or_else(|| {
             self.parent.as_ref().and_then(|p| p.get_variable(name))
         })
+    }
+
+    /// Check if a variable has been moved
+    pub fn is_moved(&self, name: &str) -> bool {
+        if let Some((_, state)) = self.ownership.get(name) {
+            matches!(state, OwnershipState::Moved)
+        } else {
+            self.parent.as_ref().map_or(false, |p| p.is_moved(name))
+        }
+    }
+
+    /// Mark a variable as moved
+    pub fn mark_moved(&mut self, name: &str) -> LppoResult<()> {
+        if let Some((kind, state)) = self.ownership.get_mut(name) {
+            if matches!(state, OwnershipState::Moved) {
+                return Err(LppoError::MoveAfterMove {
+                    variable: name.to_string(),
+                    location: None,
+                });
+            }
+            // Only owned values can be moved
+            if !matches!(kind, OwnershipKind::Own) {
+                return Err(LppoError::OwnershipError {
+                    message: format!("cannot move non-owned value '{}'", name),
+                    location: None,
+                });
+            }
+            *state = OwnershipState::Moved;
+            Ok(())
+        } else {
+            Err(LppoError::UnknownVariable {
+                name: name.to_string(),
+                location: None,
+                suggestion: Some("declare the variable before using it".to_string()),
+            })
+        }
+    }
+
+    /// Check ownership state when accessing a variable
+    pub fn check_variable_access(&self, name: &str) -> LppoResult<()> {
+        if self.is_moved(name) {
+            return Err(LppoError::MoveAfterMove {
+                variable: name.to_string(),
+                location: None,
+            });
+        }
+        Ok(())
     }
 
     /// Add a procedure signature
@@ -161,7 +228,7 @@ fn typecheck_procedure(proc: &Procedure, ctx: &mut TypeContext) -> LppoResult<()
 /// Type check a statement, returning the type if it's a return statement
 fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Option<TypeAnnotation>> {
     match stmt {
-        Statement::Let { name, typ, expr, .. } => {
+        Statement::Let { name, typ, expr, ownership, .. } => {
             let expr_type = typecheck_expr(expr, ctx)?;
             if !types_compatible(typ, &expr_type) {
                 return Err(LppoError::TypeError {
@@ -175,7 +242,7 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
                     suggestion: Some("ensure the expression type matches the variable type".to_string()),
                 });
             }
-            ctx.add_variable(name.clone(), typ.clone());
+            ctx.add_variable_with_ownership(name.clone(), typ.clone(), ownership.clone());
             Ok(None)
         }
 
@@ -450,11 +517,36 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
             Ok(None)
         }
 
+        Statement::Move { source, target } => {
+            // Mark source as moved and create new variable with ownership
+            ctx.mark_moved(source)?;
+            let src_type = ctx.get_variable(source).ok_or_else(|| {
+                LppoError::UnknownVariable {
+                    name: source.clone(),
+                    location: None,
+                    suggestion: None,
+                }
+            })?.clone();
+            ctx.add_variable_with_ownership(target.clone(), src_type, OwnershipKind::Own);
+            Ok(None)
+        }
+
+        Statement::Copy { source, target } => {
+            // Copy doesn't move ownership
+            let src_type = ctx.get_variable(source).ok_or_else(|| {
+                LppoError::UnknownVariable {
+                    name: source.clone(),
+                    location: None,
+                    suggestion: None,
+                }
+            })?.clone();
+            ctx.add_variable_with_ownership(target.clone(), src_type, OwnershipKind::Own);
+            Ok(None)
+        }
+
         // For now, treat these as no-ops in type checking
         Statement::Alloc { .. }
         | Statement::Dealloc(_)
-        | Statement::Move { .. }
-        | Statement::Copy { .. }
         | Statement::Match { .. }
         | Statement::StructInit { .. } => Ok(None),
     }
@@ -468,6 +560,8 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
         Expr::Str(_) => Ok(TypeAnnotation::Str),
 
         Expr::Var(name) => {
+            // Check ownership state before access
+            ctx.check_variable_access(name)?;
             ctx.get_variable(name)
                 .cloned()
                 .ok_or_else(|| LppoError::UnknownVariable {
@@ -831,5 +925,39 @@ mod tests {
         // Test heterogeneous array (should fail)
         let expr = Expr::Array(vec![Expr::Int(1), Expr::Bool(true)]);
         assert!(typecheck_expr(&expr, &ctx).is_err());
+    }
+
+    #[test]
+    fn test_move_after_move() {
+        use crate::ast::OwnershipKind;
+        let mut ctx = TypeContext::new();
+        ctx.add_variable_with_ownership("x".to_string(), TypeAnnotation::Int64, OwnershipKind::Own);
+        
+        // First move should succeed
+        assert!(ctx.mark_moved("x").is_ok());
+        
+        // Second move should fail
+        assert!(ctx.mark_moved("x").is_err());
+        
+        // Access after move should fail
+        assert!(ctx.check_variable_access("x").is_err());
+    }
+
+    #[test]
+    fn test_ownership_tracking() {
+        use crate::ast::OwnershipKind;
+        let mut ctx = TypeContext::new();
+        
+        // Add owned variable
+        ctx.add_variable_with_ownership("x".to_string(), TypeAnnotation::Int64, OwnershipKind::Own);
+        
+        // Should be accessible
+        assert!(ctx.check_variable_access("x").is_ok());
+        assert!(!ctx.is_moved("x"));
+        
+        // After moving, should not be accessible
+        ctx.mark_moved("x").unwrap();
+        assert!(ctx.is_moved("x"));
+        assert!(ctx.check_variable_access("x").is_err());
     }
 }
