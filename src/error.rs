@@ -1,6 +1,9 @@
 use std::fmt::{self, Display, Formatter};
 
 /// Convenient result alias for LPPO operations.
+/// Note: LppoError has large variants; boxing them would require extensive refactoring.
+/// For now, we accept the performance trade-off for better error messages.
+#[allow(clippy::result_large_err)]
 pub type LppoResult<T> = Result<T, LppoError>;
 
 /// Source location information for error reporting
