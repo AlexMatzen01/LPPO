@@ -5,7 +5,13 @@ use std::path::Path;
 
 fn main() {
     if let Err(error) = run() {
-        eprintln!("error: {error}");
+        // Try to get more detailed error information if it's an LppoError
+        if let Some(lppo_err) = error.downcast_ref::<lppo::LppoError>() {
+            // Use the detailed formatting if source is available
+            eprint!("{}", lppo_err.format_detailed(None));
+        } else {
+            eprintln!("error: {error}");
+        }
         std::process::exit(1);
     }
 }

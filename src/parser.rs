@@ -936,12 +936,16 @@ impl<'a> Parser<'a> {
         if self.lookahead != Token::RParen {
             loop {
                 let name = self.parse_name("parameter name")?;
-                let typ = if self.lookahead == Token::Colon {
-                    self.advance()?;
-                    self.parse_type()?
-                } else {
-                    TypeAnnotation::Void
-                };
+                // Explicit type annotation is REQUIRED for parameters
+                if self.lookahead != Token::Colon {
+                    return Err(LppoError::SyntaxError {
+                        message: format!("missing type annotation for parameter '{}'", name),
+                        location: Some(self.position.clone()),
+                        suggestion: Some(format!("add a type annotation like ': Int64' or ': Str' after the parameter name")),
+                    });
+                }
+                self.advance()?; // consume colon
+                let typ = self.parse_type()?;
                 let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
                     let lt = lt.clone();
                     self.advance()?;
@@ -1182,14 +1186,16 @@ impl<'a> Parser<'a> {
             return Err(LppoError::unexpected_token_at("variable name", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
-        // Optional explicit type for loop variable (for old syntax compatibility)
-        let typ = if self.lookahead == Token::Colon {
-            self.advance()?;
-            self.parse_type()?
-        } else {
-            // Default to Void - will be inferred at runtime
-            TypeAnnotation::Void
-        };
+        // Explicit type annotation is REQUIRED for loop variable
+        if self.lookahead != Token::Colon {
+            return Err(LppoError::SyntaxError {
+                message: format!("missing type annotation for loop variable '{}'", var),
+                location: Some(self.position.clone()),
+                suggestion: Some(format!("add a type annotation like ': Int64' after the variable name")),
+            });
+        }
+        self.advance()?; // consume colon
+        let typ = self.parse_type()?;
         
         self.expect(Token::In)?;
         let iterable = self.parse_expression()?;
@@ -1299,14 +1305,16 @@ impl<'a> Parser<'a> {
             return Err(LppoError::unexpected_token_at("identifier", &format!("{:?}", self.lookahead), self.position.clone()));
         };
         
-        // Optional explicit type annotation (for old syntax compatibility)
-        let typ = if self.lookahead == Token::Colon {
-            self.advance()?;
-            self.parse_type()?
-        } else {
-            // Default to Void for old syntax - will be inferred at runtime
-            TypeAnnotation::Void
-        };
+        // Explicit type annotation is REQUIRED
+        if self.lookahead != Token::Colon {
+            return Err(LppoError::SyntaxError {
+                message: format!("missing type annotation for variable '{}'", name),
+                location: Some(self.position.clone()),
+                suggestion: Some(format!("add a type annotation like ': Int64' or ': Str' after the variable name")),
+            });
+        }
+        self.advance()?; // consume colon
+        let typ = self.parse_type()?;
         
         // expect an equals token
         self.expect(Token::Equals)?;
@@ -2259,5 +2267,75 @@ impl<'a> Parser<'a> {
             // Allow most soft keywords to be used as identifiers
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod strict_type_tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_type_annotation_let() {
+        let source = "pub proc main() -> Void { let own x = 42; }";
+        let result = parse_program(source);
+        assert!(result.is_err());
+        match result {
+            Err(LppoError::SyntaxError { message, .. }) => {
+                assert!(message.contains("missing type annotation for variable 'x'"));
+            }
+            _ => panic!("Expected SyntaxError for missing type annotation"),
+        }
+    }
+
+    #[test]
+    fn test_missing_type_annotation_for_loop() {
+        let source = "pub proc main() -> Void { for i in [1,2,3] { out i; } }";
+        let result = parse_program(source);
+        assert!(result.is_err());
+        match result {
+            Err(LppoError::SyntaxError { message, .. }) => {
+                assert!(message.contains("missing type annotation for loop variable 'i'"));
+            }
+            _ => panic!("Expected SyntaxError for missing type annotation in for loop"),
+        }
+    }
+
+    #[test]
+    fn test_missing_type_annotation_parameter() {
+        let source = "pub proc test(x) -> Void { out x; }";
+        let result = parse_program(source);
+        assert!(result.is_err());
+        match result {
+            Err(LppoError::SyntaxError { message, .. }) => {
+                assert!(message.contains("missing type annotation for parameter 'x'"));
+            }
+            _ => panic!("Expected SyntaxError for missing parameter type"),
+        }
+    }
+
+    #[test]
+    fn test_valid_type_annotations() {
+        let source = r#"
+            pub proc main() -> Void {
+                let own x: Int64 = 42;
+                for i: Int64 in [1, 2, 3] {
+                    out i;
+                }
+            }
+        "#;
+        let result = parse_program(source);
+        assert!(result.is_ok(), "Valid code with type annotations should parse successfully");
+    }
+
+    #[test]
+    fn test_procedure_with_typed_parameters() {
+        let source = r#"
+            pub proc add(a: Int64, b: Int64) -> Int64 {
+                let own result: Int64 = a + b;
+                return result;
+            }
+        "#;
+        let result = parse_program(source);
+        assert!(result.is_ok(), "Procedure with typed parameters should parse successfully");
     }
 }
