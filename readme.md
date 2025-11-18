@@ -173,6 +173,13 @@ LPPO emphasizes:
 **Status**: Educational prototype
 **Stability**: Experimental - APIs may change
 
+## Documentation
+
+- **[FEATURES.md](FEATURES.md)** - Complete list of implemented features
+- **[REBUILD_NOTES.md](REBUILD_NOTES.md)** - Details about the rebuild process
+- **[SUMMARY.md](SUMMARY.md)** - Quick overview of changes
+- **[BUGS.md](BUGS.md)** - Known issues and limitations
+
 ## Contributing
 
 This is an educational project. Contributions welcome for:
