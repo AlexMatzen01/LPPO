@@ -1,0 +1,13 @@
+pub proc main() -> Void {
+    let own score: Int64 = 85;
+    
+    if score == 100 {
+        out "Grade: Perfect!";
+    } elif score == 85 {
+        out "Grade: B";
+    } elif score == 70 {
+        out "Grade: C";
+    } else {
+        out "Grade: Other";
+    }
+}

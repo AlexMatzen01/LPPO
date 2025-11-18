@@ -1,0 +1,8 @@
+pub proc main() -> Void {
+    let own numbers: Arr<Int64> = [1, 2, 3, 4, 5];
+    
+    out "Array contents:";
+    for n: Int64 in numbers {
+        out "  -", n;
+    }
+}
