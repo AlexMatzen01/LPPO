@@ -14,6 +14,7 @@ pub enum Token {
         Else,
         While,
         For,
+        Key,
         In,
         Loop,
         Break,
@@ -727,6 +728,7 @@ pub enum Token {
     Eprint,
     Eprintln,
     Dbg,
+    Pause,
     
     // V5.2: Testing & Benchmarking
     // Test, Bench already defined above
@@ -1093,6 +1095,7 @@ impl<'a> Lexer<'a> {
                         "JMPDEF" | "else" => Token::Else,
                         "WHLLP" | "while" => Token::While,
                         "ITRLP" | "for" => Token::For,  // Iterator loop
+                        "key" => Token::Key,
                         "INSET" | "in" => Token::In,
                         "INFLP" | "loop" => Token::Loop,  // Infinite loop
                         "LPEXIT" | "break" => Token::Break,
@@ -1546,6 +1549,7 @@ impl<'a> Lexer<'a> {
                     "fatal" => Token::Fatal,
                     "print" => Token::Print,
                     "println" => Token::Println,
+                    "pause" => Token::Pause,
                     "eprint" => Token::Eprint,
                     "eprintln" => Token::Eprintln,
                     "dbg" => Token::Dbg,

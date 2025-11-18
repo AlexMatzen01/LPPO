@@ -248,6 +248,15 @@ pub enum Statement {
         index: Box<Expr>,
         value: Expr,
     },
+    /// Pause execution until the user presses Enter (customizable)
+    /// - `prompt`: optional expression (typically a string) displayed to the user
+    /// - `timeout`: optional expression (typically an integer in milliseconds) to wait before resuming
+    /// - `key`: optional expression (typically a string) for the key to wait for; "*" for any key
+    Pause {
+        prompt: Option<Expr>,
+        timeout: Option<Expr>,
+        key: Option<Expr>,
+    },
 }
 
 /// Qualified name for namespaced identifiers like module::submodule::name

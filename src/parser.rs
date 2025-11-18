@@ -805,6 +805,46 @@ impl<'a> Parser<'a> {
             Token::While => self.parse_while(),
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
+            Token::Pause => {
+                self.advance()?;
+                // optional clauses in any order: with <expr>, for <expr>, key <expr>
+                let mut prompt: Option<Expr> = None;
+                let mut timeout: Option<Expr> = None;
+                let mut key: Option<Expr> = None;
+
+                // Parse clauses until semicolon
+                while self.lookahead != Token::Semicolon {
+                    match self.lookahead {
+                        Token::With => {
+                            if prompt.is_some() {
+                                return Err(LppoError::unexpected_token_at("unique clause", "duplicate 'with'", self.position.clone()));
+                            }
+                            self.advance()?; // consume 'with'
+                            prompt = Some(self.parse_expression()?);
+                        }
+                        Token::For => {
+                            if timeout.is_some() {
+                                return Err(LppoError::unexpected_token_at("unique clause", "duplicate 'for'", self.position.clone()));
+                            }
+                            self.advance()?; // consume 'for'
+                            timeout = Some(self.parse_expression()?);
+                        }
+                        Token::Key => {
+                            if key.is_some() {
+                                return Err(LppoError::unexpected_token_at("unique clause", "duplicate 'key'", self.position.clone()));
+                            }
+                            self.advance()?; // consume 'key'
+                            key = Some(self.parse_expression()?);
+                        }
+                        _ => {
+                            return Err(LppoError::unexpected_token_at("with, for, key, or ;", &format!("{:?}", self.lookahead), self.position.clone()));
+                        }
+                    }
+                }
+
+                self.expect(Token::Semicolon)?;
+                Ok(Statement::Pause { prompt, timeout, key })
+            }
             Token::Break => {
                 self.advance()?;
                 self.expect(Token::Semicolon)?;

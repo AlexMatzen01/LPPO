@@ -76,6 +76,12 @@ pub enum Operation {
     },
     /// No operation (placeholder)
     Nop,
+    /// Pause execution: optional prompt and optional timeout (ms)
+    Pause {
+        prompt: Option<Expr>,
+        timeout_ms: Option<Expr>,
+        key: Option<Expr>,
+    },
     /// Expression statement - evaluate for side effects
     ExprStatement(Expr),
 }
@@ -770,6 +776,106 @@ impl Executor {
                     };
                     
                     env.insert(var.clone(), value);
+                }
+                Operation::Pause { prompt, timeout_ms, key } => {
+                    use std::io::{self, Write, Read};
+                    use std::sync::mpsc;
+                    use std::thread;
+                    use std::time::Duration;
+
+                    // Display prompt if provided
+                    if let Some(prompt_expr) = prompt {
+                        let prompt_val = eval_expr(prompt_expr, env, &self.procedures)?;
+                        print!("{} ", value_to_string(&prompt_val));
+                        io::stdout().flush().unwrap();
+                    } else {
+                        // default prompt
+                        print!("(paused) Press Enter to continue...");
+                        io::stdout().flush().unwrap();
+                    }
+
+                    // Determine if we wait for a specific key or Enter
+                    let wait_for_key = if let Some(key_expr) = key {
+                        let key_val = eval_expr(key_expr, env, &self.procedures)?;
+                        match key_val {
+                            Value::Str(s) => Some(s),
+                            _ => return Err(LppoError::type_error("pause key must be a string".into())),
+                        }
+                    } else {
+                        None
+                    };
+
+                    // If no timeout, block until key is pressed
+                    if timeout_ms.is_none() {
+                        if let Some(expected_key) = wait_for_key {
+                            if expected_key == "*" {
+                                // Wait for any key
+                                let mut buf = [0u8; 1];
+                                io::stdin()
+                                    .read_exact(&mut buf)
+                                    .map_err(|e| LppoError::type_error(format!("Failed to read input: {}", e)))?;
+                            } else if expected_key.len() == 1 {
+                                // Wait for specific key
+                                loop {
+                                    let mut buf = [0u8; 1];
+                                    io::stdin()
+                                        .read_exact(&mut buf)
+                                        .map_err(|e| LppoError::type_error(format!("Failed to read input: {}", e)))?;
+                                    if buf[0] as char == expected_key.chars().next().unwrap() {
+                                        break;
+                                    }
+                                }
+                            } else {
+                                return Err(LppoError::type_error("pause key must be a single character or '*'".into()));
+                            }
+                        } else {
+                            // Default: wait for Enter
+                            let mut buf = String::new();
+                            io::stdin()
+                                .read_line(&mut buf)
+                                .map_err(|e| LppoError::type_error(format!("Failed to read input: {}", e)))?;
+                        }
+                    } else {
+                        // timeout provided: evaluate to milliseconds
+                        let t_expr = timeout_ms.as_ref().unwrap();
+                        let t_val = eval_expr(t_expr, env, &self.procedures)?;
+                        let millis = match t_val {
+                            Value::Int(i) if i >= 0 => i as u64,
+                            _ => return Err(LppoError::type_error("pause timeout must be a non-negative integer".into())),
+                        };
+
+                        // Spawn a thread to read input and use recv_timeout
+                        let (tx, rx) = mpsc::sync_channel(0);
+                        let expected_key = wait_for_key.clone();
+                        let handle = thread::spawn(move || {
+                            if let Some(expected) = expected_key {
+                                if expected == "*" {
+                                    let mut buf = [0u8; 1];
+                                    let _ = io::stdin().read_exact(&mut buf);
+                                    let _ = tx.send(());
+                                } else if expected.len() == 1 {
+                                    loop {
+                                        let mut buf = [0u8; 1];
+                                        let _ = io::stdin().read_exact(&mut buf);
+                                        if buf[0] as char == expected.chars().next().unwrap() {
+                                            let _ = tx.send(());
+                                            break;
+                                        }
+                                    }
+                                }
+                            } else {
+                                let mut s = String::new();
+                                let _ = io::stdin().read_line(&mut s);
+                                let _ = tx.send(());
+                            }
+                        });
+
+                        if rx.recv_timeout(Duration::from_millis(millis)).is_err() {
+                            // timeout reached; simply continue
+                        }
+                        // Don't join the handle here because read may still block; detach
+                        let _ = handle.thread().unpark();
+                    }
                 }
                 Operation::Call(name, args) => {
                     // Evaluate argument expressions in current env

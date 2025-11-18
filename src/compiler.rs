@@ -138,6 +138,9 @@ fn compile_statement(statement: Statement) -> Operation {
             // For now, treat as no-op since arrays are immutable in simplified runtime
             Operation::Nop
         }
+        Statement::Pause { prompt, timeout, key } => {
+            Operation::Pause { prompt, timeout_ms: timeout, key }
+        }
     }
 }
 
