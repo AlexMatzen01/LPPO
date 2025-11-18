@@ -129,6 +129,15 @@ fn compile_statement(statement: Statement) -> Operation {
             // Expression statement - evaluate expression for side effects
             Operation::ExprStatement(expr)
         }
+        Statement::Assignment { target, value } => {
+            // Assignment: var = expr is similar to let var = expr but updates existing var
+            Operation::Let(target, value)
+        }
+        Statement::IndexedAssignment { target: _, index: _, value: _ } => {
+            // Indexed assignment: arr[i] = expr
+            // For now, treat as no-op since arrays are immutable in simplified runtime
+            Operation::Nop
+        }
     }
 }
 

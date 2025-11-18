@@ -206,6 +206,11 @@ fn values_equal(a: &Value, b: &Value) -> bool {
 fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap<String, ProcedureBody>) -> LppoResult<Value> {
     match expr {
         Expr::Int(i) => Ok(Value::Int(*i)),
+        Expr::Float(f) => {
+            // Parse float string to f64 and store as string for display
+            // For now, treat floats as strings in output
+            Ok(Value::Str(f.clone()))
+        }
         Expr::Str(s) => Ok(Value::Str(s.clone())),
         Expr::Bool(b) => Ok(Value::Bool(*b)),
         Expr::Var(name) => env
@@ -529,6 +534,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
             
             // No pattern matched
             Err(LppoError::type_error("no pattern matched in match expression".into()))
+        }
+        Expr::Await(expr) => {
+            // For now, simply evaluate the expression synchronously
+            // In a real async runtime, this would suspend and resume
+            eval_expr(expr, env, procedures)
         }
     }
 }

@@ -30,6 +30,7 @@ impl<'a> Parser<'a> {
         self.expect(Token::Struct)?;
         let name = self.parse_name("struct name")?;
         let generic_params = self.parse_generic_params()?;
+        self.skip_where_clause()?;
         self.expect(Token::LBrace)?;
         let mut fields = Vec::new();
         while self.lookahead != Token::RBrace {
@@ -65,6 +66,7 @@ impl<'a> Parser<'a> {
         self.expect(Token::Enum)?;
         let name = self.parse_name("enum name")?;
         let generic_params = self.parse_generic_params()?;
+        self.skip_where_clause()?;
         self.expect(Token::LBrace)?;
         let mut variants = Vec::new();
         while self.lookahead != Token::RBrace {
@@ -652,24 +654,37 @@ impl<'a> Parser<'a> {
             let mut exprs = Vec::new();
             loop {
                 exprs.push(self.parse_expression()?);
-                if self.lookahead == Token::Comma && exprs.len() < 10 {
-                    // Check if this is the arm separator or part of the out args
-                    // Peek ahead - if next is a pattern start, break
-                    self.advance()?;
-                    
-                    // If we see tokens that start a pattern (identifiers, Some, None, etc.), break
-                    match self.lookahead {
-                        Token::Identifier(_) | Token::Some | Token::None | Token::Underscore | Token::RBrace => {
-                            // This comma is the arm separator, not part of out
+                // For out in match arms, continue until we see comma followed by a pattern-like token
+                // or no comma at all
+                if self.lookahead != Token::Comma {
+                    break;
+                }
+                // We have a comma - need to decide if it's part of out args or arm separator
+                // Save position and look ahead
+                self.advance()?; // consume comma
+                
+                // Check what follows the comma
+                match &self.lookahead {
+                    // These tokens clearly start a new pattern/arm
+                    Token::Some | Token::None | Token::Ok | Token::Err | Token::Underscore | Token::RBrace => {
+                        // This comma was the arm separator
+                        break;
+                    }
+                    // Identifier could be either - check context
+                    Token::Identifier(_) => {
+                        // Could be a variable in out or a pattern
+                        // Simple heuristic: if we already have multiple exprs, likely end of out
+                        // Otherwise, continue
+                        if exprs.len() >= 2 {
                             break;
-                        }
-                        _ => {
-                            // Continue parsing out arguments
+                        } else {
                             continue;
                         }
                     }
-                } else {
-                    break;
+                    _ => {
+                        // Continue parsing out arguments
+                        continue;
+                    }
                 }
             }
             
@@ -809,9 +824,52 @@ impl<'a> Parser<'a> {
             Token::Scope => self.parse_scope(),
             Token::Unsafe => self.parse_unsafe_block(),
             Token::Eof | Token::RBrace => Err(LppoError::unexpected_eof("statement or closing brace")),
-            _ => {
-                // Try to parse as expression statement
+            Token::Match => {
+                // Match expressions can be used as statements without semicolons
                 let expr = self.parse_expression()?;
+                // Semicolon is optional for match expressions
+                if self.lookahead == Token::Semicolon {
+                    self.advance()?;
+                }
+                Ok(Statement::ExprStatement(expr))
+            }
+            _ => {
+                // Try to parse as expression statement or assignment
+                // Parse the first expression/identifier
+                let expr = self.parse_expression()?;
+                
+                // Check if this is an assignment
+                if self.lookahead == Token::Equals {
+                    // It's an assignment: var = expr or arr[i] = expr
+                    self.advance()?; // consume =
+                    let value = self.parse_expression()?;
+                    self.expect(Token::Semicolon)?;
+                    
+                    // Handle different assignment targets
+                    match expr {
+                        Expr::Var(name) => {
+                            return Ok(Statement::Assignment {
+                                target: name,
+                                value,
+                            });
+                        }
+                        Expr::Index { target, index } => {
+                            // Indexed assignment: arr[i] = value
+                            // Store as a special indexed assignment statement
+                            return Ok(Statement::IndexedAssignment {
+                                target,
+                                index,
+                                value,
+                            });
+                        }
+                        _ => {
+                            // Other expressions can't be assigned to
+                            return Err(LppoError::unexpected_token_at("valid assignment target", "complex expression", self.position.clone()));
+                        }
+                    }
+                }
+                
+                // Not an assignment, treat as expression statement
                 self.expect(Token::Semicolon)?;
                 Ok(Statement::ExprStatement(expr))
             }
@@ -934,6 +992,17 @@ impl<'a> Parser<'a> {
                         self.advance()?;
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn skip_where_clause(&mut self) -> LppoResult<()> {
+        if self.lookahead == Token::Where {
+            self.advance()?;
+            // Skip until we hit '{' or other structural tokens
+            while !matches!(self.lookahead, Token::LBrace | Token::Semicolon | Token::Eof) {
+                self.advance()?;
             }
         }
         Ok(())
@@ -1439,6 +1508,11 @@ impl<'a> Parser<'a> {
                     lifetime,
                 })
             }
+            Token::Await => {
+                self.advance()?;
+                let expr = self.parse_unary()?;
+                Ok(Expr::Await(Box::new(expr)))
+            }
             Token::SizeOf => {
                 self.advance()?;
                 self.expect(Token::Less)?;
@@ -1520,6 +1594,112 @@ impl<'a> Parser<'a> {
                         node = Expr::FieldAccess { target: Box::new(node), field: name };
                     }
                 }
+                Token::Less => {
+                    // Could be either:
+                    // 1. Generic function call: func<T>(args)
+                    // 2. CUDA kernel launch: func<<<grid, block>>>(args)
+                    // 3. Comparison operator (should not be in postfix context)
+                    //
+                    // Heuristic: Only treat as generic/CUDA if:
+                    // - node is a simple identifier/qualified name
+                    // - followed by << or by type-like token
+                    
+                    // Check if node could be a function name
+                    let is_function_name = matches!(node, Expr::Var(_) | Expr::QualifiedVar(_));
+                    if !is_function_name {
+                        // Not a function name, so < is probably comparison
+                        // Don't consume it, let comparison parser handle it
+                        break;
+                    }
+                    
+                    self.advance()?; // consume first <
+                    
+                    if self.lookahead == Token::Less {
+                        // Might be <<<, check for third <
+                        self.advance()?; // consume second <
+                        if self.lookahead == Token::Less {
+                            // It's CUDA kernel launch: <<<grid, block>>>
+                            self.advance()?; // consume third <
+                            
+                            // Parse grid and block parameters
+                            let _grid = self.parse_expression()?;
+                            self.expect(Token::Comma)?;
+                            let _block = self.parse_expression()?;
+                            
+                            // Expect three > tokens
+                            self.expect(Token::Greater)?;
+                            self.expect(Token::Greater)?;
+                            self.expect(Token::Greater)?;
+                            
+                            // Now parse the regular function call
+                            self.expect(Token::LParen)?;
+                            let mut args = Vec::new();
+                            if self.lookahead != Token::RParen {
+                                loop {
+                                    args.push(self.parse_expression()?);
+                                    if self.lookahead == Token::Comma {
+                                        self.advance()?;
+                                        continue;
+                                    }
+                                    break;
+                                }
+                            }
+                            self.expect(Token::RParen)?;
+                            
+                            // For now, treat CUDA kernel launch as regular function call
+                            node = Expr::Call {
+                                func: Box::new(node),
+                                args,
+                            };
+                        } else {
+                            // << but not <<<, error
+                            return Err(LppoError::unexpected_token_at("<<< or generic type", &format!("{:?}", self.lookahead), self.position.clone()));
+                        }
+                    } else {
+                        // Single <, this is a generic function call: func<T>(args)
+                        // Skip generic parameters for now - just consume until >
+                        let mut depth = 1;
+                        while depth > 0 {
+                            match self.lookahead {
+                                Token::Less => {
+                                    depth += 1;
+                                    self.advance()?;
+                                }
+                                Token::Greater => {
+                                    depth -= 1;
+                                    self.advance()?;
+                                }
+                                Token::Eof => {
+                                    return Err(LppoError::unexpected_eof("matching >"));
+                                }
+                                _ => {
+                                    self.advance()?;
+                                }
+                            }
+                        }
+                        
+                        // Now should have (args)
+                        self.expect(Token::LParen)?;
+                        let mut args = Vec::new();
+                        if self.lookahead != Token::RParen {
+                            loop {
+                                args.push(self.parse_expression()?);
+                                if self.lookahead == Token::Comma {
+                                    self.advance()?;
+                                    continue;
+                                }
+                                break;
+                            }
+                        }
+                        self.expect(Token::RParen)?;
+                        
+                        // Treat as regular function call (ignoring generic params)
+                        node = Expr::Call {
+                            func: Box::new(node),
+                            args,
+                        };
+                    }
+                }
                 Token::LParen => {
                     // Function call: func(args) or Type::new()
                     self.advance()?;
@@ -1540,6 +1720,13 @@ impl<'a> Parser<'a> {
                         args,
                     };
                 }
+                Token::Question => {
+                    // Error propagation operator: expr?
+                    self.advance()?;
+                    // For now, just treat as identity (no-op)
+                    // In a real implementation, would check for Result type and propagate errors
+                    // Keep node unchanged
+                }
                 _ => break,
             }
         }
@@ -1551,6 +1738,10 @@ impl<'a> Parser<'a> {
             Token::Number(n) => { 
                 self.advance()?; 
                 Ok(Expr::Int(n)) 
+            }
+            Token::FloatLiteral(f) => {
+                self.advance()?;
+                Ok(Expr::Float(f))
             }
             Token::StringLiteral(s) => { 
                 self.advance()?; 
@@ -1602,14 +1793,11 @@ impl<'a> Parser<'a> {
                         path.push(name);
                         self.advance()?; // consume ::
                         
-                        name = match self.lookahead.clone() {
-                            Token::Identifier(n) => {
-                                self.advance()?;
-                                n
-                            }
-                            _ => {
-                                return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
-                            }
+                        name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+                            self.advance()?;
+                            n
+                        } else {
+                            return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
                         };
                     }
                     
@@ -1659,18 +1847,11 @@ impl<'a> Parser<'a> {
                         path.push(name);
                         self.advance()?; // consume ::
                         
-                        name = match self.lookahead.clone() {
-                            Token::Identifier(n) => {
-                                self.advance()?;
-                                n
-                            }
-                            Token::New => {
-                                self.advance()?;
-                                "new".to_string()
-                            }
-                            _ => {
-                                return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
-                            }
+                        name = if let Some(n) = self.token_as_identifier(&self.lookahead.clone()) {
+                            self.advance()?;
+                            n
+                        } else {
+                            return Err(LppoError::unexpected_token_at("identifier after ::", &format!("{:?}", self.lookahead), self.position.clone()));
                         };
                     }
                     
@@ -1994,6 +2175,8 @@ impl<'a> Parser<'a> {
             Token::Alloc => Some("alloc".to_string()),
             Token::Range => Some("range".to_string()),
             Token::Reduce => Some("reduce".to_string()),
+            Token::Phantom => Some("phantom".to_string()),
+            Token::New => Some("new".to_string()),
             // Allow most soft keywords to be used as identifiers
             _ => None,
         }
