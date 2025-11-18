@@ -1,0 +1,20 @@
+pub proc add(a: Int64, b: Int64) -> Int64 {
+    let own result: Int64 = a + b;
+    return result;
+}
+
+pub proc multiply(x: Int64, y: Int64) -> Int64 {
+    let own result: Int64 = x * y;
+    return result;
+}
+
+pub proc main() -> Void {
+    let own x: Int64 = 5;
+    let own y: Int64 = 3;
+    
+    call add(x, y);
+    call multiply(x, y);
+    
+    out "x =", x;
+    out "y =", y;
+}

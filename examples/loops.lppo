@@ -1,0 +1,7 @@
+pub proc main() -> Void {
+    out "For loop:";
+    let own numbers: Arr<Int64> = [10, 20, 30, 40, 50];
+    for n: Int64 in numbers {
+        out "  n =", n;
+    }
+}

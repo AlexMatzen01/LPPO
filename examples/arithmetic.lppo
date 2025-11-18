@@ -1,0 +1,15 @@
+pub proc main() -> Void {
+    let own x: Int64 = 10;
+    let own y: Int64 = 20;
+    let own sum: Int64 = x + y;
+    let own diff: Int64 = x - y;
+    let own product: Int64 = x * y;
+    let own quotient: Int64 = y / x;
+    
+    out "x =", x;
+    out "y =", y;
+    out "sum =", sum;
+    out "difference =", diff;
+    out "product =", product;
+    out "quotient =", quotient;
+}

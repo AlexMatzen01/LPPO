@@ -1,0 +1,4 @@
+pub proc main() -> Void {
+    let own message: Str = "Hello, LPPO!";
+    out message;
+}
