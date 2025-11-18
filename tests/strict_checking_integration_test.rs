@@ -1,5 +1,4 @@
 /// Integration tests for strict type and ownership checking
-
 use lppo::{parse_program, typecheck_program, LppoError};
 
 #[test]

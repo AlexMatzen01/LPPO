@@ -1,6 +1,9 @@
 use std::fmt::{self, Display, Formatter};
 
 /// Convenient result alias for LPPO operations.
+/// Note: LppoError has large variants; boxing them would require extensive refactoring.
+/// For now, we accept the performance trade-off for better error messages.
+#[allow(clippy::result_large_err)]
 pub type LppoResult<T> = Result<T, LppoError>;
 
 /// Source location information for error reporting
@@ -269,7 +272,7 @@ impl LppoError {
             // Show source code context if available
             if let Some(src) = source {
                 if let Some(line_text) = src.lines().nth(location.line) {
-                    output.push_str(&format!("   |\n"));
+                    output.push_str("   |\n");
                     output.push_str(&format!("{:3} | {}\n", location.line + 1, line_text));
                     output.push_str(&format!("   | {}{}\n", " ".repeat(location.column), "^".repeat(location.length.max(1))));
                 }

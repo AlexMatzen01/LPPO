@@ -967,7 +967,7 @@ impl<'a> Lexer<'a> {
                     let mut is_float = false;
                     
                     while let Some(d) = self.peek() {
-                        if (b'0'..=b'9').contains(&d) {
+                        if d.is_ascii_digit() {
                             self.bump();
                             num_str.push(d as char);
                         } else if d == b'.' && !is_float {
@@ -975,7 +975,7 @@ impl<'a> Lexer<'a> {
                             // Peek ahead to see if followed by digit
                             self.bump(); // consume '.'
                             if let Some(next) = self.peek() {
-                                if (b'0'..=b'9').contains(&next) {
+                                if next.is_ascii_digit() {
                                     is_float = true;
                                     num_str.push('.');
                                 } else {

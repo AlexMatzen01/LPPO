@@ -1,6 +1,5 @@
 /// Type checking for LPPO programs
 /// Validates types across expressions, statements, and procedure calls
-
 use std::collections::HashMap;
 
 use crate::ast::{
@@ -16,6 +15,7 @@ use crate::ast::OwnershipKind;
 enum OwnershipState {
     Owned,
     Moved,
+    #[allow(dead_code)] // TODO: Implement borrow tracking
     Borrowed { mutable: bool },
 }
 
