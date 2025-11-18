@@ -1965,6 +1965,84 @@ impl<'a> Parser<'a> {
                     arms,
                 })
             }
+            Token::Handle => {
+                // Handle expression: handle expr with Type { handlers }
+                self.advance()?; // consume 'handle'
+                let expr = Box::new(self.parse_expression()?);
+                self.expect(Token::With)?;
+                
+                // Parse handler type: State<I64> or similar
+                let handler_type = self.parse_type()?;
+                
+                self.expect(Token::LBrace)?;
+                let mut handlers = Vec::new();
+                
+                while self.lookahead != Token::RBrace {
+                    // Parse handler: name = expr or name() => expr or name(params) => expr
+                    let handler_name = self.parse_name("handler name")?;
+                    
+                    // Check if it's a function-style handler: name(...) => expr
+                    if self.lookahead == Token::LParen {
+                        self.advance()?; // consume '('
+                        // Skip parameters for now - consume until )
+                        let mut depth = 1;
+                        while depth > 0 && self.lookahead != Token::Eof {
+                            match self.lookahead {
+                                Token::LParen => {
+                                    depth += 1;
+                                    self.advance()?;
+                                }
+                                Token::RParen => {
+                                    depth -= 1;
+                                    if depth > 0 {
+                                        self.advance()?;
+                                    }
+                                }
+                                _ => {
+                                    self.advance()?;
+                                }
+                            }
+                        }
+                        self.expect(Token::RParen)?; // consume final ')'
+                        self.expect(Token::FatArrow)?; // expect '=>'
+                        
+                        // Parse handler body - could be block or expression
+                        let handler_body = if self.lookahead == Token::LBrace {
+                            self.advance()?; // consume '{'
+                            // For now, just collect as dummy Int(0) since we're not fully evaluating handlers
+                            // A real implementation would collect statements
+                            while self.lookahead != Token::RBrace && self.lookahead != Token::Eof {
+                                self.advance()?;
+                            }
+                            self.expect(Token::RBrace)?;
+                            Box::new(Expr::Int(0))
+                        } else {
+                            Box::new(self.parse_expression()?)
+                        };
+                        handlers.push((handler_name, handler_body));
+                    } else {
+                        // Simple assignment style: name = expr
+                        self.expect(Token::Equals)?;
+                        let handler_body = Box::new(self.parse_expression()?);
+                        handlers.push((handler_name, handler_body));
+                    }
+                    
+                    // Handlers are separated by commas
+                    if self.lookahead == Token::Comma {
+                        self.advance()?;
+                    } else if self.lookahead != Token::RBrace {
+                        break; // Exit if no comma and not at closing brace
+                    }
+                }
+                
+                self.expect(Token::RBrace)?;
+                
+                Ok(Expr::Handle {
+                    expr,
+                    handler_type,
+                    handlers,
+                })
+            }
             _ => Err(LppoError::unexpected_token_at("expression", &format!("{:?}", self.lookahead), self.position.clone())),
         }
     }
@@ -2156,6 +2234,7 @@ impl<'a> Parser<'a> {
             Token::Constraint => Some("constraint".to_string()),
             Token::Where => Some("where".to_string()),
             Token::Simd => Some("simd".to_string()),
+            Token::Splat => Some("splat".to_string()),
             Token::Gpu => Some("gpu".to_string()),
             Token::Jit => Some("jit".to_string()),
             Token::Kernel => Some("kernel".to_string()),

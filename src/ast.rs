@@ -390,6 +390,12 @@ pub enum Expr {
     },
     /// Await expression: await expr
     Await(Box<Expr>),
+    /// Handle expression for effect handling: handle expr with type { handlers }
+    Handle {
+        expr: Box<Expr>,
+        handler_type: TypeAnnotation,
+        handlers: Vec<(String, Box<Expr>)>, // (handler_name, handler_body)
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

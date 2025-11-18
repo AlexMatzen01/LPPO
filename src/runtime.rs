@@ -318,7 +318,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
         }
         Expr::MethodCall { target, method, args } => {
             let target_val = eval_expr(target, env, procedures)?;
-            match (target_val, method.as_str()) {
+            match (target_val.clone(), method.as_str()) {
                 (Value::Array(mut arr), "push") => {
                     for arg in args {
                         arr.push(eval_expr(arg, env, procedures)?);
@@ -330,6 +330,70 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
                         .ok_or_else(|| LppoError::type_error("pop on empty array".into()))
                 }
                 (Value::Array(arr), "len") => Ok(Value::Int(arr.len() as i64)),
+                (Value::Array(arr), "iter") => {
+                    // Return the array itself wrapped as an iterator
+                    // The iterator is represented as an array that can be further chained
+                    Ok(Value::Array(arr))
+                }
+                (Value::Array(arr), "map") => {
+                    // map applies a closure to each element
+                    if args.len() != 1 {
+                        return Err(LppoError::type_error("map requires 1 argument".into()));
+                    }
+                    let closure_val = eval_expr(&args[0], env, procedures)?;
+                    
+                    let mut result = Vec::new();
+                    for item in arr {
+                        match closure_val.clone() {
+                            Value::Closure { params, body, captured_env } => {
+                                if params.len() != 1 {
+                                    return Err(LppoError::type_error("map closure must take 1 parameter".into()));
+                                }
+                                let mut closure_env = captured_env;
+                                closure_env.insert(params[0].clone(), item);
+                                let mapped_val = eval_expr(&body, &mut closure_env, procedures)?;
+                                result.push(mapped_val);
+                            }
+                            _ => return Err(LppoError::type_error("map argument must be a closure".into())),
+                        }
+                    }
+                    Ok(Value::Array(result))
+                }
+                (Value::Array(arr), "filter") => {
+                    // filter keeps elements where closure returns true
+                    if args.len() != 1 {
+                        return Err(LppoError::type_error("filter requires 1 argument".into()));
+                    }
+                    let closure_val = eval_expr(&args[0], env, procedures)?;
+                    
+                    let mut result = Vec::new();
+                    for item in arr {
+                        match closure_val.clone() {
+                            Value::Closure { params, body, captured_env } => {
+                                if params.len() != 1 {
+                                    return Err(LppoError::type_error("filter closure must take 1 parameter".into()));
+                                }
+                                let mut closure_env = captured_env;
+                                closure_env.insert(params[0].clone(), item.clone());
+                                let keep = eval_expr(&body, &mut closure_env, procedures)?;
+                                if is_truthy(&keep) {
+                                    result.push(item);
+                                }
+                            }
+                            _ => return Err(LppoError::type_error("filter argument must be a closure".into())),
+                        }
+                    }
+                    Ok(Value::Array(result))
+                }
+                (Value::Array(arr), "collect") => {
+                    // collect just returns the array as-is (already collected)
+                    Ok(Value::Array(arr))
+                }
+                (Value::Array(arr), "first") => {
+                    arr.first()
+                        .cloned()
+                        .ok_or_else(|| LppoError::type_error("first on empty array".into()))
+                }
                 (Value::Str(s), "len") => Ok(Value::Int(s.len() as i64)),
                 (Value::Str(s), "upper") => Ok(Value::Str(s.to_uppercase())),
                 (Value::Str(s), "lower") => Ok(Value::Str(s.to_lowercase())),
@@ -538,6 +602,11 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
         Expr::Await(expr) => {
             // For now, simply evaluate the expression synchronously
             // In a real async runtime, this would suspend and resume
+            eval_expr(expr, env, procedures)
+        }
+        Expr::Handle { expr, handler_type: _, handlers: _ } => {
+            // For now, evaluate the expression and ignore effect handlers
+            // A full implementation would set up effect handlers and call them on performance
             eval_expr(expr, env, procedures)
         }
     }
