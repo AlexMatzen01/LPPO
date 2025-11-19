@@ -806,44 +806,116 @@ impl<'a> Parser<'a> {
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
             Token::Pause => {
-                self.advance()?;
-                // optional clauses in any order: with <expr>, for <expr>, key <expr>
-                let mut prompt: Option<Expr> = None;
-                let mut timeout: Option<Expr> = None;
-                let mut key: Option<Expr> = None;
+                self.advance()?; // consume 'pause'
 
-                // Parse clauses until semicolon
-                while self.lookahead != Token::Semicolon {
-                    match self.lookahead {
-                        Token::With => {
-                            if prompt.is_some() {
-                                return Err(LppoError::unexpected_token_at("unique clause", "duplicate 'with'", self.position.clone()));
-                            }
+                // Optional clauses: with <expr>, timeout <expr>, until <expr>, assign <ident>, on_mismatch <expr>, on_timeout <expr>
+                let mut prompt: Option<Expr> = None;
+                let mut timeout_ms: Option<Expr> = None;
+                let mut until: Option<Expr> = None;
+                let mut assign_to: Option<String> = None;
+                let mut on_mismatch: Option<Expr> = None;
+                let mut on_timeout: Option<Expr> = None;
+                let mut is_async: bool = false;
+
+                // If next token is a brace, parse a block of clauses each terminated by ';'
+                if self.lookahead == Token::LBrace {
+                    self.advance()?; // consume '{'
+                    while self.lookahead != Token::RBrace {
+                        if self.lookahead == Token::With {
                             self.advance()?; // consume 'with'
                             prompt = Some(self.parse_expression()?);
+                            self.expect(Token::Semicolon)?;
+                            continue;
                         }
-                        Token::For => {
-                            if timeout.is_some() {
-                                return Err(LppoError::unexpected_token_at("unique clause", "duplicate 'for'", self.position.clone()));
+                        if self.lookahead == Token::Until {
+                            self.advance()?; // consume 'until'
+                            until = Some(self.parse_expression()?);
+                            self.expect(Token::Semicolon)?;
+                            continue;
+                        }
+
+                        if let Some(name) = self.token_as_identifier(&self.lookahead.clone()) {
+                            match name.as_str() {
+                                "timeout" => {
+                                    self.advance()?; // consume 'timeout'
+                                    timeout_ms = Some(self.parse_expression()?);
+                                    self.expect(Token::Semicolon)?;
+                                    continue;
+                                }
+                                "assign" => {
+                                    self.advance()?; // consume 'assign'
+                                    let ident = self.parse_name("variable name for assign")?;
+                                    assign_to = Some(ident);
+                                    self.expect(Token::Semicolon)?;
+                                    continue;
+                                }
+                                "on_mismatch" => {
+                                    self.advance()?; // consume on_mismatch
+                                    on_mismatch = Some(self.parse_expression()?);
+                                    self.expect(Token::Semicolon)?;
+                                    continue;
+                                }
+                                "on_timeout" => {
+                                    self.advance()?; // consume on_timeout
+                                    on_timeout = Some(self.parse_expression()?);
+                                    self.expect(Token::Semicolon)?;
+                                    continue;
+                                }
+                                "async" => {
+                                    self.advance()?; // consume 'async'
+                                    is_async = true;
+                                    self.expect(Token::Semicolon)?;
+                                    continue;
+                                }
+                                _ => {
+                                    return Err(LppoError::unexpected_token_at("pause clause", &format!("{:?}", self.lookahead), self.position.clone()));
+                                }
                             }
-                            self.advance()?; // consume 'for'
-                            timeout = Some(self.parse_expression()?);
                         }
-                        Token::Key => {
-                            if key.is_some() {
-                                return Err(LppoError::unexpected_token_at("unique clause", "duplicate 'key'", self.position.clone()));
+
+                        return Err(LppoError::unexpected_token_at("pause clause or '}'", &format!("{:?}", self.lookahead), self.position.clone()));
+                    }
+                    self.expect(Token::RBrace)?;
+                    Ok(Statement::Pause { prompt, timeout_ms, until, assign_to, on_mismatch, on_timeout, is_async })
+                } else {
+                    // Single-line form: parse clauses until semicolon
+                    loop {
+                        match &self.lookahead {
+                            Token::Semicolon => break,
+                            Token::With => {
+                                self.advance()?;
+                                prompt = Some(self.parse_expression()?);
                             }
-                            self.advance()?; // consume 'key'
-                            key = Some(self.parse_expression()?);
-                        }
-                        _ => {
-                            return Err(LppoError::unexpected_token_at("with, for, key, or ;", &format!("{:?}", self.lookahead), self.position.clone()));
+                            Token::Until => {
+                                self.advance()?;
+                                until = Some(self.parse_expression()?);
+                            }
+                            tok if self.token_as_identifier(tok).as_deref() == Some("timeout") => {
+                                self.advance()?;
+                                timeout_ms = Some(self.parse_expression()?);
+                            }
+                            tok if self.token_as_identifier(tok).as_deref() == Some("async") => {
+                                self.advance()?;
+                                is_async = true;
+                            }
+                            tok if self.token_as_identifier(tok).as_deref() == Some("assign") => {
+                                self.advance()?;
+                                assign_to = Some(self.parse_name("variable name for assign")?);
+                            }
+                            tok if self.token_as_identifier(tok).as_deref() == Some("on_mismatch") => {
+                                self.advance()?;
+                                on_mismatch = Some(self.parse_expression()?);
+                            }
+                            tok if self.token_as_identifier(tok).as_deref() == Some("on_timeout") => {
+                                self.advance()?;
+                                on_timeout = Some(self.parse_expression()?);
+                            }
+                            _ => return Err(LppoError::unexpected_token_at("pause clause or ';'", &format!("{:?}", self.lookahead), self.position.clone())),
                         }
                     }
+                    self.expect(Token::Semicolon)?;
+                    Ok(Statement::Pause { prompt, timeout_ms, until, assign_to, on_mismatch, on_timeout, is_async })
                 }
-
-                self.expect(Token::Semicolon)?;
-                Ok(Statement::Pause { prompt, timeout, key })
             }
             Token::Break => {
                 self.advance()?;

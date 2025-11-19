@@ -1,4 +1,10 @@
 use std::collections::HashMap;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+use std::thread::JoinHandle;
+
+// Global registry for background task handles scheduled by async pauses.
+static BACKGROUND_HANDLES: Lazy<Mutex<Vec<JoinHandle<()>>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 use crate::error::{LppoError, LppoResult};
 use crate::ast::{Expr, BinaryOp, UnaryOp};
@@ -76,11 +82,15 @@ pub enum Operation {
     },
     /// No operation (placeholder)
     Nop,
-    /// Pause execution: optional prompt and optional timeout (ms)
+    /// Pause execution: optionally show prompt, wait until condition or timeout
     Pause {
         prompt: Option<Expr>,
         timeout_ms: Option<Expr>,
-        key: Option<Expr>,
+        until: Option<Expr>,
+        assign_to: Option<String>,
+        on_mismatch: Option<Expr>,
+        on_timeout: Option<Expr>,
+        is_async: bool,
     },
     /// Expression statement - evaluate for side effects
     ExprStatement(Expr),
@@ -491,6 +501,28 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
             }
             
             // Evaluate the function expression
+            // Fast-path builtins when func is a simple identifier
+            if let Expr::Var(name) = func.as_ref() {
+                match name.as_str() {
+                    "println" => {
+                        let parts: Vec<String> = arg_vals.iter().map(value_to_string).collect();
+                        println!("{}", parts.join(" "));
+                        return Ok(Value::Int(0));
+                    }
+                    "print" => {
+                        let parts: Vec<String> = arg_vals.iter().map(value_to_string).collect();
+                        print!("{}", parts.join(" "));
+                        return Ok(Value::Int(0));
+                    }
+                    "eprintln" => {
+                        let parts: Vec<String> = arg_vals.iter().map(value_to_string).collect();
+                        eprintln!("{}", parts.join(" "));
+                        return Ok(Value::Int(0));
+                    }
+                    _ => {}
+                }
+            }
+
             let func_val = eval_expr(func, env, procedures);
             
             // Handle the different cases
@@ -637,7 +669,14 @@ impl Executor {
             .get(entry)
             .ok_or_else(|| LppoError::unknown_procedure(entry.to_string()))?;
         let mut env = HashMap::new();
-        self.execute_procedure_with_env(procedure, &mut env)
+        let res = self.execute_procedure_with_env(procedure, &mut env);
+        // Wait for any scheduled background tasks to finish before returning
+        // This ensures async pauses get a chance to complete their continuations.
+        let mut handles = BACKGROUND_HANDLES.lock().unwrap();
+        while let Some(h) = handles.pop() {
+            let _ = h.join();
+        }
+        res
     }
 
     fn execute_procedure_with_env(&self, procedure: &ProcedureBody, env: &mut HashMap<String, Value>) -> LppoResult<()> {
@@ -646,7 +685,9 @@ impl Executor {
     }
 
     fn execute_ops(&self, ops: &[Operation], env: &mut HashMap<String, Value>) -> LppoResult<ControlFlow> {
-        for op in ops {
+        let len = ops.len();
+        for i in 0..len {
+            let op = &ops[i];
             match op {
                 Operation::Emit(exprs) => {
                     // evaluate all expressions and join them with spaces
@@ -777,104 +818,168 @@ impl Executor {
                     
                     env.insert(var.clone(), value);
                 }
-                Operation::Pause { prompt, timeout_ms, key } => {
-                    use std::io::{self, Write, Read};
+                Operation::Pause { prompt, timeout_ms, until, assign_to, on_mismatch, on_timeout, is_async } => {
+                    // Pause invocation
+                    use std::io::{self, Write};
                     use std::sync::mpsc;
                     use std::thread;
-                    use std::time::Duration;
+                    use std::time::{Duration, Instant};
 
-                    // Display prompt if provided
-                    if let Some(prompt_expr) = prompt {
-                        let prompt_val = eval_expr(prompt_expr, env, &self.procedures)?;
-                        print!("{} ", value_to_string(&prompt_val));
-                        io::stdout().flush().unwrap();
-                    } else {
-                        // default prompt
-                        print!("(paused) Press Enter to continue...");
-                        io::stdout().flush().unwrap();
-                    }
-
-                    // Determine if we wait for a specific key or Enter
-                    let wait_for_key = if let Some(key_expr) = key {
-                        let key_val = eval_expr(key_expr, env, &self.procedures)?;
-                        match key_val {
-                            Value::Str(s) => Some(s),
-                            _ => return Err(LppoError::type_error("pause key must be a string".into())),
+                    // Evaluate timeout if provided, else default to 1 second
+                    let timeout_dur_opt: Option<Duration> = if let Some(t) = &timeout_ms {
+                        match eval_expr(t, env, &self.procedures)? {
+                            Value::Int(ms) if ms > 0 => Some(Duration::from_millis(ms as u64)),
+                            _ => None,
                         }
                     } else {
                         None
                     };
 
-                    // If no timeout, block until key is pressed
-                    if timeout_ms.is_none() {
-                        if let Some(expected_key) = wait_for_key {
-                            if expected_key == "*" {
-                                // Wait for any key
-                                let mut buf = [0u8; 1];
-                                io::stdin()
-                                    .read_exact(&mut buf)
-                                    .map_err(|e| LppoError::type_error(format!("Failed to read input: {}", e)))?;
-                            } else if expected_key.len() == 1 {
-                                // Wait for specific key
-                                loop {
-                                    let mut buf = [0u8; 1];
-                                    io::stdin()
-                                        .read_exact(&mut buf)
-                                        .map_err(|e| LppoError::type_error(format!("Failed to read input: {}", e)))?;
-                                    if buf[0] as char == expected_key.chars().next().unwrap() {
-                                        break;
-                                    }
-                                }
-                            } else {
-                                return Err(LppoError::type_error("pause key must be a single character or '*'".into()));
-                            }
-                        } else {
-                            // Default: wait for Enter
-                            let mut buf = String::new();
-                            io::stdin()
-                                .read_line(&mut buf)
-                                .map_err(|e| LppoError::type_error(format!("Failed to read input: {}", e)))?;
+                    // Prepare until target if provided
+                    let until_target_opt: Option<String> = if let Some(u) = &until {
+                        match eval_expr(u, env, &self.procedures)? {
+                            Value::Str(s) => Some(s),
+                            Value::Int(i) => Some(i.to_string()),
+                            Value::Bool(b) => Some(b.to_string()),
+                            other => Some(value_to_string(&other)),
                         }
                     } else {
-                        // timeout provided: evaluate to milliseconds
-                        let t_expr = timeout_ms.as_ref().unwrap();
-                        let t_val = eval_expr(t_expr, env, &self.procedures)?;
-                        let millis = match t_val {
-                            Value::Int(i) if i >= 0 => i as u64,
-                            _ => return Err(LppoError::type_error("pause timeout must be a non-negative integer".into())),
+                        None
+                    };
+
+                    // If no arguments at all, just sleep for 1 second
+                    if prompt.is_none() && timeout_ms.is_none() && until.is_none() && assign_to.is_none() && on_mismatch.is_none() && on_timeout.is_none() {
+                        std::thread::sleep(Duration::from_secs(1));
+                        
+                        continue;
+                    }
+
+                    // If only timeout is set and no until, handle either synchronously or asynchronously
+                    if until_target_opt.is_none() && timeout_dur_opt.is_some() && assign_to.is_none() && on_mismatch.is_none() && on_timeout.is_none() {
+                        // Async scheduling: spawn a background thread to continue remaining ops after timeout
+                        if *is_async {
+                            // Capture remaining operations and environment, clone procedures
+                            let remaining: Vec<Operation> = if i + 1 < len { ops[i+1..].to_vec() } else { vec![] };
+                            let procs_clone = self.procedures.clone();
+                            let mut env_clone = env.clone();
+                            let sleep_dur = timeout_dur_opt.unwrap();
+                            let handle = thread::spawn(move || {
+                                std::thread::sleep(sleep_dur);
+                                let exec = Executor::new(procs_clone);
+                                let _ = exec.execute_ops(&remaining, &mut env_clone);
+                            });
+                            // Store handle so run() can join before exiting
+                            BACKGROUND_HANDLES.lock().unwrap().push(handle);
+                            // Stop executing this procedure now; remaining ops will run in background
+                            return Ok(ControlFlow::None);
+                        } else {
+                            std::thread::sleep(timeout_dur_opt.unwrap());
+                            continue;
+                        }
+                    }
+
+                    // Otherwise, proceed with input-waiting logic
+                    // Evaluate prompt if present
+                    if let Some(p) = &prompt {
+                        let pv = eval_expr(p, env, &self.procedures)?;
+                        print!("{} ", value_to_string(&pv));
+                        io::stdout().flush().unwrap();
+                    }
+
+                    // Channel reader thread: sends each read line to channel
+                    let (tx, rx) = mpsc::channel::<String>();
+                    thread::spawn(move || {
+                        let stdin = io::stdin();
+                        loop {
+                            let mut line = String::new();
+                            if stdin.read_line(&mut line).is_err() { break; }
+                            // send trimmed line
+                            let _ = tx.send(line);
+                        }
+                    });
+
+                    let start = Instant::now();
+                    let mut handled = false;
+
+                    // Loop until conditions satisfied or timeout
+                    loop {
+                        // compute remaining timeout
+                        let recv_res = if let Some(timeout_total) = timeout_dur_opt {
+                            let elapsed = start.elapsed();
+                            if elapsed >= timeout_total {
+                                Err(mpsc::RecvTimeoutError::Timeout)
+                            } else {
+                                let remaining = timeout_total - elapsed;
+                                rx.recv_timeout(remaining)
+                            }
+                        } else {
+                            // wait indefinitely
+                            match rx.recv() {
+                                Ok(s) => Ok(s),
+                                Err(_) => Err(mpsc::RecvTimeoutError::Disconnected),
+                            }
                         };
 
-                        // Spawn a thread to read input and use recv_timeout
-                        let (tx, rx) = mpsc::sync_channel(0);
-                        let expected_key = wait_for_key.clone();
-                        let handle = thread::spawn(move || {
-                            if let Some(expected) = expected_key {
-                                if expected == "*" {
-                                    let mut buf = [0u8; 1];
-                                    let _ = io::stdin().read_exact(&mut buf);
-                                    let _ = tx.send(());
-                                } else if expected.len() == 1 {
-                                    loop {
-                                        let mut buf = [0u8; 1];
-                                        let _ = io::stdin().read_exact(&mut buf);
-                                        if buf[0] as char == expected.chars().next().unwrap() {
-                                            let _ = tx.send(());
-                                            break;
+                        match recv_res {
+                            Ok(line) => {
+                                let input = line.trim().to_string();
+
+                                // assign input to variable if requested
+                                if let Some(var) = &assign_to {
+                                    env.insert(var.clone(), Value::Str(input.clone()));
+                                }
+
+                                // check until condition
+                                if let Some(ref target) = until_target_opt {
+                                    if &input == target {
+                                        // matched, we're done
+                                        handled = true;
+                                        break;
+                                    } else {
+                                        // mismatch
+                                        if let Some(expr) = &on_mismatch {
+                                            // evaluate handler
+                                            let _ = eval_expr(expr, env, &self.procedures)?;
+                                        } else {
+                                            return Err(LppoError::type_error("pause: input did not match 'until' condition".into()));
+                                        }
+                                        // if no timeout, continue waiting; if timeout is set, keep looping until timeout
+                                        if timeout_dur_opt.is_none() {
+                                            continue;
+                                        } else {
+                                            // continue looping; remaining timeout governs
+                                            continue;
                                         }
                                     }
+                                } else {
+                                    // no until specified: we're done after first input
+                                    handled = true;
+                                    break;
                                 }
-                            } else {
-                                let mut s = String::new();
-                                let _ = io::stdin().read_line(&mut s);
-                                let _ = tx.send(());
                             }
-                        });
-
-                        if rx.recv_timeout(Duration::from_millis(millis)).is_err() {
-                            // timeout reached; simply continue
+                            Err(mpsc::RecvTimeoutError::Timeout) => {
+                                // timeout occurred
+                                if let Some(expr) = &on_timeout {
+                                    let _ = eval_expr(expr, env, &self.procedures)?;
+                                } else {
+                                    // default: just continue (no-op)
+                                }
+                                break;
+                            }
+                            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                                // stdin closed; break
+                                break;
+                            }
                         }
-                        // Don't join the handle here because read may still block; detach
-                        let _ = handle.thread().unpark();
+                    }
+
+                    // If there was no input and no until, just return (user pressed Enter without typing)
+                    if !handled {
+                        // If we didn't handle but assign requested, ensure variable exists (assign empty)
+                        if let Some(var_ref) = &assign_to {
+                            env.insert(var_ref.clone(), Value::Str(String::new()));
+                        }
+                        
                     }
                 }
                 Operation::Call(name, args) => {

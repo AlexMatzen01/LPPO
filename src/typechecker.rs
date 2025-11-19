@@ -544,51 +544,12 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
             Ok(None)
         }
 
-        // For now, treat these as no-ops in type checking, but validate pause operands
+        // For now, treat these as no-ops in type checking
         Statement::Alloc { .. }
         | Statement::Dealloc(_)
         | Statement::Match { .. }
-        | Statement::StructInit { .. } => Ok(None),
-
-        Statement::Pause { prompt, timeout, key } => {
-            if let Some(p) = prompt {
-                let p_type = typecheck_expr(p, ctx)?;
-                if !types_compatible(&TypeAnnotation::Str, &p_type) {
-                    return Err(LppoError::TypeError {
-                        message: "pause prompt must be a string".to_string(),
-                        expected: Some("Str".to_string()),
-                        found: Some(format!("{:?}", p_type)),
-                        location: None,
-                        suggestion: None,
-                    });
-                }
-            }
-            if let Some(t) = timeout {
-                let t_type = typecheck_expr(t, ctx)?;
-                if !types_compatible(&TypeAnnotation::Int64, &t_type) {
-                    return Err(LppoError::TypeError {
-                        message: "pause timeout must be an Int64 (milliseconds)".to_string(),
-                        expected: Some("Int64".to_string()),
-                        found: Some(format!("{:?}", t_type)),
-                        location: None,
-                        suggestion: None,
-                    });
-                }
-            }
-            if let Some(k) = key {
-                let k_type = typecheck_expr(k, ctx)?;
-                if !types_compatible(&TypeAnnotation::Str, &k_type) {
-                    return Err(LppoError::TypeError {
-                        message: "pause key must be a string".to_string(),
-                        expected: Some("Str".to_string()),
-                        found: Some(format!("{:?}", k_type)),
-                        location: None,
-                        suggestion: None,
-                    });
-                }
-            }
-            Ok(None)
-        }
+        | Statement::StructInit { .. }
+        | Statement::Pause { .. } => Ok(None),
     }
 }
 

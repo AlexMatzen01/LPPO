@@ -49,6 +49,28 @@ LPPO is a **small, educational language** that demonstrates:
 - Logical: `and`, `or`, `not`
 - Output: `out` statement
 
+### Pause / Timers
+
+LPPO includes a `pause` statement useful for simple timers and input-with-timeout patterns.
+
+- Synchronous pause (blocks the current procedure until the timeout expires):
+
+```lppo
+// sleep for 1000 ms
+pause { timeout 1000; }
+```
+
+- Asynchronous pause (schedules the remaining operations to run after timeout, returns immediately):
+
+```lppo
+// schedule remaining operations after 1s, return immediately
+pause { async; timeout 1000; }
+```
+
+Notes:
+- The `async` form runs the remaining operations in a background worker using a snapshot of the current environment (cloned variables and procedures).
+- By default the interpreter waits for background continuations to finish before exiting so outputs from async continuations are not lost. To change to fire-and-forget behavior you can modify the runtime to not join background handles.
+
 ### Partially Implemented
 
 ⚠️ **Advanced Features** (syntax exists but may be incomplete)

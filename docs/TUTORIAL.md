@@ -265,6 +265,46 @@ pub proc main() -> Void {
 }
 ```
 
+## Pause / Timers
+
+LPPO provides a small `pause` statement for simple timing and wait-for-input use cases. It can be used as a one-off sleep, an input-with-timeout, or (with `async`) to schedule remaining work later.
+
+Synchronous sleep:
+
+```lppo
+pub proc main() -> Void {
+    out "Sleeping...";
+    // block current procedure for 500 ms
+    pause { timeout 500; }
+    out "Woke up";
+}
+```
+
+Input with timeout (assign result to variable):
+
+```lppo
+pub proc main() -> Void {
+    out "Type 'go' within 3s:";
+    pause { assign_to answer: Str; timeout 3000; }
+    out "You answered:", answer;
+}
+```
+
+Asynchronous pause (schedule remaining operations):
+
+```lppo
+pub proc main() -> Void {
+    out "Timer test";
+    // Remaining operations will run after 1000ms in background
+    pause { async; timeout 1000; }
+    out "Main returns immediately (remaining ops scheduled)";
+}
+```
+
+Notes:
+- The `async` form schedules the *remaining operations* of the current procedure to run in a background worker after the timeout. The background worker receives a cloned (snapshot) environment and a cloned procedure map.
+- By default the interpreter waits for background continuations to finish before exiting, so output from scheduled work is preserved. If you want true fire-and-forget semantics you can change the runtime to not join background handles or add an explicit API to wait for them.
+
 ### Error Handling
 
 Input validation is automatic:

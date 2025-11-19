@@ -14,7 +14,6 @@ pub enum Token {
         Else,
         While,
         For,
-        Key,
         In,
         Loop,
         Break,
@@ -1095,7 +1094,6 @@ impl<'a> Lexer<'a> {
                         "JMPDEF" | "else" => Token::Else,
                         "WHLLP" | "while" => Token::While,
                         "ITRLP" | "for" => Token::For,  // Iterator loop
-                        "key" => Token::Key,
                         "INSET" | "in" => Token::In,
                         "INFLP" | "loop" => Token::Loop,  // Infinite loop
                         "LPEXIT" | "break" => Token::Break,

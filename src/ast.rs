@@ -248,14 +248,22 @@ pub enum Statement {
         index: Box<Expr>,
         value: Expr,
     },
-    /// Pause execution until the user presses Enter (customizable)
-    /// - `prompt`: optional expression (typically a string) displayed to the user
-    /// - `timeout`: optional expression (typically an integer in milliseconds) to wait before resuming
-    /// - `key`: optional expression (typically a string) for the key to wait for; "*" for any key
+    /// Pause execution until the user presses Enter or other condition
     Pause {
+        /// Optional prompt expression displayed before waiting
         prompt: Option<Expr>,
-        timeout: Option<Expr>,
-        key: Option<Expr>,
+        /// Optional timeout in milliseconds (Int expression)
+        timeout_ms: Option<Expr>,
+        /// Optional until-expression: wait until input equals this expression's string
+        until: Option<Expr>,
+        /// Optional variable name to assign the received input to
+        assign_to: Option<String>,
+        /// Optional expression to evaluate on mismatch (when input != until)
+        on_mismatch: Option<Expr>,
+        /// Optional expression to evaluate on timeout
+        on_timeout: Option<Expr>,
+        /// Async flag: if true, schedule remaining ops in background and return immediately
+        is_async: bool,
     },
 }
 
