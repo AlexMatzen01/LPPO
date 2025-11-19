@@ -819,6 +819,7 @@ pub enum Token {
 }
 
 /// Transforms raw LPPO source code into a stream of tokens.
+#[derive(Clone)]
 pub struct Lexer<'a> {
     input: &'a [u8],
     position: usize,

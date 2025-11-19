@@ -1715,42 +1715,49 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Token::Less => {
-                    // Could be either:
-                    // 1. Generic function call: func<T>(args)
-                    // 2. CUDA kernel launch: func<<<grid, block>>>(args)
-                    // 3. Comparison operator (should not be in postfix context)
-                    //
-                    // Heuristic: Only treat as generic/CUDA if:
-                    // - node is a simple identifier/qualified name
-                    // - followed by << or by type-like token
-                    
-                    // Check if node could be a function name
+                    // Could be CUDA kernel launch (<<<), generic function call (func<T>(...)),
+                    // or a comparison operator. We'll conservatively detect CUDA or generic
+                    // only when a lookahead scan confirms the pattern; otherwise treat as
+                    // a binary comparison and let higher-level parser handle it.
+
+                    // Only identifiers or qualified names can be function names
                     let is_function_name = matches!(node, Expr::Var(_) | Expr::QualifiedVar(_));
                     if !is_function_name {
-                        // Not a function name, so < is probably comparison
-                        // Don't consume it, let comparison parser handle it
                         break;
                     }
-                    
-                    self.advance()?; // consume first <
-                    
-                    if self.lookahead == Token::Less {
-                        // Might be <<<, check for third <
-                        self.advance()?; // consume second <
-                        if self.lookahead == Token::Less {
-                            // It's CUDA kernel launch: <<<grid, block>>>
-                            self.advance()?; // consume third <
-                            
+
+                    // Use a cloned lexer to scan ahead without consuming parser state.
+                    let mut cloned = self.lexer.clone();
+
+                    // First token from cloned should be the '<' we currently see
+                    let first = cloned.next_token()?;
+                    if first != Token::Less {
+                        // Unexpected -- don't treat as generic
+                        break;
+                    }
+
+                    // Peek second token
+                    let second = cloned.next_token()?;
+                    if second == Token::Less {
+                        // Potential CUDA. Check third token
+                        let third = cloned.next_token()?;
+                        if third == Token::Less {
+                            // Confirmed CUDA '<<<' pattern: consume from real lexer and handle
+                            // by advancing parser normally and parsing the CUDA args.
+                            self.advance()?; // consume '<'
+                            self.advance()?; // consume second '<'
+                            self.advance()?; // consume third '<'
+
                             // Parse grid and block parameters
                             let _grid = self.parse_expression()?;
                             self.expect(Token::Comma)?;
                             let _block = self.parse_expression()?;
-                            
+
                             // Expect three > tokens
                             self.expect(Token::Greater)?;
                             self.expect(Token::Greater)?;
                             self.expect(Token::Greater)?;
-                            
+
                             // Now parse the regular function call
                             self.expect(Token::LParen)?;
                             let mut args = Vec::new();
@@ -1765,60 +1772,69 @@ impl<'a> Parser<'a> {
                                 }
                             }
                             self.expect(Token::RParen)?;
-                            
-                            // For now, treat CUDA kernel launch as regular function call
-                            node = Expr::Call {
-                                func: Box::new(node),
-                                args,
-                            };
+
+                            node = Expr::Call { func: Box::new(node), args };
+                            continue;
                         } else {
-                            // << but not <<<, error
-                            return Err(LppoError::unexpected_token_at("<<< or generic type", &format!("{:?}", self.lookahead), self.position.clone()));
+                            // << but not <<< -> treat as not generic; fall through to binary handling
+                            break;
                         }
-                    } else {
-                        // Single <, this is a generic function call: func<T>(args)
-                        // Skip generic parameters for now - just consume until >
-                        let mut depth = 1;
-                        while depth > 0 {
-                            match self.lookahead {
-                                Token::Less => {
-                                    depth += 1;
-                                    self.advance()?;
-                                }
-                                Token::Greater => {
-                                    depth -= 1;
-                                    self.advance()?;
-                                }
-                                Token::Eof => {
-                                    return Err(LppoError::unexpected_eof("matching >"));
-                                }
-                                _ => {
-                                    self.advance()?;
-                                }
-                            }
-                        }
-                        
-                        // Now should have (args)
-                        self.expect(Token::LParen)?;
-                        let mut args = Vec::new();
-                        if self.lookahead != Token::RParen {
-                            loop {
-                                args.push(self.parse_expression()?);
-                                if self.lookahead == Token::Comma {
-                                    self.advance()?;
-                                    continue;
-                                }
-                                break;
-                            }
-                        }
-                        self.expect(Token::RParen)?;
-                        
-                        // Treat as regular function call (ignoring generic params)
-                        node = Expr::Call {
-                            func: Box::new(node),
-                            args,
-                        };
                     }
+
+                    // For single '<', scan until a matching '>' and then see if a '(' follows;
+                    // if so, treat as generic func call, otherwise treat as comparison.
+                    let mut depth = 1usize;
+                    loop {
+                        let t = cloned.next_token()?;
+                        match t {
+                            Token::Less => depth += 1,
+                            Token::Greater => {
+                                depth = depth.saturating_sub(1);
+                                if depth == 0 {
+                                    // peek next token after '>'
+                                    let after = cloned.next_token()?;
+                                    if after == Token::LParen {
+                                        // confirmed generic pattern: consume real tokens and parse normally
+                                        // consume the initial '<' in real lexer
+                                        self.advance()?; // consume '<'
+                                        // now consume until and including matching '>' using real lexer
+                                        let mut real_depth = 1usize;
+                                        while real_depth > 0 {
+                                            self.advance()?;
+                                            match self.lookahead {
+                                                Token::Less => real_depth += 1,
+                                                Token::Greater => real_depth -= 1,
+                                                Token::Eof => return Err(LppoError::unexpected_eof("matching >")),
+                                                _ => {}
+                                            }
+                                        }
+                                        // Now expect '(' and parse call args
+                                        self.expect(Token::LParen)?;
+                                        let mut args = Vec::new();
+                                        if self.lookahead != Token::RParen {
+                                            loop {
+                                                args.push(self.parse_expression()?);
+                                                if self.lookahead == Token::Comma {
+                                                    self.advance()?;
+                                                    continue;
+                                                }
+                                                break;
+                                            }
+                                        }
+                                        self.expect(Token::RParen)?;
+                                        node = Expr::Call { func: Box::new(node), args };
+                                    }
+                                    // whether generic or not, we're done scanning
+                                    break;
+                                }
+                            }
+                            Token::Eof => break,
+                            _ => {}
+                        }
+                    }
+                    // If we didn't detect a generic or CUDA pattern, fallthrough so that
+                    // the comparison '<' will be handled by higher-precedence parser.
+                    break;
                 }
                 Token::LParen => {
                     // Function call: func(args) or Type::new()
