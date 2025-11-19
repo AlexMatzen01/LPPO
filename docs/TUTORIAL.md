@@ -269,6 +269,8 @@ pub proc main() -> Void {
 
 LPPO provides a small `pause` statement for simple timing and wait-for-input use cases. It can be used as a one-off sleep, an input-with-timeout, or (with `async`) to schedule remaining work later.
 
+Note: the default behavior of `pause` was simplified — a bare `pause;` now acts as a 1-second sleep with no prompt or stdin interaction. Use the `timeout` clause to set a custom delay (milliseconds).
+
 Synchronous sleep:
 
 ```lppo
@@ -285,6 +287,8 @@ Input with timeout (assign result to variable):
 ```lppo
 pub proc main() -> Void {
     out "Type 'go' within 3s:";
+    // You can use either `assign` or `assign_to` as the clause name.
+    // An optional type annotation may follow the variable (e.g. `answer: Str`).
     pause { assign_to answer: Str; timeout 3000; }
     out "You answered:", answer;
 }
@@ -304,6 +308,12 @@ pub proc main() -> Void {
 Notes:
 - The `async` form schedules the *remaining operations* of the current procedure to run in a background worker after the timeout. The background worker receives a cloned (snapshot) environment and a cloned procedure map.
 - By default the interpreter waits for background continuations to finish before exiting, so output from scheduled work is preserved. If you want true fire-and-forget semantics you can change the runtime to not join background handles or add an explicit API to wait for them.
+
+Additional `pause` forms
+- `pause;` — Sleep for 1 second (no prompt, no stdin read).
+- `pause { timeout 1000; }` — Sleep for `1000` ms.
+- `pause { assign name: Str; timeout 3000; }` — Wait for input up to timeout and assign input to `name` (optional `: Type`).
+- `pause { until "yes"; on_mismatch println("try again"); }` — Wait until user input matches the `until` value and run `on_mismatch` handler on mismatch.
 
 ### Error Handling
 

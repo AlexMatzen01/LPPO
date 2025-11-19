@@ -100,6 +100,7 @@ pub enum Operation {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
+    Float(f64),
     Bool(bool),
     Str(String),
     Array(Vec<Value>),
@@ -212,6 +213,7 @@ fn pattern_matches(pattern: &crate::ast::Pattern, value: &Value, env: &mut HashM
 fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Int(a), Value::Int(b)) => a == b,
+        (Value::Float(a), Value::Float(b)) => a == b,
         (Value::Bool(a), Value::Bool(b)) => a == b,
         (Value::Str(a), Value::Str(b)) => a == b,
         (Value::Array(a), Value::Array(b)) => a == b,
@@ -223,9 +225,8 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
     match expr {
         Expr::Int(i) => Ok(Value::Int(*i)),
         Expr::Float(f) => {
-            // Parse float string to f64 and store as string for display
-            // For now, treat floats as strings in output
-            Ok(Value::Str(f.clone()))
+            let parsed = f.parse::<f64>().map_err(|_| LppoError::type_error("invalid float literal".into()))?;
+            Ok(Value::Float(parsed))
         }
         Expr::Str(s) => Ok(Value::Str(s.clone())),
         Expr::Bool(b) => Ok(Value::Bool(*b)),
@@ -272,6 +273,23 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
                     (Value::Int(a), Value::Int(b), BinaryOp::Le) => Ok(Value::Bool(a <= b)),
                     (Value::Int(a), Value::Int(b), BinaryOp::Gt) => Ok(Value::Bool(a > b)),
                     (Value::Int(a), Value::Int(b), BinaryOp::Ge) => Ok(Value::Bool(a >= b)),
+                    // float arithmetic
+                    (Value::Float(a), Value::Float(b), BinaryOp::Add) => Ok(Value::Float(a + b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Sub) => Ok(Value::Float(a - b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Mul) => Ok(Value::Float(a * b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Div) => {
+                        if b == 0.0 {
+                            Err(LppoError::type_error("division by zero".into()))
+                        } else {
+                            Ok(Value::Float(a / b))
+                        }
+                    }
+                    (Value::Float(a), Value::Float(b), BinaryOp::Eq) => Ok(Value::Bool(a == b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Ne) => Ok(Value::Bool(a != b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Lt) => Ok(Value::Bool(a < b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Le) => Ok(Value::Bool(a <= b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Gt) => Ok(Value::Bool(a > b)),
+                    (Value::Float(a), Value::Float(b), BinaryOp::Ge) => Ok(Value::Bool(a >= b)),
                     // string concat with +
                     (Value::Str(a), Value::Str(b), BinaryOp::Add) => Ok(Value::Str(format!("{}{}", a, b))),
                     // string comparisons
@@ -292,6 +310,7 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
             let val = eval_expr(operand, env, procedures)?;
             match (op, val) {
                 (UnaryOp::Neg, Value::Int(i)) => Ok(Value::Int(-i)),
+                (UnaryOp::Neg, Value::Float(f)) => Ok(Value::Float(-f)),
                 (UnaryOp::Not, Value::Bool(b)) => Ok(Value::Bool(!b)),
                 (UnaryOp::BitNot, Value::Int(i)) => Ok(Value::Int(!i)),
                 _ => Err(LppoError::type_error("type mismatch in unary operation".into())),
@@ -1135,6 +1154,7 @@ impl Executor {
 fn value_to_string(v: &Value) -> String {
     match v {
         Value::Int(i) => i.to_string(),
+        Value::Float(f) => f.to_string(),
         Value::Str(s) => s.clone(),
         Value::Bool(b) => b.to_string(),
         Value::Array(arr) => {
@@ -1152,6 +1172,7 @@ fn is_truthy(v: &Value) -> bool {
     match v {
         Value::Bool(b) => *b,
         Value::Int(i) => *i != 0,
+        Value::Float(f) => *f != 0.0,
         Value::Str(s) => !s.is_empty(),
         Value::Array(arr) => !arr.is_empty(),
         Value::Closure { .. } => true, // Closures are always truthy

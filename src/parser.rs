@@ -842,9 +842,14 @@ impl<'a> Parser<'a> {
                                     self.expect(Token::Semicolon)?;
                                     continue;
                                 }
-                                "assign" => {
-                                    self.advance()?; // consume 'assign'
+                                "assign" | "assign_to" => {
+                                    self.advance()?; // consume 'assign' or 'assign_to'
                                     let ident = self.parse_name("variable name for assign")?;
+                                    // allow optional type annotation after the variable name: ': Type'
+                                    if self.lookahead == Token::Colon {
+                                        self.advance()?;
+                                        let _typ = self.parse_type()?; // ignore the type here
+                                    }
                                     assign_to = Some(ident);
                                     self.expect(Token::Semicolon)?;
                                     continue;
@@ -898,9 +903,14 @@ impl<'a> Parser<'a> {
                                 self.advance()?;
                                 is_async = true;
                             }
-                            tok if self.token_as_identifier(tok).as_deref() == Some("assign") => {
+                            tok if matches!(self.token_as_identifier(tok).as_deref(), Some("assign") | Some("assign_to")) => {
                                 self.advance()?;
-                                assign_to = Some(self.parse_name("variable name for assign")?);
+                                let ident = self.parse_name("variable name for assign")?;
+                                if self.lookahead == Token::Colon {
+                                    self.advance()?;
+                                    let _typ = self.parse_type()?;
+                                }
+                                assign_to = Some(ident);
                             }
                             tok if self.token_as_identifier(tok).as_deref() == Some("on_mismatch") => {
                                 self.advance()?;

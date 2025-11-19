@@ -559,6 +559,7 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
         Expr::Int(_) => Ok(TypeAnnotation::Int64),
         Expr::Bool(_) => Ok(TypeAnnotation::Bool),
         Expr::Str(_) => Ok(TypeAnnotation::Str),
+        Expr::Float(_) => Ok(TypeAnnotation::Custom("F64".to_string())),
 
         Expr::Var(name) => {
             // Check ownership state before access
@@ -629,25 +630,26 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
 
             match op {
                 BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod | BinaryOp::Pow => {
-                    if !types_compatible(&TypeAnnotation::Int64, &left_type) {
-                        return Err(LppoError::TypeError {
-                            message: format!("arithmetic operator {:?} requires Int64 operands", op),
-                            expected: Some("Int64".to_string()),
-                            found: Some(format!("{:?}", left_type)),
-                            location: None,
-                            suggestion: None,
-                        });
+                    // Support integer or float arithmetic. Both operands must have the same numeric type.
+                    let left_is_int = types_compatible(&TypeAnnotation::Int64, &left_type);
+                    let right_is_int = types_compatible(&TypeAnnotation::Int64, &right_type);
+                    let left_is_f64 = matches!(left_type, TypeAnnotation::Custom(ref n) if n == "F64");
+                    let right_is_f64 = matches!(right_type, TypeAnnotation::Custom(ref n) if n == "F64");
+
+                    if left_is_int && right_is_int {
+                        return Ok(TypeAnnotation::Int64);
                     }
-                    if !types_compatible(&TypeAnnotation::Int64, &right_type) {
-                        return Err(LppoError::TypeError {
-                            message: format!("arithmetic operator {:?} requires Int64 operands", op),
-                            expected: Some("Int64".to_string()),
-                            found: Some(format!("{:?}", right_type)),
-                            location: None,
-                            suggestion: None,
-                        });
+                    if left_is_f64 && right_is_f64 {
+                        return Ok(TypeAnnotation::Custom("F64".to_string()));
                     }
-                    Ok(TypeAnnotation::Int64)
+
+                    return Err(LppoError::TypeError {
+                        message: format!("arithmetic operator {:?} requires numeric operands of the same type", op),
+                        expected: None,
+                        found: Some(format!("{:?} and {:?}", left_type, right_type)),
+                        location: None,
+                        suggestion: Some("use matching numeric types (Int64 or F64)".to_string()),
+                    });
                 }
 
                 BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
@@ -714,16 +716,19 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
 
             match op {
                 UnaryOp::Neg => {
-                    if !types_compatible(&TypeAnnotation::Int64, &operand_type) {
+                    if types_compatible(&TypeAnnotation::Int64, &operand_type) {
+                        Ok(TypeAnnotation::Int64)
+                    } else if matches!(operand_type, TypeAnnotation::Custom(ref n) if n == "F64") {
+                        Ok(TypeAnnotation::Custom("F64".to_string()))
+                    } else {
                         return Err(LppoError::TypeError {
-                            message: "negation requires Int64 operand".to_string(),
-                            expected: Some("Int64".to_string()),
+                            message: "negation requires numeric operand (Int64 or F64)".to_string(),
+                            expected: Some("Int64 or F64".to_string()),
                             found: Some(format!("{:?}", operand_type)),
                             location: None,
                             suggestion: None,
                         });
                     }
-                    Ok(TypeAnnotation::Int64)
                 }
                 UnaryOp::Not => {
                     if !types_compatible(&TypeAnnotation::Bool, &operand_type) {

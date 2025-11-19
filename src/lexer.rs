@@ -1263,8 +1263,9 @@ impl<'a> Lexer<'a> {
                     "I128" | "Int128" => Token::TypeI128,
                     "Char" => Token::TypeChar,
                     "Byte" => Token::TypeByte,
-                    "Float" => Token::TypeFloat,
-                    "Double" => Token::TypeDouble,
+                    // Treat generic keyword `Float` and `Double` as 64-bit floats
+                    "Float" => Token::TypeF64,
+                    "Double" => Token::TypeF64,
                     "Usize" => Token::TypeUsize,
                     "Isize" => Token::TypeIsize,
                     "Tuple" => Token::TypeTuple,
