@@ -1,0 +1,25 @@
+pub proc main() -> Void {
+    let mut own counter: Int64 = 0;
+    input threshhold: Int64 with "How many seconds would you like to wait for?";
+    out "--------------";
+    
+    loop {
+        pause { timeout 1000; }
+
+        let own next: Int64 = counter + 1;
+        move next -> counter;
+
+        let own is_limit: Bool = threshhold < counter;
+        let own is_plural: Bool = counter > 1;
+
+        if is_limit {
+            break;
+        }
+
+        if is_plural {
+            out counter, "seconds";
+        } else {
+            out counter, "second";  
+        }
+    }
+}
