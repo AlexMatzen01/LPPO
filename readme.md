@@ -49,6 +49,31 @@ LPPO is a **small, educational language** that demonstrates:
 - Logical: `and`, `or`, `not`
 - Output: `out` statement
 
+✅ **File I/O** (New in v5.3)
+- `read_file(path)` - Read file contents as string
+- `write_file(path, content)` - Write content to file
+- `append_file(path, content)` - Append content to file
+- `file_exists(path)` - Check if file exists (returns Bool)
+- `delete_file(path)` - Delete a file
+
+### File I/O Example
+
+```lppo
+pub proc main() -> Void {
+    let own path: Str = "example.txt";
+    let own content: Str = "Hello, World!";
+    
+    let own write_result: Bool = write_file(path, content);
+    let own file_content: Str = read_file(path);
+    out "File contents:", file_content;
+    
+    let own exists: Bool = file_exists(path);
+    if exists {
+        let own delete_result: Bool = delete_file(path);
+    }
+}
+```
+
 ### Pause / Timers
 
 LPPO includes a `pause` statement useful for simple timers and input-with-timeout patterns.
@@ -83,13 +108,14 @@ Notes:
 ### Not Implemented
 
 ❌ **Features in Documentation But Not in Code**
-- Async/await
+- Async/await (separate from pause)
 - SIMD operations
-- Standard library collections
+- Standard library collections (HashMap, Vec, etc.)
 - Effect system
 - JIT compilation
 - GPU computing
 - Memory pools
+- Networking (TCP/UDP)
 - And many others claimed in older docs
 
 ## Quick Start
@@ -191,8 +217,8 @@ LPPO emphasizes:
 
 ## Development Status
 
-**Current Version**: 5.2 (documentation cleaned up)
-**Status**: Educational prototype
+**Current Version**: 5.3 (file I/O system added)
+**Status**: Educational prototype with growing practical features
 **Stability**: Experimental - APIs may change
 
 ## Documentation
