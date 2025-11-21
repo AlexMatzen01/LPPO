@@ -49,6 +49,71 @@ LPPO is a **small, educational language** that demonstrates:
 - Logical: `and`, `or`, `not`
 - Output: `out` statement
 
+✅ **File I/O** (New in v5.3)
+- `read_file(path)` - Read file contents as string
+- `write_file(path, content)` - Write content to file
+- `append_file(path, content)` - Append content to file
+- `file_exists(path)` - Check if file exists (returns Bool)
+- `delete_file(path)` - Delete a file
+
+✅ **String Utilities** (New in v5.3)
+- `str_concat(s1, s2)` - Concatenate two strings
+- `int_to_str(num)` - Convert integer to string
+- `str_to_int(str)` - Convert string to integer
+- `str_len(str)` - Get string length
+- `str_upper(str)` - Convert to uppercase
+- `str_lower(str)` - Convert to lowercase
+- `str_trim(str)` - Trim whitespace
+- `str_split(str, delim)` - Split string into array
+
+✅ **Math Utilities** (New in v5.3)
+- `abs(num)` - Absolute value
+- `min(a, b)` - Minimum of two numbers
+- `max(a, b)` - Maximum of two numbers
+- `pow(base, exp)` - Exponentiation
+
+### File I/O Example
+
+```lppo
+pub proc main() -> Void {
+    let own path: Str = "example.txt";
+    let own content: Str = "Hello, World!";
+    
+    let own write_result: Bool = write_file(path, content);
+    let own file_content: Str = read_file(path);
+    out "File contents:", file_content;
+    
+    let own exists: Bool = file_exists(path);
+    if exists {
+        let own delete_result: Bool = delete_file(path);
+    }
+}
+```
+
+### String Utilities Example
+
+```lppo
+pub proc main() -> Void {
+    let own name: Str = "Alice";
+    let own age: Int64 = 30;
+    
+    // Concatenate strings
+    let own greeting: Str = str_concat("Hello, ", name);
+    
+    // Convert and build message
+    let own age_str: Str = int_to_str(age);
+    let own message: Str = str_concat(name, str_concat(" is ", str_concat(age_str, " years old")));
+    out message;
+    
+    // Split string
+    let own csv: Str = "apple,banana,orange";
+    let own fruits: Arr<Str> = str_split(csv, ",");
+    for fruit: Str in fruits {
+        out fruit;
+    }
+}
+```
+
 ### Pause / Timers
 
 LPPO includes a `pause` statement useful for simple timers and input-with-timeout patterns.
@@ -83,13 +148,14 @@ Notes:
 ### Not Implemented
 
 ❌ **Features in Documentation But Not in Code**
-- Async/await
+- Async/await (separate from pause)
 - SIMD operations
-- Standard library collections
+- Standard library collections (HashMap, Vec, etc.)
 - Effect system
 - JIT compilation
 - GPU computing
 - Memory pools
+- Networking (TCP/UDP)
 - And many others claimed in older docs
 
 ## Quick Start
@@ -191,8 +257,8 @@ LPPO emphasizes:
 
 ## Development Status
 
-**Current Version**: 5.2 (documentation cleaned up)
-**Status**: Educational prototype
+**Current Version**: 5.3 (file I/O system added)
+**Status**: Educational prototype with growing practical features
 **Stability**: Experimental - APIs may change
 
 ## Documentation

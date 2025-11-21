@@ -50,6 +50,24 @@ This document honestly describes what LPPO actually implements.
 - Conditionals (if/elif/else)
 - Basic output (out statement)
 - Break/continue in loops
+- **File I/O operations (v5.3)**:
+  - `read_file(path)` - read file contents
+  - `write_file(path, content)` - write to file
+  - `append_file(path, content)` - append to file
+  - `file_exists(path)` - check file existence
+  - `delete_file(path)` - delete file
+- **String utilities (v5.3)**:
+  - `str_concat(s1, s2)` - concatenate strings
+  - `int_to_str(num)` - integer to string conversion
+  - `str_to_int(str)` - string to integer parsing
+  - `str_len(str)` - string length
+  - `str_upper(str)`, `str_lower(str)` - case conversion
+  - `str_trim(str)` - whitespace trimming
+  - `str_split(str, delim)` - string splitting
+- **Math utilities (v5.3)**:
+  - `abs(num)` - absolute value
+  - `min(a, b)`, `max(a, b)` - min/max functions
+  - `pow(base, exp)` - exponentiation
 
 ### Limited Features
 - Pattern matching (basic support only)
@@ -59,11 +77,10 @@ This document honestly describes what LPPO actually implements.
 - Module system (parsed but not executed)
 
 ### Not Implemented
-- Standard library
-- File I/O
-- Networking
-- Async/await
-- Memory allocation/deallocation
+- Standard library collections (Vec, HashMap, etc.)
+- Networking (TCP/UDP)
+- Async/await (separate from pause statement)
+- Manual memory allocation/deallocation
 - Heap vs stack management
 - Foreign function interface
 - Macros

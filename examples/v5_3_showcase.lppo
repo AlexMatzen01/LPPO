@@ -1,0 +1,88 @@
+pub proc main() -> Void {
+    out "=== LPPO v5.3 Feature Showcase ===";
+    out "Demonstrating all 17 new built-in functions";
+    out "";
+    
+    out "--- File I/O Operations ---";
+    let own filename: Str = "/tmp/lppo_v5_3_demo.txt";
+    
+    let own data: Str = "LPPO v5.3 Demo File";
+    let own write_ok: Bool = write_file(filename, data);
+    out "Write file:", write_ok;
+    
+    let own exists_before: Bool = file_exists(filename);
+    out "File exists:", exists_before;
+    
+    let own content: Str = read_file(filename);
+    out "Read content:", content;
+    
+    let own append_ok: Bool = append_file(filename, "\nNew line added!");
+    out "Append ok:", append_ok;
+    
+    let own updated: Str = read_file(filename);
+    out "Updated content:", updated;
+    
+    out "";
+    out "--- String Utilities ---";
+    let own name: Str = "Alice";
+    let own age: Int64 = 30;
+    
+    let own greeting: Str = str_concat("Hello, ", name);
+    out greeting;
+    
+    let own age_str: Str = int_to_str(age);
+    let own info: Str = str_concat(name, str_concat(" is ", str_concat(age_str, " years old")));
+    out info;
+    
+    let own name_len: Int64 = str_len(name);
+    out "Name length:", name_len;
+    
+    let own upper_name: Str = str_upper(name);
+    let own lower_name: Str = str_lower(name);
+    out "Uppercase:", upper_name;
+    out "Lowercase:", lower_name;
+    
+    let own padded: Str = "  spaces  ";
+    let own trimmed: Str = str_trim(padded);
+    out "Trimmed:", trimmed;
+    
+    let own csv: Str = "apple,banana,cherry";
+    let own fruits: Arr<Str> = str_split(csv, ",");
+    out "Split result:";
+    for fruit: Str in fruits {
+        out "  -", fruit;
+    }
+    
+    let own num_str: Str = "42";
+    let own parsed: Int64 = str_to_int(num_str);
+    out "Parsed number:", parsed;
+    
+    out "";
+    out "--- Math Utilities ---";
+    let own negative: Int64 = -15;
+    let own absolute: Int64 = abs(negative);
+    out "abs(-15) =", absolute;
+    
+    let own a: Int64 = 10;
+    let own b: Int64 = 25;
+    let own minimum: Int64 = min(a, b);
+    let own maximum: Int64 = max(a, b);
+    out "min(10, 25) =", minimum;
+    out "max(10, 25) =", maximum;
+    
+    let own base: Int64 = 2;
+    let own exp: Int64 = 8;
+    let own power: Int64 = pow(base, exp);
+    out "2^8 =", power;
+    
+    out "";
+    out "--- Cleanup ---";
+    let own delete_ok: Bool = delete_file(filename);
+    out "File deleted:", delete_ok;
+    
+    let own exists_after: Bool = file_exists(filename);
+    out "File exists after delete:", exists_after;
+    
+    out "";
+    out "=== All v5.3 features demonstrated successfully! ===";
+}

@@ -1,0 +1,5 @@
+pub proc main() -> Void {
+    let own msg: Str = "Test";
+    let own result: Int64 = println(msg);
+    out "Done";
+}

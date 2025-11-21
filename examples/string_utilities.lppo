@@ -1,0 +1,44 @@
+pub proc main() -> Void {
+    out "=== String Utilities Demo ===";
+    
+    let own name: Str = "Alice";
+    let own age: Int64 = 30;
+    
+    out "String Concatenation:";
+    let own greeting: Str = str_concat("Hello, ", name);
+    out greeting;
+    
+    out "\nInteger to String:";
+    let own age_str: Str = int_to_str(age);
+    let own message: Str = str_concat(name, str_concat(" is ", str_concat(age_str, " years old")));
+    out message;
+    
+    out "\nString Length:";
+    let own name_len: Int64 = str_len(name);
+    out "Length of name:", name_len;
+    
+    out "\nCase Conversion:";
+    let own upper: Str = str_upper(name);
+    let own lower: Str = str_lower(name);
+    out "Uppercase:", upper;
+    out "Lowercase:", lower;
+    
+    out "\nString Trimming:";
+    let own padded: Str = "  hello  ";
+    let own trimmed: Str = str_trim(padded);
+    out "Before:", padded;
+    out "After:", trimmed;
+    
+    out "\nString Splitting:";
+    let own csv: Str = "apple,banana,orange";
+    let own fruits: Arr<Str> = str_split(csv, ",");
+    for fruit: Str in fruits {
+        out "Fruit:", fruit;
+    }
+    
+    out "\nString to Integer:";
+    let own num_str: Str = "42";
+    let own num: Int64 = str_to_int(num_str);
+    let own doubled: Int64 = num * 2;
+    out "Doubled:", doubled;
+}

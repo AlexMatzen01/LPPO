@@ -1,0 +1,29 @@
+pub proc main() -> Void {
+    out "=== Math Utilities Demo ===";
+    
+    let own a: Int64 = -42;
+    let own b: Int64 = 15;
+    
+    out "\nAbsolute Value:";
+    let own abs_a: Int64 = abs(a);
+    out "abs(-42) =", abs_a;
+    
+    out "\nMin and Max:";
+    let own minimum: Int64 = min(a, b);
+    let own maximum: Int64 = max(a, b);
+    out "min(-42, 15) =", minimum;
+    out "max(-42, 15) =", maximum;
+    
+    out "\nPower:";
+    let own base: Int64 = 2;
+    let own exp: Int64 = 10;
+    let own result: Int64 = pow(base, exp);
+    out "2^10 =", result;
+    
+    out "\nCombined Example:";
+    let own x: Int64 = -5;
+    let own y: Int64 = 3;
+    let own abs_x: Int64 = abs(x);
+    let own power: Int64 = pow(abs_x, y);
+    out "abs(-5)^3 =", power;
+}
