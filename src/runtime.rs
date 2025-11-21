@@ -731,7 +731,14 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
                             if *exp < 0 {
                                 return Err(LppoError::type_error("pow exponent must be non-negative".into()));
                             }
-                            return Ok(Value::Int(base.pow(*exp as u32)));
+                            if *exp > u32::MAX as i64 {
+                                return Err(LppoError::type_error("pow exponent too large (must be <= 4294967295)".into()));
+                            }
+                            // Safe to cast since we've checked bounds
+                            match base.checked_pow(*exp as u32) {
+                                Some(result) => return Ok(Value::Int(result)),
+                                None => return Err(LppoError::type_error("pow result overflow".into())),
+                            }
                         } else {
                             return Err(LppoError::type_error("pow arguments must be integers".into()));
                         }
