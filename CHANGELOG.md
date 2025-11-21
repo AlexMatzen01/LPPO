@@ -12,11 +12,28 @@ LPPO v5.3 adds a **fully implemented and tested** file I/O system with built-in 
 
 All functions are fully implemented, type-checked, and tested:
 
+#### File I/O Functions
 - **`read_file(path: Str) -> Str`** - Read entire file contents as a string
 - **`write_file(path: Str, content: Str) -> Bool`** - Write content to file (overwrites if exists)
 - **`append_file(path: Str, content: Str) -> Bool`** - Append content to file (creates if doesn't exist)
 - **`file_exists(path: Str) -> Bool`** - Check if a file exists
 - **`delete_file(path: Str) -> Bool`** - Delete a file
+
+#### String Utility Functions  
+- **`str_concat(s1: Str, s2: Str) -> Str`** - Concatenate two strings
+- **`int_to_str(num: Int64) -> Str`** - Convert integer to string
+- **`str_to_int(str: Str) -> Int64`** - Parse string to integer
+- **`str_len(str: Str) -> Int64`** - Get string length
+- **`str_upper(str: Str) -> Str`** - Convert to uppercase
+- **`str_lower(str: Str) -> Str`** - Convert to lowercase
+- **`str_trim(str: Str) -> Str`** - Trim leading/trailing whitespace
+- **`str_split(str: Str, delim: Str) -> Arr<Str>`** - Split string by delimiter
+
+#### Math Utility Functions
+- **`abs(num: Int64) -> Int64`** - Absolute value
+- **`min(a: Int64, b: Int64) -> Int64`** - Minimum of two numbers
+- **`max(a: Int64, b: Int64) -> Int64`** - Maximum of two numbers
+- **`pow(base: Int64, exp: Int64) -> Int64`** - Exponentiation (exp must be non-negative)
 
 ### 📝 Example Usage
 
@@ -47,10 +64,11 @@ pub proc main() -> Void {
 
 ### 🧪 Testing
 
-- **5 new integration tests** covering all file I/O operations
-- Tests verify actual file system interaction
-- Error handling tested (e.g., reading non-existent files)
-- **All 26 tests pass** (18 original + 3 integration + 5 file I/O)
+- **5 file I/O tests** covering all file operations
+- **8 string utility tests** covering all string functions
+- Tests verify actual functionality
+- Error handling tested (e.g., invalid conversions, non-existent files)
+- **All 34 tests pass** (18 original + 3 integration + 5 file I/O + 8 string utilities)
 
 ### 🔧 Technical Implementation
 
@@ -71,9 +89,12 @@ pub proc main() -> Void {
 
 ### 📚 Documentation Updates
 
-- Updated README with file I/O section and examples
-- Updated FEATURES.md to reflect implemented features
-- Added working example: `examples/file_io.lppo`
+- Updated README with file I/O, string utilities, and math utilities sections
+- Updated FEATURES.md to reflect all implemented features
+- Added working examples: 
+  - `examples/file_io.lppo`
+  - `examples/string_utilities.lppo`
+  - `examples/math_utilities.lppo`
 - Version bumped to 5.3.0
 
 ### 🎯 Why v5.3?

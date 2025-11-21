@@ -56,6 +56,22 @@ LPPO is a **small, educational language** that demonstrates:
 - `file_exists(path)` - Check if file exists (returns Bool)
 - `delete_file(path)` - Delete a file
 
+✅ **String Utilities** (New in v5.3)
+- `str_concat(s1, s2)` - Concatenate two strings
+- `int_to_str(num)` - Convert integer to string
+- `str_to_int(str)` - Convert string to integer
+- `str_len(str)` - Get string length
+- `str_upper(str)` - Convert to uppercase
+- `str_lower(str)` - Convert to lowercase
+- `str_trim(str)` - Trim whitespace
+- `str_split(str, delim)` - Split string into array
+
+✅ **Math Utilities** (New in v5.3)
+- `abs(num)` - Absolute value
+- `min(a, b)` - Minimum of two numbers
+- `max(a, b)` - Maximum of two numbers
+- `pow(base, exp)` - Exponentiation
+
 ### File I/O Example
 
 ```lppo
@@ -70,6 +86,30 @@ pub proc main() -> Void {
     let own exists: Bool = file_exists(path);
     if exists {
         let own delete_result: Bool = delete_file(path);
+    }
+}
+```
+
+### String Utilities Example
+
+```lppo
+pub proc main() -> Void {
+    let own name: Str = "Alice";
+    let own age: Int64 = 30;
+    
+    // Concatenate strings
+    let own greeting: Str = str_concat("Hello, ", name);
+    
+    // Convert and build message
+    let own age_str: Str = int_to_str(age);
+    let own message: Str = str_concat(name, str_concat(" is ", str_concat(age_str, " years old")));
+    out message;
+    
+    // Split string
+    let own csv: Str = "apple,banana,orange";
+    let own fruits: Arr<Str> = str_split(csv, ",");
+    for fruit: Str in fruits {
+        out fruit;
     }
 }
 ```

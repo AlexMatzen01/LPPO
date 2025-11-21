@@ -56,6 +56,18 @@ This document honestly describes what LPPO actually implements.
   - `append_file(path, content)` - append to file
   - `file_exists(path)` - check file existence
   - `delete_file(path)` - delete file
+- **String utilities (v5.3)**:
+  - `str_concat(s1, s2)` - concatenate strings
+  - `int_to_str(num)` - integer to string conversion
+  - `str_to_int(str)` - string to integer parsing
+  - `str_len(str)` - string length
+  - `str_upper(str)`, `str_lower(str)` - case conversion
+  - `str_trim(str)` - whitespace trimming
+  - `str_split(str, delim)` - string splitting
+- **Math utilities (v5.3)**:
+  - `abs(num)` - absolute value
+  - `min(a, b)`, `max(a, b)` - min/max functions
+  - `pow(base, exp)` - exponentiation
 
 ### Limited Features
 - Pattern matching (basic support only)
