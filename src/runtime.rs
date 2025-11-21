@@ -607,6 +607,135 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
                             return Err(LppoError::type_error("delete_file path must be a string".into()));
                         }
                     }
+                    "str_concat" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error("str_concat requires 2 arguments".into()));
+                        }
+                        if let (Value::Str(s1), Value::Str(s2)) = (&arg_vals[0], &arg_vals[1]) {
+                            return Ok(Value::Str(format!("{}{}", s1, s2)));
+                        } else {
+                            return Err(LppoError::type_error("str_concat arguments must be strings".into()));
+                        }
+                    }
+                    "int_to_str" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("int_to_str requires 1 argument".into()));
+                        }
+                        if let Value::Int(i) = arg_vals[0] {
+                            return Ok(Value::Str(i.to_string()));
+                        } else {
+                            return Err(LppoError::type_error("int_to_str argument must be an integer".into()));
+                        }
+                    }
+                    "str_to_int" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("str_to_int requires 1 argument".into()));
+                        }
+                        if let Value::Str(s) = &arg_vals[0] {
+                            match s.parse::<i64>() {
+                                Ok(i) => return Ok(Value::Int(i)),
+                                Err(_) => return Err(LppoError::type_error(format!("Failed to parse '{}' as integer", s))),
+                            }
+                        } else {
+                            return Err(LppoError::type_error("str_to_int argument must be a string".into()));
+                        }
+                    }
+                    "str_len" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("str_len requires 1 argument".into()));
+                        }
+                        if let Value::Str(s) = &arg_vals[0] {
+                            return Ok(Value::Int(s.len() as i64));
+                        } else {
+                            return Err(LppoError::type_error("str_len argument must be a string".into()));
+                        }
+                    }
+                    "str_upper" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("str_upper requires 1 argument".into()));
+                        }
+                        if let Value::Str(s) = &arg_vals[0] {
+                            return Ok(Value::Str(s.to_uppercase()));
+                        } else {
+                            return Err(LppoError::type_error("str_upper argument must be a string".into()));
+                        }
+                    }
+                    "str_lower" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("str_lower requires 1 argument".into()));
+                        }
+                        if let Value::Str(s) = &arg_vals[0] {
+                            return Ok(Value::Str(s.to_lowercase()));
+                        } else {
+                            return Err(LppoError::type_error("str_lower argument must be a string".into()));
+                        }
+                    }
+                    "str_trim" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("str_trim requires 1 argument".into()));
+                        }
+                        if let Value::Str(s) = &arg_vals[0] {
+                            return Ok(Value::Str(s.trim().to_string()));
+                        } else {
+                            return Err(LppoError::type_error("str_trim argument must be a string".into()));
+                        }
+                    }
+                    "str_split" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error("str_split requires 2 arguments (string, delimiter)".into()));
+                        }
+                        if let (Value::Str(s), Value::Str(delim)) = (&arg_vals[0], &arg_vals[1]) {
+                            let parts: Vec<Value> = s.split(delim.as_str())
+                                .map(|p| Value::Str(p.to_string()))
+                                .collect();
+                            return Ok(Value::Array(parts));
+                        } else {
+                            return Err(LppoError::type_error("str_split arguments must be strings".into()));
+                        }
+                    }
+                    "abs" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("abs requires 1 argument".into()));
+                        }
+                        if let Value::Int(i) = arg_vals[0] {
+                            return Ok(Value::Int(i.abs()));
+                        } else {
+                            return Err(LppoError::type_error("abs argument must be an integer".into()));
+                        }
+                    }
+                    "min" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error("min requires 2 arguments".into()));
+                        }
+                        if let (Value::Int(a), Value::Int(b)) = (&arg_vals[0], &arg_vals[1]) {
+                            return Ok(Value::Int((*a).min(*b)));
+                        } else {
+                            return Err(LppoError::type_error("min arguments must be integers".into()));
+                        }
+                    }
+                    "max" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error("max requires 2 arguments".into()));
+                        }
+                        if let (Value::Int(a), Value::Int(b)) = (&arg_vals[0], &arg_vals[1]) {
+                            return Ok(Value::Int((*a).max(*b)));
+                        } else {
+                            return Err(LppoError::type_error("max arguments must be integers".into()));
+                        }
+                    }
+                    "pow" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error("pow requires 2 arguments (base, exponent)".into()));
+                        }
+                        if let (Value::Int(base), Value::Int(exp)) = (&arg_vals[0], &arg_vals[1]) {
+                            if *exp < 0 {
+                                return Err(LppoError::type_error("pow exponent must be non-negative".into()));
+                            }
+                            return Ok(Value::Int(base.pow(*exp as u32)));
+                        } else {
+                            return Err(LppoError::type_error("pow arguments must be integers".into()));
+                        }
+                    }
                     _ => {}
                 }
             }

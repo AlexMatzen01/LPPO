@@ -1,0 +1,6 @@
+pub proc main() -> Void {
+    let own name: Str = "Alice";
+    let own age: Int64 = 30;
+    let own greeting: Str = "Hello, ";
+    out greeting, name;
+}

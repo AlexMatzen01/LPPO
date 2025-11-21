@@ -151,14 +151,33 @@ pub fn typecheck_program(program: &Program) -> LppoResult<()> {
     let mut ctx = TypeContext::new();
 
     // Register built-in functions
+    // I/O functions
     ctx.add_procedure("println".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
     ctx.add_procedure("print".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
     ctx.add_procedure("eprintln".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
+    
+    // File I/O functions
     ctx.add_procedure("read_file".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
     ctx.add_procedure("write_file".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Bool);
     ctx.add_procedure("append_file".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Bool);
     ctx.add_procedure("file_exists".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Bool);
     ctx.add_procedure("delete_file".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Bool);
+    
+    // String utility functions
+    ctx.add_procedure("str_concat".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Str);
+    ctx.add_procedure("int_to_str".to_string(), vec![TypeAnnotation::Int64], TypeAnnotation::Str);
+    ctx.add_procedure("str_to_int".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
+    ctx.add_procedure("str_len".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
+    ctx.add_procedure("str_upper".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
+    ctx.add_procedure("str_lower".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
+    ctx.add_procedure("str_trim".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
+    ctx.add_procedure("str_split".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Arr(Box::new(TypeAnnotation::Str)));
+    
+    // Math utility functions
+    ctx.add_procedure("abs".to_string(), vec![TypeAnnotation::Int64], TypeAnnotation::Int64);
+    ctx.add_procedure("min".to_string(), vec![TypeAnnotation::Int64, TypeAnnotation::Int64], TypeAnnotation::Int64);
+    ctx.add_procedure("max".to_string(), vec![TypeAnnotation::Int64, TypeAnnotation::Int64], TypeAnnotation::Int64);
+    ctx.add_procedure("pow".to_string(), vec![TypeAnnotation::Int64, TypeAnnotation::Int64], TypeAnnotation::Int64);
 
     // First pass: register all procedures, structs, and enums
     for proc in &program.procedures {
