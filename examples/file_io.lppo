@@ -1,0 +1,32 @@
+pub proc main() -> Void {
+    let own test_file: Str = "/tmp/lppo_test.txt";
+    let own content: Str = "Hello from LPPO!";
+    
+    out "Writing to file...";
+    let own write_result: Bool = write_file(test_file, content);
+    out "Write successful:", write_result;
+    
+    out "Reading from file...";
+    let own read_content: Str = read_file(test_file);
+    out "File contents:", read_content;
+    
+    out "Appending to file...";
+    let own append_result: Bool = append_file(test_file, "\nAppended line!");
+    out "Append successful:", append_result;
+    
+    out "Reading updated file...";
+    let own updated_content: Str = read_file(test_file);
+    out "Updated contents:", updated_content;
+    
+    out "Checking if file exists...";
+    let own exists: Bool = file_exists(test_file);
+    out "File exists:", exists;
+    
+    out "Deleting file...";
+    let own delete_result: Bool = delete_file(test_file);
+    out "Delete successful:", delete_result;
+    
+    out "Checking if file still exists...";
+    let own still_exists: Bool = file_exists(test_file);
+    out "File exists after delete:", still_exists;
+}

@@ -538,6 +538,75 @@ fn eval_expr(expr: &Expr, env: &mut HashMap<String, Value>, procedures: &HashMap
                         eprintln!("{}", parts.join(" "));
                         return Ok(Value::Int(0));
                     }
+                    "read_file" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("read_file requires 1 argument (path)".into()));
+                        }
+                        if let Value::Str(path) = &arg_vals[0] {
+                            match std::fs::read_to_string(path) {
+                                Ok(content) => return Ok(Value::Str(content)),
+                                Err(e) => return Err(LppoError::io_error(format!("Failed to read file '{}': {}", path, e))),
+                            }
+                        } else {
+                            return Err(LppoError::type_error("read_file path must be a string".into()));
+                        }
+                    }
+                    "write_file" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error("write_file requires 2 arguments (path, content)".into()));
+                        }
+                        if let (Value::Str(path), Value::Str(content)) = (&arg_vals[0], &arg_vals[1]) {
+                            match std::fs::write(path, content) {
+                                Ok(_) => return Ok(Value::Bool(true)),
+                                Err(e) => return Err(LppoError::io_error(format!("Failed to write file '{}': {}", path, e))),
+                            }
+                        } else {
+                            return Err(LppoError::type_error("write_file path and content must be strings".into()));
+                        }
+                    }
+                    "append_file" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error("append_file requires 2 arguments (path, content)".into()));
+                        }
+                        if let (Value::Str(path), Value::Str(content)) = (&arg_vals[0], &arg_vals[1]) {
+                            match std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                                Ok(mut file) => {
+                                    use std::io::Write;
+                                    match file.write_all(content.as_bytes()) {
+                                        Ok(_) => return Ok(Value::Bool(true)),
+                                        Err(e) => return Err(LppoError::io_error(format!("Failed to append to file '{}': {}", path, e))),
+                                    }
+                                }
+                                Err(e) => return Err(LppoError::io_error(format!("Failed to open file '{}': {}", path, e))),
+                            }
+                        } else {
+                            return Err(LppoError::type_error("append_file path and content must be strings".into()));
+                        }
+                    }
+                    "file_exists" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("file_exists requires 1 argument (path)".into()));
+                        }
+                        if let Value::Str(path) = &arg_vals[0] {
+                            let exists = std::path::Path::new(path).exists();
+                            return Ok(Value::Bool(exists));
+                        } else {
+                            return Err(LppoError::type_error("file_exists path must be a string".into()));
+                        }
+                    }
+                    "delete_file" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error("delete_file requires 1 argument (path)".into()));
+                        }
+                        if let Value::Str(path) = &arg_vals[0] {
+                            match std::fs::remove_file(path) {
+                                Ok(_) => return Ok(Value::Bool(true)),
+                                Err(e) => return Err(LppoError::io_error(format!("Failed to delete file '{}': {}", path, e))),
+                            }
+                        } else {
+                            return Err(LppoError::type_error("delete_file path must be a string".into()));
+                        }
+                    }
                     _ => {}
                 }
             }

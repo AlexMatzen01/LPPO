@@ -150,6 +150,16 @@ impl TypeContext {
 pub fn typecheck_program(program: &Program) -> LppoResult<()> {
     let mut ctx = TypeContext::new();
 
+    // Register built-in functions
+    ctx.add_procedure("println".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
+    ctx.add_procedure("print".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
+    ctx.add_procedure("eprintln".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
+    ctx.add_procedure("read_file".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
+    ctx.add_procedure("write_file".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Bool);
+    ctx.add_procedure("append_file".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Bool);
+    ctx.add_procedure("file_exists".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Bool);
+    ctx.add_procedure("delete_file".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Bool);
+
     // First pass: register all procedures, structs, and enums
     for proc in &program.procedures {
         let param_types = proc.params.iter().map(|p| p.typ.clone()).collect();

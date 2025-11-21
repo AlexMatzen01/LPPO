@@ -175,6 +175,11 @@ pub enum LppoError {
         location: Option<SourceLocation>,
         stack_trace: Vec<String>,
     },
+    /// I/O operation error
+    IoError {
+        message: String,
+        location: Option<SourceLocation>,
+    },
 }
 
 impl LppoError {
@@ -202,7 +207,8 @@ impl LppoError {
             | LppoError::PatternMatchError { .. }
             | LppoError::InvalidCast { .. }
             | LppoError::ModuleNotFound { .. }
-            | LppoError::RuntimeError { .. } => ErrorSeverity::Error,
+            | LppoError::RuntimeError { .. }
+            | LppoError::IoError { .. } => ErrorSeverity::Error,
             
             LppoError::StackOverflow { .. } => ErrorSeverity::Fatal,
         }
@@ -371,6 +377,9 @@ impl Display for LppoError {
             LppoError::RuntimeError { message, .. } => {
                 write!(f, "runtime error: {}", message)
             }
+            LppoError::IoError { message, .. } => {
+                write!(f, "I/O error: {}", message)
+            }
         }
     }
 }
@@ -465,6 +474,13 @@ impl LppoError {
             found: None,
             location: None,
             suggestion: None,
+        }
+    }
+
+    pub fn io_error(message: String) -> Self {
+        LppoError::IoError {
+            message,
+            location: None,
         }
     }
 }
