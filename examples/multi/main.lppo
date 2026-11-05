@@ -1,0 +1,8 @@
+use math;
+
+pub proc main() -> Void {
+    out "=== multi-file: use math; ===";
+    out "add(5, 3) =", add(5, 3);
+    out "mul(5, 3) =", mul(5, 3);
+    out "the implementation is in math.lppo; math.lpph is the header";
+}

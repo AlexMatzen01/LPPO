@@ -1,0 +1,2 @@
+proc add(a: Int64, b: Int64) -> Int64 { }
+proc mul(a: Int64, b: Int64) -> Int64 { }

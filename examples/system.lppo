@@ -1,0 +1,13 @@
+pub proc main() -> Void {
+    out "=== Terminal Commands ===";
+
+    let own who: Str = system("whoami");
+    out "Current user:", who;
+
+    let own date: Str = system("date");
+    out "Date:", date;
+
+    let own listing: Str = system("ls -la");
+    out "Directory listing:";
+    out listing;
+}

@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 
 use crate::ast::{
-    Expr, BinaryOp, UnaryOp, TypeAnnotation, Statement, Procedure, Program, 
-    QualifiedName, StructDef, EnumDef
+    BinaryOp, EnumDef, Expr, Procedure, Program, QualifiedName, Statement, StructDef, StructField,
+    TypeAnnotation, UnaryOp,
 };
 use crate::error::{LppoError, LppoResult};
 
@@ -16,7 +16,9 @@ enum OwnershipState {
     Owned,
     Moved,
     #[allow(dead_code)] // TODO: Implement borrow tracking
-    Borrowed { mutable: bool },
+    Borrowed {
+        mutable: bool,
+    },
 }
 
 /// Type context for tracking variable and procedure types
@@ -66,16 +68,22 @@ impl TypeContext {
     }
 
     /// Add a variable with explicit ownership
-    pub fn add_variable_with_ownership(&mut self, name: String, typ: TypeAnnotation, ownership_kind: OwnershipKind) {
+    pub fn add_variable_with_ownership(
+        &mut self,
+        name: String,
+        typ: TypeAnnotation,
+        ownership_kind: OwnershipKind,
+    ) {
         self.variables.insert(name.clone(), typ);
-        self.ownership.insert(name, (ownership_kind, OwnershipState::Owned));
+        self.ownership
+            .insert(name, (ownership_kind, OwnershipState::Owned));
     }
 
     /// Look up a variable type
     pub fn get_variable(&self, name: &str) -> Option<&TypeAnnotation> {
-        self.variables.get(name).or_else(|| {
-            self.parent.as_ref().and_then(|p| p.get_variable(name))
-        })
+        self.variables
+            .get(name)
+            .or_else(|| self.parent.as_ref().and_then(|p| p.get_variable(name)))
     }
 
     /// Check if a variable has been moved
@@ -126,7 +134,12 @@ impl TypeContext {
     }
 
     /// Add a procedure signature
-    pub fn add_procedure(&mut self, name: String, params: Vec<TypeAnnotation>, return_type: TypeAnnotation) {
+    pub fn add_procedure(
+        &mut self,
+        name: String,
+        params: Vec<TypeAnnotation>,
+        return_type: TypeAnnotation,
+    ) {
         self.procedures.insert(name, (params, return_type));
     }
 
@@ -152,32 +165,331 @@ pub fn typecheck_program(program: &Program) -> LppoResult<()> {
 
     // Register built-in functions
     // I/O functions
-    ctx.add_procedure("println".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
-    ctx.add_procedure("print".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
-    ctx.add_procedure("eprintln".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
-    
+    ctx.add_procedure(
+        "println".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "print".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "eprintln".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+
     // File I/O functions
-    ctx.add_procedure("read_file".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
-    ctx.add_procedure("write_file".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Bool);
-    ctx.add_procedure("append_file".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Bool);
-    ctx.add_procedure("file_exists".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Bool);
-    ctx.add_procedure("delete_file".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Bool);
-    
+    ctx.add_procedure(
+        "read_file".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "write_file".to_string(),
+        vec![TypeAnnotation::Str, TypeAnnotation::Str],
+        TypeAnnotation::Bool,
+    );
+    ctx.add_procedure(
+        "append_file".to_string(),
+        vec![TypeAnnotation::Str, TypeAnnotation::Str],
+        TypeAnnotation::Bool,
+    );
+    ctx.add_procedure(
+        "file_exists".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Bool,
+    );
+    ctx.add_procedure(
+        "delete_file".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Bool,
+    );
+
     // String utility functions
-    ctx.add_procedure("str_concat".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Str);
-    ctx.add_procedure("int_to_str".to_string(), vec![TypeAnnotation::Int64], TypeAnnotation::Str);
-    ctx.add_procedure("str_to_int".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
-    ctx.add_procedure("str_len".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
-    ctx.add_procedure("str_upper".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
-    ctx.add_procedure("str_lower".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
-    ctx.add_procedure("str_trim".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Str);
-    ctx.add_procedure("str_split".to_string(), vec![TypeAnnotation::Str, TypeAnnotation::Str], TypeAnnotation::Arr(Box::new(TypeAnnotation::Str)));
-    
+    ctx.add_procedure(
+        "str_concat".to_string(),
+        vec![TypeAnnotation::Str, TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "int_to_str".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "str_to_int".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "str_len".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "str_upper".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "str_lower".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "str_trim".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "str_split".to_string(),
+        vec![TypeAnnotation::Str, TypeAnnotation::Str],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Str)),
+    );
+
     // Math utility functions
-    ctx.add_procedure("abs".to_string(), vec![TypeAnnotation::Int64], TypeAnnotation::Int64);
-    ctx.add_procedure("min".to_string(), vec![TypeAnnotation::Int64, TypeAnnotation::Int64], TypeAnnotation::Int64);
-    ctx.add_procedure("max".to_string(), vec![TypeAnnotation::Int64, TypeAnnotation::Int64], TypeAnnotation::Int64);
-    ctx.add_procedure("pow".to_string(), vec![TypeAnnotation::Int64, TypeAnnotation::Int64], TypeAnnotation::Int64);
+    ctx.add_procedure(
+        "abs".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "min".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "max".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "pow".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+
+    // Random numbers
+    ctx.add_procedure(
+        "random".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+
+    // System commands
+    ctx.add_procedure(
+        "system".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+
+    // JSON support
+    ctx.add_procedure(
+        "json_parse".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "json_stringify".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+
+    // ANSI colors
+    ctx.add_procedure(
+        "color".to_string(),
+        vec![TypeAnnotation::Str, TypeAnnotation::Str],
+        TypeAnnotation::Str,
+    );
+
+    // Terminal user interface (TUI) built-ins.
+    ctx.add_procedure("tui_init".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure("tui_end".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure("tui_clear".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure(
+        "tui_move".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_put".to_string(),
+        vec![
+            TypeAnnotation::Str,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_puts".to_string(),
+        vec![
+            TypeAnnotation::Str,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Str,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_cls".to_string(),
+        vec![
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_box".to_string(),
+        vec![
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Str,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_label".to_string(),
+        vec![
+            TypeAnnotation::Str,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_title".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_fg".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_bg".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_bold".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_underline".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_reverse".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_style".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure("tui_reset".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure("tui_hide_cursor".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure("tui_show_cursor".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure("tui_refresh".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure(
+        "tui_input".to_string(),
+        vec![
+            TypeAnnotation::Str,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure("tui_getch".to_string(), vec![], TypeAnnotation::Str);
+    ctx.add_procedure("tui_poll".to_string(), vec![], TypeAnnotation::Str);
+    ctx.add_procedure(
+        "tui_progress".to_string(),
+        vec![
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "tui_size".to_string(),
+        vec![],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+    );
+
+    // Ring-0 (kernel privilege) built-ins. Only available when the source file
+    // declares `ring 0;` as its first directive. These interact with ring-0
+    // resources (port I/O, MSRs, CPUID, CLI/STI, HLT) and are rejected by the
+    // type checker unless `ring 0` is declared.
+    if program.ring0 {
+        // Port I/O
+        ctx.add_procedure(
+            "outb".to_string(),
+            vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+            TypeAnnotation::Void,
+        );
+        ctx.add_procedure(
+            "outw".to_string(),
+            vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+            TypeAnnotation::Void,
+        );
+        ctx.add_procedure(
+            "outl".to_string(),
+            vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+            TypeAnnotation::Void,
+        );
+        ctx.add_procedure(
+            "inb".to_string(),
+            vec![TypeAnnotation::Int64],
+            TypeAnnotation::Int64,
+        );
+        ctx.add_procedure(
+            "inw".to_string(),
+            vec![TypeAnnotation::Int64],
+            TypeAnnotation::Int64,
+        );
+        ctx.add_procedure(
+            "inl".to_string(),
+            vec![TypeAnnotation::Int64],
+            TypeAnnotation::Int64,
+        );
+        // Model-specific registers
+        ctx.add_procedure(
+            "rdmsr".to_string(),
+            vec![TypeAnnotation::Int64],
+            TypeAnnotation::Int64,
+        );
+        ctx.add_procedure(
+            "wrmsr".to_string(),
+            vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+            TypeAnnotation::Void,
+        );
+        // CPUID
+        ctx.add_procedure(
+            "cpuid".to_string(),
+            vec![TypeAnnotation::Int64],
+            TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+        );
+        // Interrupt control
+        ctx.add_procedure("cli".to_string(), vec![], TypeAnnotation::Void);
+        ctx.add_procedure("sti".to_string(), vec![], TypeAnnotation::Void);
+        // Halt
+        ctx.add_procedure("hlt".to_string(), vec![], TypeAnnotation::Void);
+    }
 
     // First pass: register all procedures, structs, and enums
     for proc in &program.procedures {
@@ -245,7 +557,9 @@ fn typecheck_procedure(proc: &Procedure, ctx: &mut TypeContext) -> LppoResult<()
                     expected: Some(format!("{:?}", proc.return_type)),
                     found: Some(format!("{:?}", ret_type)),
                     location: None,
-                    suggestion: Some("ensure all return statements match the declared return type".to_string()),
+                    suggestion: Some(
+                        "ensure all return statements match the declared return type".to_string(),
+                    ),
                 });
             }
         }
@@ -255,9 +569,18 @@ fn typecheck_procedure(proc: &Procedure, ctx: &mut TypeContext) -> LppoResult<()
 }
 
 /// Type check a statement, returning the type if it's a return statement
-fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Option<TypeAnnotation>> {
+fn typecheck_statement(
+    stmt: &Statement,
+    ctx: &mut TypeContext,
+) -> LppoResult<Option<TypeAnnotation>> {
     match stmt {
-        Statement::Let { name, typ, expr, ownership, .. } => {
+        Statement::Let {
+            name,
+            typ,
+            expr,
+            ownership,
+            ..
+        } => {
             let expr_type = typecheck_expr(expr, ctx)?;
             if !types_compatible(typ, &expr_type) {
                 return Err(LppoError::TypeError {
@@ -268,7 +591,9 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
                     expected: Some(format!("{:?}", typ)),
                     found: Some(format!("{:?}", expr_type)),
                     location: None,
-                    suggestion: Some("ensure the expression type matches the variable type".to_string()),
+                    suggestion: Some(
+                        "ensure the expression type matches the variable type".to_string(),
+                    ),
                 });
             }
             ctx.add_variable_with_ownership(name.clone(), typ.clone(), ownership.clone());
@@ -276,13 +601,13 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
         }
 
         Statement::Assignment { target, value } => {
-            let var_type = ctx.get_variable(target).ok_or_else(|| {
-                LppoError::UnknownVariable {
+            let var_type = ctx
+                .get_variable(target)
+                .ok_or_else(|| LppoError::UnknownVariable {
                     name: target.clone(),
                     location: None,
                     suggestion: Some("declare the variable before assigning to it".to_string()),
-                }
-            })?;
+                })?;
             let value_type = typecheck_expr(value, ctx)?;
             if !types_compatible(var_type, &value_type) {
                 return Err(LppoError::TypeError {
@@ -306,7 +631,12 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
 
         Statement::Return(None) => Ok(Some(TypeAnnotation::Void)),
 
-        Statement::If { cond, then_branch, elifs, else_branch } => {
+        Statement::If {
+            cond,
+            then_branch,
+            elifs,
+            else_branch,
+        } => {
             let cond_type = typecheck_expr(cond, ctx)?;
             if !types_compatible(&TypeAnnotation::Bool, &cond_type) {
                 return Err(LppoError::TypeError {
@@ -314,7 +644,9 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
                     expected: Some("Bool".to_string()),
                     found: Some(format!("{:?}", cond_type)),
                     location: None,
-                    suggestion: Some("use a comparison operator like ==, !=, <, >, etc.".to_string()),
+                    suggestion: Some(
+                        "use a comparison operator like ==, !=, <, >, etc.".to_string(),
+                    ),
                 });
             }
 
@@ -370,9 +702,14 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
             Ok(None)
         }
 
-        Statement::For { var, typ, iterable, body } => {
+        Statement::For {
+            var,
+            typ,
+            iterable,
+            body,
+        } => {
             let iter_type = typecheck_expr(iterable, ctx)?;
-            
+
             // Validate iterable is an array
             match &iter_type {
                 TypeAnnotation::Arr(elem_type) => {
@@ -385,7 +722,9 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
                             expected: Some(format!("{:?}", typ)),
                             found: Some(format!("{:?}", elem_type)),
                             location: None,
-                            suggestion: Some("ensure loop variable type matches array element type".to_string()),
+                            suggestion: Some(
+                                "ensure loop variable type matches array element type".to_string(),
+                            ),
                         });
                     }
                 }
@@ -410,13 +749,16 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
 
         Statement::Call(qualified_name, args) => {
             let proc_name = qualified_name_to_string(qualified_name);
-            let (param_types, _) = ctx.get_procedure(&proc_name).ok_or_else(|| {
-                LppoError::UnknownProcedure {
+            let (param_types, _) = ctx
+                .get_procedure(&proc_name)
+                .ok_or_else(|| LppoError::UnknownProcedure {
                     name: proc_name.clone(),
                     location: None,
-                    suggestion: Some("check that the procedure is defined and spelled correctly".to_string()),
-                }
-            })?.clone();
+                    suggestion: Some(
+                        "check that the procedure is defined and spelled correctly".to_string(),
+                    ),
+                })?
+                .clone();
 
             if args.len() != param_types.len() {
                 return Err(LppoError::TypeError {
@@ -504,7 +846,11 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
             Ok(None)
         }
 
-        Statement::IndexedAssignment { target, index, value } => {
+        Statement::IndexedAssignment {
+            target,
+            index,
+            value,
+        } => {
             let target_type = typecheck_expr(target, ctx)?;
             let index_type = typecheck_expr(index, ctx)?;
             let value_type = typecheck_expr(value, ctx)?;
@@ -549,26 +895,28 @@ fn typecheck_statement(stmt: &Statement, ctx: &mut TypeContext) -> LppoResult<Op
         Statement::Move { source, target } => {
             // Mark source as moved and create new variable with ownership
             ctx.mark_moved(source)?;
-            let src_type = ctx.get_variable(source).ok_or_else(|| {
-                LppoError::UnknownVariable {
+            let src_type = ctx
+                .get_variable(source)
+                .ok_or_else(|| LppoError::UnknownVariable {
                     name: source.clone(),
                     location: None,
                     suggestion: None,
-                }
-            })?.clone();
+                })?
+                .clone();
             ctx.add_variable_with_ownership(target.clone(), src_type, OwnershipKind::Own);
             Ok(None)
         }
 
         Statement::Copy { source, target } => {
             // Copy doesn't move ownership
-            let src_type = ctx.get_variable(source).ok_or_else(|| {
-                LppoError::UnknownVariable {
+            let src_type = ctx
+                .get_variable(source)
+                .ok_or_else(|| LppoError::UnknownVariable {
                     name: source.clone(),
                     location: None,
                     suggestion: None,
-                }
-            })?.clone();
+                })?
+                .clone();
             ctx.add_variable_with_ownership(target.clone(), src_type, OwnershipKind::Own);
             Ok(None)
         }
@@ -620,7 +968,9 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                         expected: Some(format!("{:?}", first_type)),
                         found: Some(format!("{:?}", elem_type)),
                         location: None,
-                        suggestion: Some("ensure all array elements have the same type".to_string()),
+                        suggestion: Some(
+                            "ensure all array elements have the same type".to_string(),
+                        ),
                     });
                 }
             }
@@ -658,12 +1008,19 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
             let right_type = typecheck_expr(right, ctx)?;
 
             match op {
-                BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod | BinaryOp::Pow => {
+                BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::Mul
+                | BinaryOp::Div
+                | BinaryOp::Mod
+                | BinaryOp::Pow => {
                     // Support integer or float arithmetic. Both operands must have the same numeric type.
                     let left_is_int = types_compatible(&TypeAnnotation::Int64, &left_type);
                     let right_is_int = types_compatible(&TypeAnnotation::Int64, &right_type);
-                    let left_is_f64 = matches!(left_type, TypeAnnotation::Custom(ref n) if n == "F64");
-                    let right_is_f64 = matches!(right_type, TypeAnnotation::Custom(ref n) if n == "F64");
+                    let left_is_f64 =
+                        matches!(left_type, TypeAnnotation::Custom(ref n) if n == "F64");
+                    let right_is_f64 =
+                        matches!(right_type, TypeAnnotation::Custom(ref n) if n == "F64");
 
                     if left_is_int && right_is_int {
                         return Ok(TypeAnnotation::Int64);
@@ -673,7 +1030,10 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                     }
 
                     return Err(LppoError::TypeError {
-                        message: format!("arithmetic operator {:?} requires numeric operands of the same type", op),
+                        message: format!(
+                            "arithmetic operator {:?} requires numeric operands of the same type",
+                            op
+                        ),
                         expected: None,
                         found: Some(format!("{:?} and {:?}", left_type, right_type)),
                         location: None,
@@ -681,10 +1041,18 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                     });
                 }
 
-                BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                BinaryOp::Eq
+                | BinaryOp::Ne
+                | BinaryOp::Lt
+                | BinaryOp::Le
+                | BinaryOp::Gt
+                | BinaryOp::Ge => {
                     if !types_compatible(&left_type, &right_type) {
                         return Err(LppoError::TypeError {
-                            message: format!("comparison requires same types, got {:?} and {:?}", left_type, right_type),
+                            message: format!(
+                                "comparison requires same types, got {:?} and {:?}",
+                                left_type, right_type
+                            ),
                             expected: Some(format!("{:?}", left_type)),
                             found: Some(format!("{:?}", right_type)),
                             location: None,
@@ -786,6 +1154,37 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
             }
         }
 
+        Expr::StructInit { name, fields } => {
+            let struct_def = ctx
+                .structs
+                .get(name)
+                .ok_or_else(|| LppoError::type_error(format!("unknown struct '{}'", name)))?;
+            let field_types: std::collections::HashMap<&String, &StructField> =
+                struct_def.fields.iter().map(|f| (&f.name, f)).collect();
+            for (field_name, expr) in fields.iter() {
+                let field_def = field_types.get(field_name).ok_or_else(|| {
+                    LppoError::type_error(format!(
+                        "struct '{}' has no field '{}'",
+                        name, field_name
+                    ))
+                })?;
+                let expr_type = typecheck_expr(expr, ctx)?;
+                if !types_compatible(&field_def.typ, &expr_type) {
+                    return Err(LppoError::TypeError {
+                        message: format!(
+                            "field '{}' of struct '{}' expects {:?} but got {:?}",
+                            field_name, name, field_def.typ, expr_type
+                        ),
+                        expected: Some(format!("{:?}", field_def.typ)),
+                        found: Some(format!("{:?}", expr_type)),
+                        location: None,
+                        suggestion: None,
+                    });
+                }
+            }
+            Ok(TypeAnnotation::Custom(name.clone()))
+        }
+
         Expr::Call { func, args } => {
             // For now, handle simple variable calls (not complex expressions)
             let proc_name = match func.as_ref() {
@@ -796,13 +1195,16 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                     return Ok(TypeAnnotation::Void);
                 }
             };
-            let (param_types, return_type) = ctx.get_procedure(&proc_name).ok_or_else(|| {
-                LppoError::UnknownProcedure {
+            let (param_types, return_type) = ctx
+                .get_procedure(&proc_name)
+                .ok_or_else(|| LppoError::UnknownProcedure {
                     name: proc_name.clone(),
                     location: None,
-                    suggestion: Some("check that the procedure is defined and spelled correctly".to_string()),
-                }
-            })?.clone();
+                    suggestion: Some(
+                        "check that the procedure is defined and spelled correctly".to_string(),
+                    ),
+                })?
+                .clone();
 
             if args.len() != param_types.len() {
                 return Err(LppoError::TypeError {
@@ -838,6 +1240,18 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                 }
             }
             Ok(return_type)
+        }
+
+        Expr::FieldAccess { target, field } => {
+            let target_type = typecheck_expr(target, ctx)?;
+            if let TypeAnnotation::Custom(struct_name) = &target_type {
+                if let Some(struct_def) = ctx.structs.get(struct_name) {
+                    if let Some(field_def) = struct_def.fields.iter().find(|f| f.name == *field) {
+                        return Ok(field_def.typ.clone());
+                    }
+                }
+            }
+            Ok(TypeAnnotation::Void)
         }
 
         // For unimplemented expression types, return a placeholder
@@ -892,10 +1306,19 @@ mod tests {
 
     #[test]
     fn test_type_compatible() {
-        assert!(types_compatible(&TypeAnnotation::Int64, &TypeAnnotation::Int64));
-        assert!(types_compatible(&TypeAnnotation::Bool, &TypeAnnotation::Bool));
-        assert!(!types_compatible(&TypeAnnotation::Int64, &TypeAnnotation::Bool));
-        
+        assert!(types_compatible(
+            &TypeAnnotation::Int64,
+            &TypeAnnotation::Int64
+        ));
+        assert!(types_compatible(
+            &TypeAnnotation::Bool,
+            &TypeAnnotation::Bool
+        ));
+        assert!(!types_compatible(
+            &TypeAnnotation::Int64,
+            &TypeAnnotation::Bool
+        ));
+
         let arr_int = TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64));
         let arr_int2 = TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64));
         assert!(types_compatible(&arr_int, &arr_int2));
@@ -905,16 +1328,25 @@ mod tests {
     fn test_expr_type_checking() {
         let mut ctx = TypeContext::new();
         ctx.add_variable("x".to_string(), TypeAnnotation::Int64);
-        
+
         // Test integer literal
-        assert_eq!(typecheck_expr(&Expr::Int(42), &ctx).unwrap(), TypeAnnotation::Int64);
-        
+        assert_eq!(
+            typecheck_expr(&Expr::Int(42), &ctx).unwrap(),
+            TypeAnnotation::Int64
+        );
+
         // Test boolean literal
-        assert_eq!(typecheck_expr(&Expr::Bool(true), &ctx).unwrap(), TypeAnnotation::Bool);
-        
+        assert_eq!(
+            typecheck_expr(&Expr::Bool(true), &ctx).unwrap(),
+            TypeAnnotation::Bool
+        );
+
         // Test variable lookup
-        assert_eq!(typecheck_expr(&Expr::Var("x".to_string()), &ctx).unwrap(), TypeAnnotation::Int64);
-        
+        assert_eq!(
+            typecheck_expr(&Expr::Var("x".to_string()), &ctx).unwrap(),
+            TypeAnnotation::Int64
+        );
+
         // Test unknown variable
         assert!(typecheck_expr(&Expr::Var("y".to_string()), &ctx).is_err());
     }
@@ -922,7 +1354,7 @@ mod tests {
     #[test]
     fn test_binary_op_type_checking() {
         let ctx = TypeContext::new();
-        
+
         // Test arithmetic: 1 + 2
         let expr = Expr::BinaryOp {
             left: Box::new(Expr::Int(1)),
@@ -930,7 +1362,7 @@ mod tests {
             right: Box::new(Expr::Int(2)),
         };
         assert_eq!(typecheck_expr(&expr, &ctx).unwrap(), TypeAnnotation::Int64);
-        
+
         // Test comparison: 1 < 2
         let expr = Expr::BinaryOp {
             left: Box::new(Expr::Int(1)),
@@ -938,7 +1370,7 @@ mod tests {
             right: Box::new(Expr::Int(2)),
         };
         assert_eq!(typecheck_expr(&expr, &ctx).unwrap(), TypeAnnotation::Bool);
-        
+
         // Test logical: true and false
         let expr = Expr::BinaryOp {
             left: Box::new(Expr::Bool(true)),
@@ -951,12 +1383,12 @@ mod tests {
     #[test]
     fn test_array_type_checking() {
         let ctx = TypeContext::new();
-        
+
         // Test homogeneous array
         let expr = Expr::Array(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]);
         let result = typecheck_expr(&expr, &ctx).unwrap();
         assert!(matches!(result, TypeAnnotation::Arr(_)));
-        
+
         // Test heterogeneous array (should fail)
         let expr = Expr::Array(vec![Expr::Int(1), Expr::Bool(true)]);
         assert!(typecheck_expr(&expr, &ctx).is_err());
@@ -967,13 +1399,13 @@ mod tests {
         use crate::ast::OwnershipKind;
         let mut ctx = TypeContext::new();
         ctx.add_variable_with_ownership("x".to_string(), TypeAnnotation::Int64, OwnershipKind::Own);
-        
+
         // First move should succeed
         assert!(ctx.mark_moved("x").is_ok());
-        
+
         // Second move should fail
         assert!(ctx.mark_moved("x").is_err());
-        
+
         // Access after move should fail
         assert!(ctx.check_variable_access("x").is_err());
     }
@@ -982,14 +1414,14 @@ mod tests {
     fn test_ownership_tracking() {
         use crate::ast::OwnershipKind;
         let mut ctx = TypeContext::new();
-        
+
         // Add owned variable
         ctx.add_variable_with_ownership("x".to_string(), TypeAnnotation::Int64, OwnershipKind::Own);
-        
+
         // Should be accessible
         assert!(ctx.check_variable_access("x").is_ok());
         assert!(!ctx.is_moved("x"));
-        
+
         // After moving, should not be accessible
         ctx.mark_moved("x").unwrap();
         assert!(ctx.is_moved("x"));

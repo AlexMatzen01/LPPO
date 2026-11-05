@@ -9,32 +9,33 @@ pub enum Token {
     Input,
     Call,
     Let,
-        If,
-        Elif,
-        Else,
-        While,
-        For,
-        In,
-        Loop,
-        Break,
-        Continue,
-        Return,
-        Struct,
-        Enum,
-        Trait,
-        Impl,
-        Match,
-        New,
-        Dot,
-        Equals,
-        Comma,
-        Underscore, // _ for wildcard
-        EqEq,
-        NotEq,
-        Less,
-        LessEq,
-        Greater,
-        GreaterEq,
+    If,
+    Elif,
+    Else,
+    While,
+    For,
+    In,
+    Loop,
+    Break,
+    Continue,
+    Return,
+    Struct,
+    Class,
+    Enum,
+    Trait,
+    Impl,
+    Match,
+    New,
+    Dot,
+    Equals,
+    Comma,
+    Underscore, // _ for wildcard
+    EqEq,
+    NotEq,
+    Less,
+    LessEq,
+    Greater,
+    GreaterEq,
     And,
     Or,
     Not,
@@ -74,6 +75,7 @@ pub enum Token {
     Module,
     Use,
     Pub,
+    Ring,
     // Explicit scope tokens
     Scope,
     End,
@@ -188,7 +190,7 @@ pub enum Token {
     CondVar,
     RwLock,
     Spinlock,
-    
+
     // V5.2: Extended Type System (150+ new type features)
     TypeF32,
     TypeF64,
@@ -252,7 +254,7 @@ pub enum Token {
     TypeZeroSized,
     TypeUninit,
     TypeMaybeUninit,
-    
+
     // V5.2: Advanced Numeric Types
     TypeDecimal,
     TypeRational,
@@ -264,7 +266,7 @@ pub enum Token {
     TypeWrapping,
     TypeChecked,
     TypeNonZero,
-    
+
     // V5.2: String & Text Types
     TypeString,
     TypeCStr,
@@ -277,7 +279,7 @@ pub enum Token {
     TypeByteString,
     TypeRawStr,
     TypeInterpolated,
-    
+
     // V5.2: Container Types
     TypeVec,
     TypeArray,
@@ -292,7 +294,7 @@ pub enum Token {
     TypeSmallVec,
     TypeTinyVec,
     TypeArrayVec,
-    
+
     // V5.2: Pointer & Reference Types
     TypeBox,
     TypeRc,
@@ -308,7 +310,7 @@ pub enum Token {
     TypeManualDrop,
     TypeMaybeOwned,
     TypeCow,
-    
+
     // V5.2: Async Types
     TypeFuture,
     TypeStream,
@@ -318,7 +320,7 @@ pub enum Token {
     TypeAsyncBlock,
     TypeAsyncFn,
     TypeAsyncClosure,
-    
+
     // V5.2: Function Types
     TypeFn,
     TypeFnOnce,
@@ -330,14 +332,14 @@ pub enum Token {
     TypeMethod,
     TypeConstructor,
     TypeDestructor,
-    
+
     // V5.2: Error Types
     TypeError,
     TypeException,
     TypePanic,
     TypeAbort,
     TypeTrap,
-    
+
     // V5.2: Time & Duration Types
     TypeDuration,
     TypeInstant,
@@ -347,7 +349,7 @@ pub enum Token {
     TypeTime,
     TypeTimeZone,
     TypeChrono,
-    
+
     // V5.2: I/O & Network Types
     TypeFile,
     TypeDir,
@@ -361,7 +363,7 @@ pub enum Token {
     TypeUdpSocket,
     TypeUnixStream,
     TypeUnixListener,
-    
+
     // V5.2: Synchronization Types
     TypeMutex,
     TypeRwLock,
@@ -371,14 +373,14 @@ pub enum Token {
     TypeAtomic,
     TypeOnce,
     TypeLatch,
-    
+
     // V5.2: Range Types
     TypeRange,
     TypeRangeInclusive,
     TypeRangeFrom,
     TypeRangeTo,
     TypeRangeFull,
-    
+
     // V5.2: Advanced Keywords (150+ new language features)
     Async,
     Await,
@@ -495,7 +497,7 @@ pub enum Token {
     Aapcs,
     Win64,
     SysV64,
-    
+
     // V5.2: Pattern Matching Extensions
     Some,
     None,
@@ -509,7 +511,7 @@ pub enum Token {
     Binding,
     Refutable,
     Irrefutable,
-    
+
     // V5.2: Macro System
     Macro,
     MacroRules,
@@ -529,7 +531,7 @@ pub enum Token {
     Cfg,
     CfgAttr,
     Feature,
-    
+
     // V5.2: Attributes & Annotations
     Attribute,
     Derive,
@@ -552,7 +554,7 @@ pub enum Token {
     Since,
     Unstable,
     Stable,
-    
+
     // V5.2: Lifetime & Variance
     LifetimeStatic,
     LifetimeAnon,
@@ -562,7 +564,7 @@ pub enum Token {
     Contravariant,
     // Invariant already defined in V4.0
     Bivariant,
-    
+
     // V5.2: Effect System
     Effect,
     Handler,
@@ -572,7 +574,7 @@ pub enum Token {
     Perform,
     Handle,
     // With already defined above
-    
+
     // V5.2: Linear & Affine Types
     Linear,
     Affine,
@@ -581,7 +583,7 @@ pub enum Token {
     Drop,
     Forget,
     Leak,
-    
+
     // V5.2: Dependent Types
     Dependent,
     Indexed,
@@ -594,7 +596,7 @@ pub enum Token {
     Axiom,
     Lemma,
     Theorem,
-    
+
     // V5.2: Memory Operations
     Memcpy,
     Memmove,
@@ -606,7 +608,7 @@ pub enum Token {
     Free,
     AlignedAlloc,
     Zalloc,
-    
+
     // V5.2: Synchronization Primitives
     AtomicLoad,
     AtomicStore,
@@ -623,7 +625,7 @@ pub enum Token {
     AcqRel,
     SeqCst,
     Relaxed,
-    
+
     // V5.2: SIMD & Vectorization
     Simd,
     Vector,
@@ -635,7 +637,7 @@ pub enum Token {
     Reduce,
     Horizontal,
     Vertical,
-    
+
     // V5.2: GPU & Parallel Computing
     Gpu,
     Kernel,
@@ -649,7 +651,7 @@ pub enum Token {
     Constant,
     Device,
     Host,
-    
+
     // V5.2: JIT & Compilation
     Jit,
     Compile,
@@ -659,7 +661,7 @@ pub enum Token {
     Specialize,
     Monomorphize,
     Devirtualize,
-    
+
     // V5.2: Reflection & Metaprogramming
     TypeOf,
     TypeId,
@@ -671,7 +673,7 @@ pub enum Token {
     MethodOf,
     TraitOf,
     ImplOf,
-    
+
     // V5.2: Serialization & Encoding
     // Serialize, Deserialize already defined in V4.0
     Encode,
@@ -688,7 +690,7 @@ pub enum Token {
     Binary,
     Base64,
     Hex,
-    
+
     // V5.2: Cryptography
     Hash,
     Sha256,
@@ -703,7 +705,7 @@ pub enum Token {
     Verify,
     Random,
     SecureRandom,
-    
+
     // V5.2: Compression
     Compress,
     Decompress,
@@ -712,7 +714,7 @@ pub enum Token {
     Bzip2,
     Lz4,
     Zstd,
-    
+
     // V5.2: Logging & Debugging
     Log,
     Trace,
@@ -728,7 +730,7 @@ pub enum Token {
     Eprintln,
     Dbg,
     Pause,
-    
+
     // V5.2: Testing & Benchmarking
     // Test, Bench already defined above
     Fuzz,
@@ -743,7 +745,7 @@ pub enum Token {
     // When, Then already defined above
     Expect,
     // Should already defined above
-    
+
     // V5.2: Documentation
     // Doc, Warning, Deprecated, Since, Return already defined above or earlier
     Example,
@@ -751,7 +753,7 @@ pub enum Token {
     See,
     Param,
     Throws,
-    
+
     // V5.2: Build & Compilation
     Build,
     Clean,
@@ -761,7 +763,7 @@ pub enum Token {
     Publish,
     Install,
     Run,
-    
+
     // V5.2: Additional Operators
     PlusPlus,
     MinusMinus,
@@ -797,7 +799,6 @@ pub enum Token {
     DoubleArrow,
     TripleArrow,
     // At, Hash already defined above or cause conflicts
-    
     Number(i64),
     FloatLiteral(String), // Store as string to maintain Eq
     Plus,
@@ -901,13 +902,20 @@ impl<'a> Lexer<'a> {
     }
 
     fn current_token_location(&self) -> crate::error::SourceLocation {
-        crate::error::SourceLocation::with_line_col(self.token_start_line, self.token_start_column, self.token_start_position)
+        crate::error::SourceLocation::with_line_col(
+            self.token_start_line,
+            self.token_start_column,
+            self.token_start_position,
+        )
     }
 
     fn read_identifier(&mut self, first: u8) -> String {
         let mut ident = String::new();
         ident.push(first as char);
-        while matches!(self.peek(), Some(b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_')) {
+        while matches!(
+            self.peek(),
+            Some(b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_')
+        ) {
             ident.push(self.bump().unwrap() as char);
         }
         ident
@@ -938,7 +946,9 @@ impl<'a> Lexer<'a> {
                 other => value.push(other as char),
             }
         }
-        Err(LppoError::unterminated_string_at(self.current_token_location()))
+        Err(LppoError::unterminated_string_at(
+            self.current_token_location(),
+        ))
     }
 
     /// Returns the next token in the input stream.
@@ -962,155 +972,169 @@ impl<'a> Lexer<'a> {
                 let string = self.read_string()?;
                 Token::StringLiteral(string)
             }
-                b'0'..=b'9' => {
-                    // read number (integer or float)
-                    let mut num_str = String::new();
-                    num_str.push(ch as char);
-                    let mut is_float = false;
-                    
-                    while let Some(d) = self.peek() {
-                        if d.is_ascii_digit() {
-                            self.bump();
-                            num_str.push(d as char);
-                        } else if d == b'.' && !is_float {
-                            // Check if this is a decimal point (not method call)
-                            // Peek ahead to see if followed by digit
-                            self.bump(); // consume '.'
-                            if let Some(next) = self.peek() {
-                                if next.is_ascii_digit() {
-                                    is_float = true;
-                                    num_str.push('.');
-                                } else {
-                                    // Not a float, it's a method call or range
-                                    // Put the dot back by decrementing position
-                                    self.position -= 1;
-                                    self.current -= 1;
-                                    self.column -= 1;
-                                    break;
-                                }
+            b'0'..=b'9' => {
+                // read number (integer or float)
+                let mut num_str = String::new();
+                num_str.push(ch as char);
+                let mut is_float = false;
+
+                while let Some(d) = self.peek() {
+                    if d.is_ascii_digit() {
+                        self.bump();
+                        num_str.push(d as char);
+                    } else if d == b'.' && !is_float {
+                        // Check if this is a decimal point (not method call)
+                        // Peek ahead to see if followed by digit
+                        self.bump(); // consume '.'
+                        if let Some(next) = self.peek() {
+                            if next.is_ascii_digit() {
+                                is_float = true;
+                                num_str.push('.');
                             } else {
-                                // EOF after dot, not a float
+                                // Not a float, it's a method call or range
+                                // Put the dot back by decrementing position
                                 self.position -= 1;
                                 self.current -= 1;
                                 self.column -= 1;
                                 break;
                             }
                         } else {
+                            // EOF after dot, not a float
+                            self.position -= 1;
+                            self.current -= 1;
+                            self.column -= 1;
                             break;
                         }
-                    }
-                    
-                    if is_float {
-                        Token::FloatLiteral(num_str)
                     } else {
-                        Token::Number(num_str.parse().unwrap())
+                        break;
                     }
                 }
-                b'=' => {
-                    if self.peek() == Some(b'=') {
-                        self.bump();
-                        Token::EqEq
-                    } else if self.peek() == Some(b'>') {
-                        self.bump();
-                        Token::FatArrow
-                    } else {
-                        Token::Equals
-                    }
+
+                if is_float {
+                    Token::FloatLiteral(num_str)
+                } else {
+                    Token::Number(num_str.parse().unwrap())
                 }
-                b'!' => {
-                    if self.peek() == Some(b'=') {
-                        self.bump();
-                        Token::NotEq
-                    } else {
-                        Token::Bang
-                    }
+            }
+            b'=' => {
+                if self.peek() == Some(b'=') {
+                    self.bump();
+                    Token::EqEq
+                } else if self.peek() == Some(b'>') {
+                    self.bump();
+                    Token::FatArrow
+                } else {
+                    Token::Equals
                 }
-                b',' => Token::Comma,
-                b'.' => Token::Dot,
-                b'?' => Token::Question,
-                b':' => {
-                    if self.peek() == Some(b':') {
-                        self.bump();
-                        Token::DoubleColon
-                    } else {
-                        Token::Colon
-                    }
+            }
+            b'!' => {
+                if self.peek() == Some(b'=') {
+                    self.bump();
+                    Token::NotEq
+                } else {
+                    Token::Bang
                 }
-                b'\'' => {
-                    // Lifetime annotation like 'a or 'static
-                    let mut lifetime = String::new();
-                    while matches!(self.peek(), Some(b'a'..=b'z' | b'A'..=b'Z' | b'_')) {
-                        lifetime.push(self.bump().unwrap() as char);
-                    }
-                    if lifetime.is_empty() {
-                        return Err(LppoError::unexpected_char_at('\'', self.current_token_location()));
-                    }
-                    Token::Lifetime(lifetime)
+            }
+            b',' => Token::Comma,
+            b'.' => Token::Dot,
+            b'?' => Token::Question,
+            b':' => {
+                if self.peek() == Some(b':') {
+                    self.bump();
+                    Token::DoubleColon
+                } else {
+                    Token::Colon
                 }
-                b'[' => Token::LBracket,
-                b']' => Token::RBracket,
-                b'%' => Token::Modulo,
-                b'^' => Token::Caret,
-                b'~' => Token::Tilde,
-                b'#' => Token::Hash,
-                b'&' => Token::Amp,
-                b'|' => Token::Pipe,
-                b'<' => {
-                    if self.peek() == Some(b'=') { self.bump(); Token::LessEq } else { Token::Less }
+            }
+            b'\'' => {
+                // Lifetime annotation like 'a or 'static
+                let mut lifetime = String::new();
+                while matches!(self.peek(), Some(b'a'..=b'z' | b'A'..=b'Z' | b'_')) {
+                    lifetime.push(self.bump().unwrap() as char);
                 }
-                b'>' => {
-                    if self.peek() == Some(b'=') { self.bump(); Token::GreaterEq } else { Token::Greater }
+                if lifetime.is_empty() {
+                    return Err(LppoError::unexpected_char_at(
+                        '\'',
+                        self.current_token_location(),
+                    ));
                 }
-                b'+' => Token::Plus,
-                b'-' => {
-                    if self.peek() == Some(b'>') {
-                        self.bump();
-                        Token::Arrow
-                    } else {
-                        Token::Minus
-                    }
+                Token::Lifetime(lifetime)
+            }
+            b'[' => Token::LBracket,
+            b']' => Token::RBracket,
+            b'%' => Token::Modulo,
+            b'^' => Token::Caret,
+            b'~' => Token::Tilde,
+            b'#' => Token::Hash,
+            b'&' => Token::Amp,
+            b'|' => Token::Pipe,
+            b'<' => {
+                if self.peek() == Some(b'=') {
+                    self.bump();
+                    Token::LessEq
+                } else {
+                    Token::Less
                 }
-                b'*' => {
-                    if self.peek() == Some(b'*') {
-                        self.bump();
-                        Token::Power
-                    } else {
-                        Token::Star
-                    }
+            }
+            b'>' => {
+                if self.peek() == Some(b'=') {
+                    self.bump();
+                    Token::GreaterEq
+                } else {
+                    Token::Greater
                 }
-                b'/' => Token::Slash,
-                b'(' => Token::LParen,
-                b')' => Token::RParen,
-                b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+            }
+            b'+' => Token::Plus,
+            b'-' => {
+                if self.peek() == Some(b'>') {
+                    self.bump();
+                    Token::Arrow
+                } else {
+                    Token::Minus
+                }
+            }
+            b'*' => {
+                if self.peek() == Some(b'*') {
+                    self.bump();
+                    Token::Power
+                } else {
+                    Token::Star
+                }
+            }
+            b'/' => Token::Slash,
+            b'(' => Token::LParen,
+            b')' => Token::RParen,
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let ident = self.read_identifier(ch);
                 match ident.as_str() {
                     // V3.0: Cryptic abbreviations replacing conversational keywords
-                    "PROCDEF" | "proc" => Token::Proc,  // Keep backward compat during transition
+                    "PROCDEF" | "proc" => Token::Proc, // Keep backward compat during transition
                     "PARLBLK" | "parallel" => Token::Parallel,
                     "EMIT" | "out" => Token::Out,
                     "STDIN" | "input" => Token::Input,
-                        "DECLVAR" | "let" => Token::Let,
-                        "CJMP" | "if" => Token::If,  // Conditional jump
-                        "CJMPALT" | "elif" => Token::Elif,
-                        "JMPDEF" | "else" => Token::Else,
-                        "WHLLP" | "while" => Token::While,
-                        "ITRLP" | "for" => Token::For,  // Iterator loop
-                        "INSET" | "in" => Token::In,
-                        "INFLP" | "loop" => Token::Loop,  // Infinite loop
-                        "LPEXIT" | "break" => Token::Break,
-                        "LPSKIP" | "continue" => Token::Continue,
-                        "RETVL" | "return" => Token::Return,
-                        "STRUCTDEF" | "struct" => Token::Struct,
-                        "ENUMDEF" | "enum" => Token::Enum,
-                        "TRAITDEF" | "trait" => Token::Trait,
-                        "IMPLBLK" | "impl" => Token::Impl,
-                        "PATMCH" | "match" => Token::Match,
-                        "INSTCRT" | "new" => Token::New,
-                        "BOOLT" | "true" => Token::Identifier("true".into()),
-                        "BOOLF" | "false" => Token::Identifier("false".into()),
-                            "LOGAND" | "and" => Token::And,
-                            "LOGOR" | "or" => Token::Or,
-                            "LOGNOT" | "not" => Token::Not,
+                    "DECLVAR" | "let" => Token::Let,
+                    "CJMP" | "if" => Token::If, // Conditional jump
+                    "CJMPALT" | "elif" => Token::Elif,
+                    "JMPDEF" | "else" => Token::Else,
+                    "WHLLP" | "while" => Token::While,
+                    "ITRLP" | "for" => Token::For, // Iterator loop
+                    "INSET" | "in" => Token::In,
+                    "INFLP" | "loop" => Token::Loop, // Infinite loop
+                    "LPEXIT" | "break" => Token::Break,
+                    "LPSKIP" | "continue" => Token::Continue,
+                    "RETVL" | "return" => Token::Return,
+                    "STRUCTDEF" | "struct" => Token::Struct,
+                    "CLASSDEF" | "class" => Token::Class,
+                    "ENUMDEF" | "enum" => Token::Enum,
+                    "TRAITDEF" | "trait" => Token::Trait,
+                    "IMPLBLK" | "impl" => Token::Impl,
+                    "PATMCH" | "match" => Token::Match,
+                    "INSTCRT" | "new" => Token::New,
+                    "BOOLT" | "true" => Token::Identifier("true".into()),
+                    "BOOLF" | "false" => Token::Identifier("false".into()),
+                    "LOGAND" | "and" => Token::And,
+                    "LOGOR" | "or" => Token::Or,
+                    "LOGNOT" | "not" => Token::Not,
                     "PROCCALL" | "call" => Token::Call,
                     // Type keywords - V3.0 with explicit bit sizes
                     "I64" | "Int64" => Token::TypeInt64,
@@ -1134,6 +1158,7 @@ impl<'a> Lexer<'a> {
                     "MODDEF" | "module" => Token::Module,
                     "MODIMP" | "use" => Token::Use,
                     "PUBEXP" | "pub" => Token::Pub,
+                    "RING0" | "ring" => Token::Ring,
                     // Scope keywords - V3.0 explicit scope management
                     "STKFRAME" | "scope" => Token::Scope,
                     "FRAMEEND" | "end" => Token::End,
@@ -1248,7 +1273,7 @@ impl<'a> Lexer<'a> {
                     "CONDVAR" => Token::CondVar,
                     "RWLOCK" => Token::RwLock,
                     "SPINLOCK" => Token::Spinlock,
-                    
+
                     // V5.2: Extended Type System
                     "F32" | "Float32" => Token::TypeF32,
                     "F64" | "Float64" => Token::TypeF64,
@@ -1275,7 +1300,7 @@ impl<'a> Lexer<'a> {
                     "Never" => Token::TypeNever,
                     "Unknown" => Token::TypeUnknown,
                     "Dynamic" => Token::TypeDynamic,
-                    
+
                     // V5.2: Advanced Keywords
                     "async" => Token::Async,
                     "await" => Token::Await,
@@ -1389,7 +1414,7 @@ impl<'a> Lexer<'a> {
                     "primitive" => Token::Primitive,
                     "native" => Token::Native,
                     "foreign" => Token::Foreign,
-                    
+
                     // V5.2: Pattern Matching
                     "Some" => Token::Some,
                     "None" => Token::None,
@@ -1399,7 +1424,7 @@ impl<'a> Lexer<'a> {
                     "at" => Token::At,
                     "range" => Token::Range,
                     "rest" => Token::Rest,
-                    
+
                     // V5.2: Macro System
                     "macro" => Token::Macro,
                     "macro_rules" => Token::MacroRules,
@@ -1413,7 +1438,7 @@ impl<'a> Lexer<'a> {
                     "file" => Token::File,
                     "line" => Token::Line,
                     "column" => Token::Column,
-                    
+
                     // V5.2: Attributes
                     "derive" => Token::Derive,
                     "test" => Token::Test,
@@ -1426,13 +1451,13 @@ impl<'a> Lexer<'a> {
                     "forbid" => Token::Forbid,
                     "deprecated" => Token::Deprecated,
                     "must_use" => Token::MustUse,
-                    
+
                     // V5.2: Effect System
                     "effect" => Token::Effect,
                     "handler" => Token::Handler,
                     "perform" => Token::Perform,
                     "handle" => Token::Handle,
-                    
+
                     // V5.2: Linear & Affine Types
                     "linear" => Token::Linear,
                     "affine" => Token::Affine,
@@ -1441,7 +1466,7 @@ impl<'a> Lexer<'a> {
                     "drop" => Token::Drop,
                     "forget" => Token::Forget,
                     "leak" => Token::Leak,
-                    
+
                     // V5.2: Memory Operations
                     "memcpy" => Token::Memcpy,
                     "memmove" => Token::Memmove,
@@ -1451,7 +1476,7 @@ impl<'a> Lexer<'a> {
                     "calloc" => Token::Calloc,
                     "realloc" => Token::Realloc,
                     "free" => Token::Free,
-                    
+
                     // V5.2: Synchronization
                     "atomic_load" => Token::AtomicLoad,
                     "atomic_store" => Token::AtomicStore,
@@ -1459,7 +1484,7 @@ impl<'a> Lexer<'a> {
                     "acquire" => Token::Acquire,
                     "release" => Token::Release,
                     "relaxed" => Token::Relaxed,
-                    
+
                     // V5.2: SIMD & Vectorization
                     "simd" => Token::Simd,
                     "vector" => Token::Vector,
@@ -1469,7 +1494,7 @@ impl<'a> Lexer<'a> {
                     "shuffle" => Token::Shuffle,
                     "swizzle" => Token::Swizzle,
                     "reduce" => Token::Reduce,
-                    
+
                     // V5.2: GPU & Parallel Computing
                     "gpu" => Token::Gpu,
                     "kernel" => Token::Kernel,
@@ -1483,21 +1508,21 @@ impl<'a> Lexer<'a> {
                     "constant" => Token::Constant,
                     "device" => Token::Device,
                     "host" => Token::Host,
-                    
+
                     // V5.2: JIT & Compilation
                     "jit" => Token::Jit,
                     "compile" => Token::Compile,
                     "interpret" => Token::Interpret,
                     "optimize" => Token::Optimize,
                     "specialize" => Token::Specialize,
-                    
+
                     // V5.2: Reflection
                     "typeof" => Token::TypeOf,
                     "typeid" => Token::TypeId,
                     "typename" => Token::TypeName,
                     // sizeof, alignof already mapped above
                     "offsetof" => Token::OffsetOf,
-                    
+
                     // V5.2: Serialization
                     // serialize, deserialize already mapped above
                     "encode" => Token::Encode,
@@ -1514,7 +1539,7 @@ impl<'a> Lexer<'a> {
                     "binary" => Token::Binary,
                     "base64" => Token::Base64,
                     "hex" => Token::Hex,
-                    
+
                     // V5.2: Cryptography
                     "hash" => Token::Hash,
                     "sha256" => Token::Sha256,
@@ -1527,9 +1552,8 @@ impl<'a> Lexer<'a> {
                     "decrypt" => Token::Decrypt,
                     "sign" => Token::Sign,
                     "verify" => Token::Verify,
-                    "random" => Token::Random,
                     "secure_random" => Token::SecureRandom,
-                    
+
                     // V5.2: Compression
                     "compress" => Token::Compress,
                     "decompress" => Token::Decompress,
@@ -1538,7 +1562,7 @@ impl<'a> Lexer<'a> {
                     "bzip2" => Token::Bzip2,
                     "lz4" => Token::Lz4,
                     "zstd" => Token::Zstd,
-                    
+
                     // V5.2: Logging
                     "log" => Token::Log,
                     "trace" => Token::Trace,
@@ -1553,7 +1577,7 @@ impl<'a> Lexer<'a> {
                     "eprint" => Token::Eprint,
                     "eprintln" => Token::Eprintln,
                     "dbg" => Token::Dbg,
-                    
+
                     // V5.2: Testing
                     "fuzz" => Token::Fuzz,
                     "property" => Token::Property,
@@ -1566,7 +1590,7 @@ impl<'a> Lexer<'a> {
                     "given" => Token::Given,
                     // when, then already mapped above
                     "expect" => Token::Expect,
-                    
+
                     // V5.2: Documentation
                     "doc" => Token::Doc,
                     "example" => Token::Example,
@@ -1574,7 +1598,7 @@ impl<'a> Lexer<'a> {
                     "see" => Token::See,
                     "param" => Token::Param,
                     "throws" => Token::Throws,
-                    
+
                     // V5.2: Build & Compilation
                     "build" => Token::Build,
                     "clean" => Token::Clean,
@@ -1584,7 +1608,7 @@ impl<'a> Lexer<'a> {
                     "publish" => Token::Publish,
                     "install" => Token::Install,
                     "run" => Token::Run,
-                    
+
                     // V5.2: Container Types
                     "Vec" => Token::TypeVec,
                     "Array" => Token::TypeArray,
@@ -1596,7 +1620,7 @@ impl<'a> Lexer<'a> {
                     "LinkedList" => Token::TypeLinkedList,
                     "VecDeque" => Token::TypeVecDeque,
                     "BinaryHeap" => Token::TypeBinaryHeap,
-                    
+
                     // V5.2: Pointer Types
                     "Box" => Token::TypeBox,
                     "Rc" => Token::TypeRc,
@@ -1604,34 +1628,37 @@ impl<'a> Lexer<'a> {
                     "Cell" => Token::TypeCell,
                     "RefCell" => Token::TypeRefCell,
                     "Pin" => Token::TypePin,
-                    
+
                     // V5.2: Async Types
                     "Future" => Token::TypeFuture,
                     "Stream" => Token::TypeStream,
                     "Task" => Token::TypeTask,
-                    
+
                     // V5.2: Time Types
                     "Duration" => Token::TypeDuration,
                     "Instant" => Token::TypeInstant,
                     "DateTime" => Token::TypeDateTime,
-                    
+
                     // V5.2: I/O Types
                     "File" => Token::TypeFile,
                     "TcpStream" => Token::TypeTcpStream,
                     "TcpListener" => Token::TypeTcpListener,
                     "UdpSocket" => Token::TypeUdpSocket,
-                    
+
                     // V5.2: Synchronization Types
                     "Mutex" => Token::TypeMutex,
                     "RwLock" => Token::TypeRwLock,
                     "Semaphore" => Token::TypeSemaphore,
                     "Barrier" => Token::TypeBarrier,
-                    
+
                     _ => Token::Identifier(ident),
                 }
             }
             other => {
-                return Err(LppoError::unexpected_char_at(other as char, self.current_token_location()))
+                return Err(LppoError::unexpected_char_at(
+                    other as char,
+                    self.current_token_location(),
+                ))
             }
         };
         Ok(token)

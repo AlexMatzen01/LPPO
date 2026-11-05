@@ -1,0 +1,17 @@
+pub proc main() -> Void {
+    out "=== Array Input ===";
+
+    input numbers: Arr<Int64> with "Enter numbers separated by commas (e.g. 1,2,3):";
+    out "You entered:", numbers;
+
+    input names: Arr<Str> with "Enter names separated by commas (e.g. Alice,Bob):";
+    out "Names list:", names;
+
+    for n: Int64 in numbers {
+        out "Number:", n;
+    }
+
+    for name: Str in names {
+        out "Name:", name;
+    }
+}

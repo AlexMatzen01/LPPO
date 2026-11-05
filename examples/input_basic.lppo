@@ -1,0 +1,9 @@
+pub proc main() -> Void {
+    out "=== Basic String Input ===";
+
+    input name: Str with "Enter your name:";
+    out "Hello,", name;
+
+    input city: Str with "Enter your city:";
+    out "You live in", city;
+}

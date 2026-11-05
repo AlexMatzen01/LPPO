@@ -1,0 +1,16 @@
+pub proc main() -> Void {
+    out "=== Random Numbers ===";
+
+    input min: Int64 with "Enter minimum:";
+    input max: Int64 with "Enter maximum:";
+
+    let own r1: Int64 = random(min, max);
+    let own r2: Int64 = random(min, max);
+    let own r3: Int64 = random(min, max);
+
+    out "Random 1:", r1;
+    out "Random 2:", r2;
+    out "Random 3:", r3;
+
+    out "Single random 1..100:", random(1, 100);
+}

@@ -1,0 +1,24 @@
+ring 0;
+
+pub proc main() -> Void {
+    out "=== LPPO ring-0 demo ===";
+
+    // Write byte 65 ('A') to serial port 992 (0x3f8, COM1 data register)
+    let own ok: Void = outb(992, 65);
+    out "outb(992, 65) done";
+
+    // Read byte from serial port status register (997 = 0x3fd)
+    let own status: Int64 = inb(997);
+    out "COM1 line status:", status;
+
+    // Read CPUID leaf 0
+    let own ids: Arr<Int64> = cpuid(0);
+    out "cpuid(0) eax:", ids[0];
+    out "cpuid(0) ebx:", ids[1];
+    out "cpuid(0) ecx:", ids[2];
+    out "cpuid(0) edx:", ids[3];
+
+    // Disable interrupts, halt
+    cli();
+    hlt();
+}

@@ -1,0 +1,13 @@
+pub proc main() -> Void {
+    out "=== combined attributes (bold + underline + color) ===";
+    out color("bold red", "bold red");
+    out color("bold underline cyan", "bold underline cyan");
+    out color("bold italic green", "bold italic green");
+
+    out "=== raw ANSI color codes ===";
+    out color("raw 1;34 (bold blue)", "1;34");
+    out color("raw 4;33 (underline yellow)", "4;33");
+
+    out "=== comma-separated list ===";
+    out color("bold,underline,magenta", "bold,underline,magenta");
+}

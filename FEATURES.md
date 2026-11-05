@@ -5,7 +5,7 @@ This document honestly describes what LPPO actually implements.
 ## Lexer & Parser
 
 ### Tokens Recognized
-- Keywords: proc, pub, let, if, elif, else, while, for, in, loop, break, continue, return, out, call
+- Keywords: proc, pub, let, if, elif, else, while, for, in, loop, break, continue, return, out, input, call
 - Types: Int64, Bool, Str, Arr, Void, Option, Result
 - Qualifiers: own, mut, ref, borrow
 - Operators: +, -, *, /, %, ==, !=, <, >, <=, >=, and, or, not
@@ -49,6 +49,7 @@ This document honestly describes what LPPO actually implements.
 - While loops
 - Conditionals (if/elif/else)
 - Basic output (out statement)
+- Basic input (input statement): reads from stdin and parses into Int64, Bool, Str, or Arr<T>
 - Break/continue in loops
 - **File I/O operations (v5.3)**:
   - `read_file(path)` - read file contents
@@ -68,6 +69,15 @@ This document honestly describes what LPPO actually implements.
   - `abs(num)` - absolute value
   - `min(a, b)`, `max(a, b)` - min/max functions
   - `pow(base, exp)` - exponentiation
+- **Random numbers**:
+  - `random(min, max)` - pseudo-random integer in [min, max]
+- **JSON support**:
+  - `json_parse(str)` - parse a JSON string into an LPPO value
+  - `json_stringify(val)` - serialize an LPPO value to a JSON string
+- **Terminal commands**:
+  - `system(cmd)` - run a shell command and return its output
+- **ANSI colors**:
+  - `color(text, color)` - wrap text in ANSI color codes (red, green, blue, yellow, magenta, cyan, white, black, bold, underline, reset, and bright variants)
 
 ### Limited Features
 - Pattern matching (basic support only)

@@ -1,0 +1,24 @@
+pub proc main() -> Void {
+    tui_init();
+    tui_clear();
+    tui_title("LPPO TUI Demo");
+
+    let own size: Arr<Int64> = tui_size();
+    out "terminal:", size[0], "rows x", size[1], "cols";
+
+    tui_style("bold underline magenta");
+    tui_put("LPPO Terminal User Interface", 10, 3);
+    tui_reset();
+
+    tui_box(8, 5, 50, 12, "Welcome");
+    tui_puts("This is a TUI label with color.", 10, 7, "bold cyan");
+    tui_puts("Press any key to continue...", 10, 9, "dim");
+
+    tui_progress(45, 100, 10, 13, 30);
+    tui_put("45%", 42, 13);
+
+    tui_move(10, 16);
+    out "tui_box, tui_puts, tui_progress, tui_size all rendered above.";
+
+    tui_end();
+}

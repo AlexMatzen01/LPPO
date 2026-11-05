@@ -1,0 +1,17 @@
+proc add(a: Int64, b: Int64) -> Int64 {
+    return a + b;
+}
+
+proc mul(a: Int64, b: Int64) -> Int64 {
+    return a * b;
+}
+
+pub proc main() -> Void {
+    // Functions can be called in expressions and their return value used.
+    let own x: Int64 = add(10, 20);
+    let own y: Int64 = mul(3, 7);
+    let own z: Int64 = add(x, mul(2, 4));
+    out "add(10, 20) =", x;
+    out "mul(3, 7) =", y;
+    out "add(x, mul(2, 4)) =", z;
+}

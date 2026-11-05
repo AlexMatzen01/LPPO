@@ -1,0 +1,17 @@
+pub proc main() -> Void {
+    out "=== Colors ===";
+
+    out color("Hello in red", "red");
+    out color("Hello in green", "green");
+    out color("Hello in yellow", "yellow");
+    out color("Hello in blue", "blue");
+    out color("Hello in magenta", "magenta");
+    out color("Hello in cyan", "cyan");
+    out color("Bold text", "bold");
+    out color("Underline text", "underline");
+    out color("Back to normal", "reset");
+
+    let own name: Str = "LPPO";
+    out color("Welcome to ", "cyan");
+    out color(name, "bold");
+}

@@ -1,0 +1,198 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "LPPO",
+  "scopeName": "source.lppo",
+  "fileTypes": ["lppo"],
+  "injectionSelector": "L:source.lppo",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#memory-management"
+    },
+    {
+      "include": "#control-flow"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#literals"
+    },
+    {
+      "include": "#punctuation"
+    },
+    {
+      "include": "#identifiers"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.lppo",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.lppo",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "include": "#comments"
+            }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.lppo",
+          "match": "\\b(?:proc|parallel|out|input|call|let|if|elif|else|while|for|in|loop|break|continue|return|match|new|struct|enum|trait|impl|module|use|pub|scope|end|beginseg|endseg|type|constexpr|genrc|uniondef|phantomtyp|regiondef|mempool|membarrier|cachealn|memlayout|comptlp|asyncblk|awaitexpr|exceptionhdl|catchblk|finallyblk|throwexpr|assertchk|gotolabl|jumpto|threadpool|atomicop|lockdef|unlockop|chaneldef|sendmsg|recvmsg|futuredef|promisedef|macrodef|macroexpand|reflecttyp|comptime|attribdef|codegen|filehandle|openfile|closefile|readdata|writedata|nethandle|connectnet|listennet|streamdef|bufferdef|serialize|deserialize|precondit|postcondit|invariant|proofhint|boundscheck|overflowcheck|nullcheck|docstring|metadata|benchmark|testcase|deprecate|closuredef|capturedef|iteratordef|yieldexpr|effectsys|lineartyp|dependtyp|affinetyp|volatile|const|static|inline|noinline|packed|aligned|select|case|default|fallthrough|barrier|semaphore|condvar|rwlock|spinlock|async|await|yield|resume|suspend|generator|coroutine|closure|lambda|capture|try|catch|finally|throw|panic|abort|unreachable|todo|unimplemented|assert|assert_eq|assert_ne|debug|debug_assert|constexpr|const_eval|const_fn|always_inline|naked|cold|hot|pure|impure|extern|export|import|package|crate|super|Self|self|this|base|parent|virtual|override|abstract|final|sealed|partial|extension|operator|implicit|explicit|as|is|of|with|without|where|when|unless|until|repeat|do|then|elseif|otherwise|switch|fallthrough|goto|label|target|jump|skip|defer|lazy|eager|memo|cached|weak|strong|pinned|unpinned|sized|unsized|zero_sized|packed|aligned|repr|layout|transparent|opaque|alias|newtype|phantom|marker|auto|builtin|lang|intrinsic|primitive|native|foreign|abi|cdecl|stdcall|fastcall|vectorcall|thiscall|aapcs|win64|sysv64|guard|at|range|rest|macro|macro_rules|macro_use|macro_export|stringify|concat|include|include_str|include_bytes|file|line|column|module_path|option_env|env|cfg|cfg_attr|feature|derive|test|bench|should|ignore|allow|warn|deny|forbid|deprecated|must_use|no_mangle|link_section|used|non_exhaustive|doc|since|unstable|stable|effect|handler|perform|handle|linear|affine|relevant|consume|drop|forget|leak|dependent|indexed|singleton|refinement|predicate|constraint|proof|qed|axiom|lemma|theorem|memcpy|memmove|memset|memcmp|malloc|calloc|realloc|free|aligned_alloc|zalloc|atomic_load|atomic_store|atomic_swap|atomic_compare_exchange|atomic_fetch_add|atomic_fetch_sub|atomic_fetch_and|atomic_fetch_or|atomic_fetch_xor|atomic_fence|acquire|release|acq_rel|seq_cst|relaxed|simd|vector|splat|extract|insert|shuffle|swizzle|reduce|horizontal|vertical|gpu|kernel|grid|block|thread|warp|global|shared|local|constant|device|host|jit|compile|interpret|optimize|specialize|monomorphize|devirtualize|typeof|typeid|typename|offsetof|strideof|fieldof|methodof|traitof|implof|encode|decode|marshal|unmarshal|pack|unpack|json|toml|yaml|xml|csv|binary|base64|hex|hash|sha256|sha512|md5|blake2|blake3|hmac|encrypt|decrypt|sign|verify|random|secure_random|compress|decompress|gzip|zlib|bzip2|lz4|zstd|log|trace|info|warning|error|critical|fatal|print|println|eprint|eprintln|dbg|pause|fuzz|property|mock|stub|spy|fixture|setup|teardown|given|when|then|expect|example|note|see|param|throws|build|clean|check|clippy|fmt|publish|install|run)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.lppo",
+          "match": "\\b(?:and|or|not)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.primitive.lppo",
+          "match": "\\b(?:Int64|I64|Bool|BOOL8|Str|STRPTR|Arr|ARRPTR|Void|VOID0|Option|OPT|Result|RES|F32|Float32|F64|Float64|Float|Double|U8|UInt8|U16|UInt16|U32|UInt32|U64|UInt64|U128|UInt128|I8|Int8|I16|Int16|I32|Int32|I128|Int128|Char|Byte|Usize|Isize|Tuple|Union|Intersection|Any|Never|Unknown|Dynamic|Abstract|Sealed|Final|Virtual|Override|Interface|Delegate|Event|Property|Indexer|Extension|Partial|Record|Nominal|Structural|Variant|Newtype|Opaque|Transparent|Existential|Universal|Forall|Exists|Constraint|Bound|Where|Assoc|Family|Instance|Class|Covariant|Contravariant|Invariant|Bivariant|Phantom|ZeroSized|Uninit|MaybeUninit|Decimal|Rational|Complex|BigInt|BigDecimal|Fixed|Saturating|Wrapping|Checked|NonZero|String|CStr|OsStr|Path|PathBuf|CString|OsString|Bytes|ByteString|RawStr|Interpolated|Vec|Array|Slice|HashMap|HashSet|BTreeMap|BTreeSet|LinkedList|VecDeque|BinaryHeap|SmallVec|TinyVec|ArrayVec|Box|Rc|Arc|Cell|RefCell|OnceCell|LazyCell|Weak|RawPtr|NonNull|Pin|ManualDrop|MaybeOwned|Cow|Future|Stream|Sink|Task|JoinHandle|AsyncBlock|AsyncFn|AsyncClosure|Fn|FnOnce|FnMut|Closure|Generator|Coroutine|Proc|Method|Constructor|Destructor|Error|Exception|Panic|Abort|Trap|Duration|Instant|SystemTime|DateTime|Date|Time|TimeZone|Chrono|File|Dir|Stdin|Stdout|Stderr|BufReader|BufWriter|TcpStream|TcpListener|UdpSocket|UnixStream|UnixListener|Mutex|RwLock|Semaphore|Barrier|CondVar|Atomic|Once|Latch|Range|RangeInclusive|RangeFrom|RangeTo|RangeFull)\\b"
+        }
+      ]
+    },
+    "memory-management": {
+      "patterns": [
+        {
+          "name": "keyword.memory.management.lppo",
+          "match": "\\b(?:alloc|dealloc|ref|deref|move|copy|borrow|mut|own|heap|stack|sizeof|alignof|cast|unsafe|on|region|mempool|membarrier|cachealn|memlayout|memcpy|memmove|memset|memcmp|malloc|calloc|realloc|free|aligned_alloc|zalloc|atomic_load|atomic_store|atomic_swap|atomic_compare_exchange|atomic_fetch_add|atomic_fetch_sub|atomic_fetch_and|atomic_fetch_or|atomic_fetch_xor|atomic_fence|acquire|release|acq_rel|seq_cst|relaxed)\\b"
+        }
+      ]
+    },
+    "control-flow": {
+      "patterns": [
+        {
+          "name": "keyword.control.flow.lppo",
+          "match": "\\b(?:if|elif|else|while|for|in|loop|break|continue|return|match|select|case|default|fallthrough|goto|label|target|jump|skip|defer|try|catch|finally|throw|async|await|yield|resume|suspend|do|then|unless|until|repeat|switch|when|where|with|without|unless|until|repeat|do|then|else|elsif|elseif|otherwise|guard|at|range|rest)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.lppo",
+          "match": "\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\^=|&=|\\|=|\\^=|<<=|>>=|\\+|-|\\*|/|%|\\^\\^|<<|>>"
+        },
+        {
+          "name": "keyword.operator.comparison.lppo",
+          "match": "==|!=|<=|>=|<|>|<=>|\\?\\:"
+        },
+        {
+          "name": "keyword.operator.logical.lppo",
+          "match": "&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.assignment.lppo",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.bitwise.lppo",
+          "match": "&|\\||\\^|~"
+        },
+        {
+          "name": "keyword.operator.misc.lppo",
+          "match": "\\.\\.\\.|\\.\\.|->|=>|::|\\.|:|,|;|\\?|@|#|\\$|`"
+        }
+      ]
+    },
+    "literals": {
+      "patterns": [
+        {
+          "name": "constant.numeric.integer.lppo",
+          "match": "\\b\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.float.lppo",
+          "match": "\\b\\d+\\.\\d+(?:[eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.language.boolean.lppo",
+          "match": "\\b(?:true|false)\\b"
+        },
+        {
+          "name": "string.quoted.double.lppo",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.lppo",
+              "match": "\\\\[nrt\"\\\\]"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.lppo",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.lppo",
+              "match": "\\\\[nrt'\\\\]"
+            }
+          ]
+        },
+        {
+          "name": "variable.parameter.lifetime.lppo",
+          "match": "'[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.bracket.curly.lppo",
+          "match": "[{}]"
+        },
+        {
+          "name": "punctuation.bracket.square.lppo",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.bracket.round.lppo",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.separator.lppo",
+          "match": "[,;]"
+        },
+        {
+          "name": "punctuation.accessor.lppo",
+          "match": "\\."
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "entity.name.function.lppo",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\s*(?=\\()"
+        },
+        {
+          "name": "variable.other.lppo",
+          "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

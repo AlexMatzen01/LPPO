@@ -48,6 +48,20 @@ LPPO is a **small, educational language** that demonstrates:
 - Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
 - Logical: `and`, `or`, `not`
 - Output: `out` statement
+- Input: `input var: Type [with prompt];` - reads a line from stdin and parses it into the given type (`Int64`, `Bool`, `Str`, `Arr<T>`)
+
+✅ **Random numbers**
+- `random(min, max)` - pseudo-random integer in the inclusive range `[min, max]`
+
+✅ **JSON support**
+- `json_parse(str)` - parse a JSON string into an LPPO value
+- `json_stringify(val)` - serialize an LPPO value to a JSON string
+
+✅ **Terminal commands**
+- `system(cmd)` - run a shell command via `sh -c` and return its output
+
+✅ **ANSI colors**
+- `color(text, color)` - wrap text in ANSI color codes. Supported colors: `reset`, `bold`, `underline`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, `black`, and `bright_*` variants
 
 ✅ **File I/O** (New in v5.3)
 - `read_file(path)` - Read file contents as string
@@ -113,6 +127,27 @@ pub proc main() -> Void {
     }
 }
 ```
+
+### Input Example
+
+```lppo
+pub proc main() -> Void {
+    input name: Str with "Enter your name:";
+    out "Hello,", name;
+
+    input age: Int64 with "Enter your age:";
+    out "You are", age, "years old.";
+
+    input active: Bool with "Are you active? (true/false):";
+    out "Active:", active;
+}
+```
+
+The `input` statement reads one line from stdin, trims whitespace, and parses it according to the declared type:
+- `Int64` - parses an integer
+- `Bool` - accepts `true/false`, `yes/no`, `y/n`, `1/0`
+- `Str` - stores the raw line as a string
+- `Arr<T>` - parses `[1, 2, 3]` or comma-separated values into an array
 
 ### Pause / Timers
 
@@ -216,6 +251,13 @@ cargo build --release
 
 # Run a program
 cargo run -- your_program.lppo
+
+# Compile to a standalone runnable native executable (ELF on Linux, .exe on Windows)
+cargo run --release -- --compile out your_program.lppo   # shorthand for --compile-out
+./out
+
+# Compile to a true bare metal executable (x86_64-unknown-none, no OS)
+cargo run --release -- --compile-bare-metal kernel.bin your_program.lppo
 
 # Run tests
 cargo test

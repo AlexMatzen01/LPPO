@@ -526,6 +526,32 @@ LPPO can compile programs to standalone executables:
 - Deserialize and execute
 - Fall back to file input if no payload
 
+### Bare Metal Executables
+
+LPPO can also compile programs to true bare metal executables that run directly on
+hardware (or under an emulator with a bootloader) with no operating system:
+
+```bash
+cargo run --release -- --compile-bare-metal kernel.bin program.lppo
+```
+
+1. Serialize compiled program to JSON (same bytecode format as bundled executables).
+2. Embed the JSON into the `lppo-bare-rt` crate via `include_bytes!`.
+3. Build `lppo-bare-rt` for the `x86_64-unknown-none` target (`#![no_std]`, `#![no_main]`).
+4. The resulting ELF is a static, position-independent x86-64 binary whose entry point
+   is `_start`.
+
+**Runtime**: A minimal `#![no_std]` interpreter runs the embedded operations on a VGA
+text-mode buffer (0xB8000) using a bump allocator. Supported operations: `Emit`, `Let`,
+`Call`, `Return`, `If`/`Elif`/`Else`, `While`, `Loop`, `Break`, `Continue`, `Scope`,
+`Unsafe`, `Nop`, and `ExprStatement`, plus integer/boolean/string/array expressions.
+OS-dependent operations (`input`, `pause`, `parallel`, `for`, file I/O) produce a runtime
+error if executed.
+
+**Entry point**: `_start` sets the stack to `_stack_top`, clears the screen, deserializes
+the bytecode, runs `main`, then halts. A `#[panic_handler]` writes panic details to VGA
+and halts.
+
 ## Dependencies
 
 **Direct Dependencies**:

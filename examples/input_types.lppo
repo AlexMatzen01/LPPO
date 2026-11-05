@@ -1,0 +1,24 @@
+pub proc main() -> Void {
+    out "=== Typed Input: Int64, Bool, Str ===";
+
+    input age: Int64 with "Enter your age:";
+    out "You are", age, "years old.";
+
+    if age >= 18 {
+        out "You are an adult.";
+    } else {
+        out "You are a minor.";
+    }
+
+    input active: Bool with "Are you active? (true/false):";
+    out "Active status:", active;
+
+    if active {
+        out "Welcome back!";
+    } else {
+        out "Please come back soon.";
+    }
+
+    input name: Str with "Enter your full name:";
+    out "Name on record:", name;
+}

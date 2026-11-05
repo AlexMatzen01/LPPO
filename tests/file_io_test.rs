@@ -7,8 +7,9 @@ fn test_file_write_and_read() {
     let test_file = "/tmp/lppo_test_write_read.txt";
     // Clean up if exists
     let _ = fs::remove_file(test_file);
-    
-    let source = format!(r#"
+
+    let source = format!(
+        r#"
         pub proc main() -> Void {{
             let own path: Str = "{}";
             let own content: Str = "Test content";
@@ -16,19 +17,21 @@ fn test_file_write_and_read() {
             let own read_content: Str = read_file(path);
             out read_content;
         }}
-    "#, test_file);
-    
+    "#,
+        test_file
+    );
+
     let mut executor = build_executor(&source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
-    
+
     // Verify file was created
     assert!(Path::new(test_file).exists());
-    
+
     // Verify content
     let content = fs::read_to_string(test_file).unwrap();
     assert_eq!(content, "Test content");
-    
+
     // Clean up
     let _ = fs::remove_file(test_file);
 }
@@ -38,8 +41,9 @@ fn test_file_append() {
     let test_file = "/tmp/lppo_test_append.txt";
     // Clean up if exists
     let _ = fs::remove_file(test_file);
-    
-    let source = format!(r#"
+
+    let source = format!(
+        r#"
         pub proc main() -> Void {{
             let own path: Str = "{}";
             let own content1: Str = "Line 1";
@@ -49,16 +53,18 @@ fn test_file_append() {
             let own final_content: Str = read_file(path);
             out final_content;
         }}
-    "#, test_file);
-    
+    "#,
+        test_file
+    );
+
     let mut executor = build_executor(&source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
-    
+
     // Verify content
     let content = fs::read_to_string(test_file).unwrap();
     assert_eq!(content, "Line 1\nLine 2");
-    
+
     // Clean up
     let _ = fs::remove_file(test_file);
 }
@@ -68,8 +74,9 @@ fn test_file_exists() {
     let test_file = "/tmp/lppo_test_exists.txt";
     // Clean up if exists
     let _ = fs::remove_file(test_file);
-    
-    let source = format!(r#"
+
+    let source = format!(
+        r#"
         pub proc main() -> Void {{
             let own path: Str = "{}";
             let own exists_before: Bool = file_exists(path);
@@ -78,15 +85,17 @@ fn test_file_exists() {
             let own exists_after: Bool = file_exists(path);
             out exists_after;
         }}
-    "#, test_file);
-    
+    "#,
+        test_file
+    );
+
     let mut executor = build_executor(&source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
-    
+
     // Verify file exists
     assert!(Path::new(test_file).exists());
-    
+
     // Clean up
     let _ = fs::remove_file(test_file);
 }
@@ -96,20 +105,23 @@ fn test_file_delete() {
     let test_file = "/tmp/lppo_test_delete.txt";
     // Create a file first
     fs::write(test_file, "test").unwrap();
-    
-    let source = format!(r#"
+
+    let source = format!(
+        r#"
         pub proc main() -> Void {{
             let own path: Str = "{}";
             let own delete_result: Bool = delete_file(path);
             let own exists_after: Bool = file_exists(path);
             out exists_after;
         }}
-    "#, test_file);
-    
+    "#,
+        test_file
+    );
+
     let mut executor = build_executor(&source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
-    
+
     // Verify file was deleted
     assert!(!Path::new(test_file).exists());
 }
@@ -123,7 +135,7 @@ fn test_read_nonexistent_file() {
             out content;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_err());

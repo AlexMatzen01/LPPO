@@ -10,7 +10,7 @@ fn test_str_concat() {
             out result;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
@@ -25,7 +25,7 @@ fn test_int_to_str() {
             out result;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
@@ -41,7 +41,7 @@ fn test_str_to_int() {
             out doubled;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
@@ -56,7 +56,7 @@ fn test_str_len() {
             out len;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
@@ -73,7 +73,7 @@ fn test_str_upper_lower() {
             out lower;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
@@ -88,7 +88,7 @@ fn test_str_trim() {
             out trimmed;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
@@ -105,7 +105,7 @@ fn test_str_split() {
             }
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     assert!(result.is_ok());
@@ -120,7 +120,7 @@ fn test_str_to_int_error() {
             out num;
         }
     "#;
-    
+
     let mut executor = build_executor(source).unwrap();
     let result = executor.run("main");
     // Should fail because "not_a_number" cannot be parsed as an integer

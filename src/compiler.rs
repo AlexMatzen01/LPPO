@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
-use crate::ast::{Procedure, Program, Statement, Expr, QualifiedName};
+use crate::ast::{Expr, Procedure, Program, QualifiedName, Statement};
 use crate::error::{LppoError, LppoResult};
 use crate::runtime::{Operation, ProcedureBody};
 
 /// Converts an LPPO program into an executable representation.
 pub fn compile_program(program: Program) -> LppoResult<HashMap<String, ProcedureBody>> {
     let mut procedures = HashMap::new();
-    
+
     // Compile module procedures with qualified names
     for module in program.modules {
         for proc in module.procedures {
@@ -18,9 +18,13 @@ pub fn compile_program(program: Program) -> LppoResult<HashMap<String, Procedure
             procedures.insert(qualified_name, compile_procedure(proc));
         }
     }
-    
+
     // Compile top-level procedures
     for proc in program.procedures {
+        // Skip header-only declarations (procedures without a body).
+        if proc.statements.is_empty() {
+            continue;
+        }
         if procedures.contains_key(&proc.name) {
             return Err(LppoError::duplicate_procedure(proc.name));
         }
@@ -37,7 +41,10 @@ fn compile_procedure(procedure: Procedure) -> ProcedureBody {
         .collect();
     // Convert Parameters to just their names for runtime (types are compile-time only)
     let param_names: Vec<String> = procedure.params.into_iter().map(|p| p.name).collect();
-    ProcedureBody { params: param_names, operations }
+    ProcedureBody {
+        params: param_names,
+        operations,
+    }
 }
 
 fn qualified_name_to_string(qn: &QualifiedName) -> String {
@@ -60,18 +67,37 @@ fn compile_statement(statement: Statement) -> Operation {
             let name = qualified_name_to_string(&qualified_name);
             Operation::Call(name, args)
         }
-        Statement::If { cond, then_branch, elifs, else_branch } => {
+        Statement::If {
+            cond,
+            then_branch,
+            elifs,
+            else_branch,
+        } => {
             // compile nested statements into operations
             let then_ops = then_branch.into_iter().map(compile_statement).collect();
-            let elif_ops = elifs.into_iter().map(|(c, stmts)| (c, stmts.into_iter().map(compile_statement).collect())).collect();
-            let else_ops = else_branch.map(|stmts| stmts.into_iter().map(compile_statement).collect());
-            Operation::If { cond, then_ops, elifs: elif_ops, else_ops }
+            let elif_ops = elifs
+                .into_iter()
+                .map(|(c, stmts)| (c, stmts.into_iter().map(compile_statement).collect()))
+                .collect();
+            let else_ops =
+                else_branch.map(|stmts| stmts.into_iter().map(compile_statement).collect());
+            Operation::If {
+                cond,
+                then_ops,
+                elifs: elif_ops,
+                else_ops,
+            }
         }
         Statement::While { cond, body } => {
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::While { cond, ops }
         }
-        Statement::For { var, typ: _, iterable, body } => {
+        Statement::For {
+            var,
+            typ: _,
+            iterable,
+            body,
+        } => {
             // Type annotation is compile-time only, runtime doesn't track it
             let ops = body.into_iter().map(compile_statement).collect();
             Operation::For { var, iterable, ops }
@@ -83,12 +109,23 @@ fn compile_statement(statement: Statement) -> Operation {
         Statement::Break => Operation::Break,
         Statement::Continue => Operation::Continue,
         Statement::Return(expr) => Operation::Return(expr),
-        Statement::Let { name, typ: _, expr, is_mut: _, ownership: _ } => {
+        Statement::Let {
+            name,
+            typ: _,
+            expr,
+            is_mut: _,
+            ownership: _,
+        } => {
             // Type, mutability, and ownership are compile-time only
             // At runtime we just bind the value to the name
             Operation::Let(name, expr)
         }
-        Statement::Alloc { var, typ: _, location: _, size: _ } => {
+        Statement::Alloc {
+            var,
+            typ: _,
+            location: _,
+            size: _,
+        } => {
             // For now, treat alloc as creating an array of the specified size
             // This is a simplified implementation
             Operation::Let(var, Expr::Array(vec![]))
@@ -121,7 +158,11 @@ fn compile_statement(statement: Statement) -> Operation {
             // For now, just placeholder - will implement pattern matching later
             Operation::Nop
         }
-        Statement::StructInit { name: _, typ: _, fields: _ } => {
+        Statement::StructInit {
+            name: _,
+            typ: _,
+            fields: _,
+        } => {
             // Struct initialization - placeholder for now
             Operation::Nop
         }
@@ -133,14 +174,32 @@ fn compile_statement(statement: Statement) -> Operation {
             // Assignment: var = expr is similar to let var = expr but updates existing var
             Operation::Let(target, value)
         }
-        Statement::IndexedAssignment { target: _, index: _, value: _ } => {
+        Statement::IndexedAssignment {
+            target: _,
+            index: _,
+            value: _,
+        } => {
             // Indexed assignment: arr[i] = expr
             // For now, treat as no-op since arrays are immutable in simplified runtime
             Operation::Nop
         }
-        Statement::Pause { prompt, timeout_ms, until, assign_to, on_mismatch, on_timeout, is_async } => {
-            Operation::Pause { prompt, timeout_ms, until, assign_to, on_mismatch, on_timeout, is_async }
-        }
+        Statement::Pause {
+            prompt,
+            timeout_ms,
+            until,
+            assign_to,
+            on_mismatch,
+            on_timeout,
+            is_async,
+        } => Operation::Pause {
+            prompt,
+            timeout_ms,
+            until,
+            assign_to,
+            on_mismatch,
+            on_timeout,
+            is_async,
+        },
     }
 }
 
@@ -152,6 +211,7 @@ mod tests {
     #[test]
     fn compiles_emit_and_parallel() {
         let program = Program {
+            ring0: false,
             use_declarations: vec![],
             type_aliases: vec![],
             modules: vec![],

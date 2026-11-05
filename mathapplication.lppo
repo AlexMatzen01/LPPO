@@ -1,0 +1,522 @@
+pub proc gcd(a: Int64, b: Int64) -> Int64 {
+    let mut x: Int64 = abs(a);
+    let mut y: Int64 = abs(b);
+    while y != 0 {
+        let own temp: Int64 = y;
+        y = x % y;
+        x = temp;
+    }
+    return x;
+}
+
+pub proc isqrt(n: Int64) -> Int64 {
+    if n <= 0 {
+        return 0;
+    }
+    let mut x: Int64 = 0;
+    while (x + 1) * (x + 1) <= n {
+        x = x + 1;
+    }
+    return x;
+}
+
+pub proc ask_int(prompt: Str) -> Int64 {
+    input raw: Str with prompt;
+    return str_to_int(str_trim(raw));
+}
+
+pub proc simple_math() -> Void {
+    out "";
+    out "SIMPLE MATH";
+    let own a: Int64 = ask_int("First integer: ");
+    input op: Str with "Operator (+ - * / % ^): ";
+    let own b: Int64 = ask_int("Second integer: ");
+    if op == "+" {
+        out "Result:", a + b;
+    } elif op == "-" {
+        out "Result:", a - b;
+    } elif op == "*" {
+        out "Result:", a * b;
+    } elif op == "/" {
+        if b == 0 {
+            out "Cannot divide by zero.";
+        } else {
+            out "Result:", a / b;
+        }
+    } elif op == "%" {
+        if b == 0 {
+            out "Cannot use remainder with zero.";
+        } else {
+            out "Result:", a % b;
+        }
+    } elif op == "^" {
+        if b < 0 {
+            out "Use a non-negative exponent.";
+        } else {
+            out "Result:", pow(a, b);
+        }
+    } else {
+        out "Unknown operator.";
+    }
+}
+
+pub proc area_shapes() -> Void {
+    out "";
+    out "AREA OF SHAPES";
+    out "1 Rectangle   2 Triangle   3 Circle";
+    out "4 Trapezoid   5 Rhombus    6 Regular hexagon";
+    out "7 Regular pentagon   8 Regular octagon";
+    let own choice: Int64 = ask_int("Shape number: ");
+    input unit: Str with "Unit (cm, ft, yd): ";
+    if choice == 1 {
+        let own l: Int64 = ask_int("Length: ");
+        let own w: Int64 = ask_int("Width: ");
+        out "Area:", l * w, unit, "squared";
+    } elif choice == 2 {
+        let own b: Int64 = ask_int("Base: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Area:", b * h / 2, unit, "squared";
+    } elif choice == 3 {
+        let own r: Int64 = ask_int("Radius: ");
+        out "Area (pi approximated):", 314159 * r * r / 100000, unit, "squared";
+    } elif choice == 4 {
+        let own b1: Int64 = ask_int("Base 1: ");
+        let own b2: Int64 = ask_int("Base 2: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Area:", (b1 + b2) * h / 2, unit, "squared";
+    } elif choice == 5 {
+        let own d1: Int64 = ask_int("Diagonal 1: ");
+        let own d2: Int64 = ask_int("Diagonal 2: ");
+        out "Area:", d1 * d2 / 2, unit, "squared";
+    } elif choice == 6 {
+        let own s: Int64 = ask_int("Side length: ");
+        out "Area (approx.):", 2598 * s * s / 1000, unit, "squared";
+    } elif choice == 7 {
+        let own s: Int64 = ask_int("Side length: ");
+        out "Area (approx.):", 1720 * s * s / 1000, unit, "squared";
+    } elif choice == 8 {
+        let own s: Int64 = ask_int("Side length: ");
+        out "Area (approx.):", 4828 * s * s / 1000, unit, "squared";
+    } else {
+        out "Invalid shape.";
+    }
+}
+
+pub proc perimeter_shapes() -> Void {
+    out "";
+    out "PERIMETER AND CIRCUMFERENCE";
+    out "1 Rectangle   2 Triangle   3 Circle";
+    let own choice: Int64 = ask_int("Shape number: ");
+    input unit: Str with "Unit (cm, ft, yd): ";
+    if choice == 1 {
+        let own l: Int64 = ask_int("Length: ");
+        let own w: Int64 = ask_int("Width: ");
+        out "Perimeter:", 2 * (l + w), unit;
+    } elif choice == 2 {
+        let own a: Int64 = ask_int("Side A: ");
+        let own b: Int64 = ask_int("Side B: ");
+        let own c: Int64 = ask_int("Side C: ");
+        out "Perimeter:", a + b + c, unit;
+    } elif choice == 3 {
+        let own r: Int64 = ask_int("Radius: ");
+        out "Circumference (pi approximated):", 628318 * r / 100000, unit;
+    } else {
+        out "Invalid shape.";
+    }
+}
+
+pub proc volume_solids() -> Void {
+    out "";
+    out "VOLUME OF SOLIDS";
+    out "1 Cube  2 Rectangular prism  3 Cylinder";
+    out "4 Sphere  5 Cone  6 Pyramid";
+    let own choice: Int64 = ask_int("Solid number: ");
+    input unit: Str with "Unit (cm, ft, yd): ";
+    if choice == 1 {
+        let own s: Int64 = ask_int("Side length: ");
+        out "Volume:", pow(s, 3), unit, "cubed";
+    } elif choice == 2 {
+        let own l: Int64 = ask_int("Length: ");
+        let own w: Int64 = ask_int("Width: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Volume:", l * w * h, unit, "cubed";
+    } elif choice == 3 {
+        let own r: Int64 = ask_int("Radius: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Volume (pi approximated):", 314159 * r * r * h / 100000, unit, "cubed";
+    } elif choice == 4 {
+        let own r: Int64 = ask_int("Radius: ");
+        out "Volume (pi approximated):", 418879 * r * r * r / 100000, unit, "cubed";
+    } elif choice == 5 {
+        let own r: Int64 = ask_int("Radius: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Volume (pi approximated):", 104719 * r * r * h / 100000, unit, "cubed";
+    } elif choice == 6 {
+        let own b: Int64 = ask_int("Base area: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Volume:", b * h / 3, unit, "cubed";
+    } else {
+        out "Invalid solid.";
+    }
+}
+
+pub proc surface_area_solids() -> Void {
+    out "";
+    out "SURFACE AREA OF SOLIDS";
+    out "1 Cube  2 Rectangular prism  3 Sphere  4 Cylinder";
+    let own choice: Int64 = ask_int("Solid number: ");
+    input unit: Str with "Unit (cm, ft, yd): ";
+    if choice == 1 {
+        let own s: Int64 = ask_int("Side length: ");
+        out "Surface area:", 6 * s * s, unit, "squared";
+    } elif choice == 2 {
+        let own l: Int64 = ask_int("Length: ");
+        let own w: Int64 = ask_int("Width: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Surface area:", 2 * (l * w + l * h + w * h), unit, "squared";
+    } elif choice == 3 {
+        let own r: Int64 = ask_int("Radius: ");
+        out "Surface area (pi approximated):", 1256637 * r * r / 100000, unit, "squared";
+    } elif choice == 4 {
+        let own r: Int64 = ask_int("Radius: ");
+        let own h: Int64 = ask_int("Height: ");
+        out "Surface area (pi approximated):", 628318 * r * (r + h) / 100000, unit, "squared";
+    } else {
+        out "Invalid solid.";
+    }
+}
+
+pub proc pythagorean() -> Void {
+    out "";
+    out "PYTHAGOREAN THEOREM";
+    let own a: Int64 = ask_int("Leg A: ");
+    let own b: Int64 = ask_int("Leg B: ");
+    out "Hypotenuse (integer approximation):", isqrt(a * a + b * b);
+}
+
+pub proc similar_triangles() -> Void {
+    out "";
+    out "SIMILAR TRIANGLES";
+    let own a1: Int64 = ask_int("Triangle 1 side A: ");
+    let own a2: Int64 = ask_int("Triangle 2 side A: ");
+    let own b1: Int64 = ask_int("Triangle 1 side B: ");
+    let own b2: Int64 = ask_int("Triangle 2 side B: ");
+    let own c1: Int64 = ask_int("Triangle 1 side C: ");
+    let own c2: Int64 = ask_int("Triangle 2 side C: ");
+    if a1 * b2 == a2 * b1 and b1 * c2 == b2 * c1 {
+        out "The triangles are similar.";
+    } else {
+        out "The triangles are not similar.";
+    }
+}
+
+pub proc angle_check(target: Int64) -> Void {
+    let own a: Int64 = ask_int("First angle: ");
+    let own b: Int64 = ask_int("Second angle: ");
+    if a + b == target {
+        out "The angles match the rule.";
+    } else {
+        out "The angles do not match the rule.";
+    }
+}
+
+pub proc distance_formula() -> Void {
+    out "";
+    out "DISTANCE FORMULA";
+    let own x1: Int64 = ask_int("x1: ");
+    let own y1: Int64 = ask_int("y1: ");
+    let own x2: Int64 = ask_int("x2: ");
+    let own y2: Int64 = ask_int("y2: ");
+    out "Distance (integer approximation):", isqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2));
+}
+
+pub proc midpoint_formula() -> Void {
+    out "";
+    out "MIDPOINT FORMULA";
+    let own x1: Int64 = ask_int("x1: ");
+    let own y1: Int64 = ask_int("y1: ");
+    let own x2: Int64 = ask_int("x2: ");
+    let own y2: Int64 = ask_int("y2: ");
+    out "Midpoint X:", (x1 + x2) / 2;
+    out "Midpoint Y:", (y1 + y2) / 2;
+}
+
+pub proc slope_formula() -> Void {
+    out "";
+    out "SLOPE FORMULA";
+    let own x1: Int64 = ask_int("x1: ");
+    let own y1: Int64 = ask_int("y1: ");
+    let own x2: Int64 = ask_int("x2: ");
+    let own y2: Int64 = ask_int("y2: ");
+    if x2 == x1 {
+        out "Undefined slope (vertical line).";
+    } else {
+        out "Slope numerator:", y2 - y1;
+        out "Slope denominator:", x2 - x1;
+        out "Integer quotient:", (y2 - y1) / (x2 - x1);
+    }
+}
+
+pub proc algebra_tools() -> Void {
+    out "";
+    out "ALGEBRA TOOLS";
+    out "1 Solve a linear equation: ax + b = c";
+    out "2 Evaluate a power";
+    out "3 Factor a quadratic with integer roots";
+    let own choice: Int64 = ask_int("Option: ");
+    if choice == 1 {
+        let own a: Int64 = ask_int("a: ");
+        let own b: Int64 = ask_int("b: ");
+        let own c: Int64 = ask_int("c: ");
+        if a == 0 {
+            out "No unique solution because a is zero.";
+        } else {
+            out "x numerator:", c - b;
+            out "x denominator:", a;
+            out "Integer quotient:", (c - b) / a;
+        }
+    } elif choice == 2 {
+        let own base: Int64 = ask_int("Base: ");
+        let own exponent: Int64 = ask_int("Exponent (0 or greater): ");
+        if exponent < 0 {
+            out "Exponent must be non-negative.";
+        } else {
+            out "Result:", pow(base, exponent);
+        }
+    } elif choice == 3 {
+        let own a: Int64 = ask_int("Coefficient a: ");
+        let own b: Int64 = ask_int("Coefficient b: ");
+        let own c: Int64 = ask_int("Coefficient c: ");
+        let own d: Int64 = b * b - 4 * a * c;
+        if a == 0 {
+            out "This is not a quadratic.";
+        } elif d < 0 {
+            out "No real integer roots.";
+        } else {
+            let own root: Int64 = isqrt(d);
+            if root * root == d {
+                out "Integer root 1:", (-b + root) / (2 * a);
+                out "Integer root 2:", (-b - root) / (2 * a);
+            } else {
+                out "The discriminant is not a perfect square.";
+            }
+        }
+    } else {
+        out "Invalid option.";
+    }
+}
+
+pub proc statistics() -> Void {
+    out "";
+    out "STATISTICS";
+    out "Enter whole numbers separated by spaces.";
+    input raw: Str with "Numbers: ";
+    let own values: Arr<Str> = str_split(str_trim(raw), " ");
+    let mut count: Int64 = 0;
+    let mut sum: Int64 = 0;
+    let mut low: Int64 = 0;
+    let mut high: Int64 = 0;
+    for part: Str in values {
+        let own value: Int64 = str_to_int(part);
+        if count == 0 {
+            low = value;
+            high = value;
+        } else {
+            if value < low {
+                low = value;
+            }
+            if value > high {
+                high = value;
+            }
+        }
+        sum = sum + value;
+        count = count + 1;
+    }
+    if count > 0 {
+        out "Count:", count;
+        out "Sum:", sum;
+        out "Mean (integer quotient):", sum / count;
+        out "Minimum:", low;
+        out "Maximum:", high;
+        out "Range:", high - low;
+    } else {
+        out "No values were entered.";
+    }
+}
+
+pub proc quadratic_formula() -> Void {
+    out "";
+    out "QUADRATIC FORMULA: ax^2 + bx + c = 0";
+    let own a: Int64 = ask_int("a: ");
+    let own b: Int64 = ask_int("b: ");
+    let own c: Int64 = ask_int("c: ");
+    if a == 0 {
+        out "a cannot be zero.";
+    } else {
+        let own d: Int64 = b * b - 4 * a * c;
+        if d < 0 {
+            out "The equation has no real roots.";
+        } else {
+            let own root: Int64 = isqrt(d);
+            if root * root == d {
+                out "Root 1:", (-b + root) / (2 * a);
+                out "Root 2:", (-b - root) / (2 * a);
+            } else {
+                out "Discriminant:", d;
+                out "Square root is not an integer.";
+                out "Use the exact form: (-b +/- sqrt(discriminant)) / (2a).";
+            }
+        }
+    }
+}
+
+pub proc number_theory() -> Void {
+    out "";
+    out "NUMBER THEORY";
+    out "1 GCD   2 LCM   3 Prime factorization";
+    let own choice: Int64 = ask_int("Option: ");
+    if choice == 1 {
+        let own a: Int64 = ask_int("First integer: ");
+        let own b: Int64 = ask_int("Second integer: ");
+        out "GCD:", gcd(a, b);
+    } elif choice == 2 {
+        let own a: Int64 = ask_int("First integer: ");
+        let own b: Int64 = ask_int("Second integer: ");
+        let own g: Int64 = gcd(a, b);
+        if g == 0 {
+            out "LCM is undefined for two zero inputs.";
+        } else {
+            out "LCM:", abs((a / g) * b);
+        }
+    } elif choice == 3 {
+        let mut n: Int64 = ask_int("Positive integer: ");
+        let mut divisor: Int64 = 2;
+        let mut factors: Str = "";
+        if n < 2 {
+            out "Enter an integer greater than 1.";
+        } else {
+            while divisor * divisor <= n {
+                while n % divisor == 0 {
+                    if str_len(factors) == 0 {
+                        factors = int_to_str(divisor);
+                    } else {
+                        factors = str_concat(factors, " x ");
+                        factors = str_concat(factors, int_to_str(divisor));
+                    }
+                    n = n / divisor;
+                }
+                divisor = divisor + 1;
+            }
+            if n > 1 {
+                if str_len(factors) == 0 {
+                    factors = int_to_str(n);
+                } else {
+                    factors = str_concat(factors, " x ");
+                    factors = str_concat(factors, int_to_str(n));
+                }
+            }
+            out "Prime factors:", factors;
+        }
+    } else {
+        out "Invalid option.";
+    }
+}
+
+pub proc unit_conversion() -> Void {
+    out "";
+    out "UNIT CONVERSION";
+    out "1 cm to m   2 m^2 to km^2   3 Celsius to Fahrenheit";
+    out "4 Fahrenheit to Celsius   5 kg to pounds   6 pounds to kg";
+    let own choice: Int64 = ask_int("Option: ");
+    let own value: Int64 = ask_int("Value (whole number): ");
+    if choice == 1 {
+        out "Meters (integer quotient):", value / 100;
+    } elif choice == 2 {
+        out "Square kilometers (integer quotient):", value / 1000000;
+    } elif choice == 3 {
+        out "Fahrenheit:", value * 9 / 5 + 32;
+    } elif choice == 4 {
+        out "Celsius:", (value - 32) * 5 / 9;
+    } elif choice == 5 {
+        out "Pounds (approximate):", value * 220462 / 100000;
+    } elif choice == 6 {
+        out "Kilograms (approximate):", value * 100000 / 220462;
+    } else {
+        out "Invalid option.";
+    }
+}
+
+pub proc main() -> Void {
+    tui_init();
+    tui_title("LPPO Math Application");
+    loop {
+        tui_clear();
+        tui_style("bold cyan");
+        out "========================================";
+        out "          LPPO MATH APPLICATION";
+        out "========================================";
+        tui_reset();
+        out " 1. Simple Math Calculator";
+        out " 2. Area of Shapes";
+        out " 3. Perimeter and Circumference";
+        out " 4. Volume of Solids";
+        out " 5. Surface Area of Solids";
+        out " 6. Pythagorean Theorem";
+        out " 7. Similar Triangles";
+        out " 8. Complementary Angles";
+        out " 9. Supplementary Angles";
+        out "10. Distance Formula";
+        out "11. Midpoint Formula";
+        out "12. Slope Formula";
+        out "13. Algebra Tools";
+        out "14. Statistics";
+        out "15. Quadratic Formula";
+        out "16. Number Theory";
+        out "17. Unit Conversion";
+        out "18. Exit";
+        input choice: Str with "Select an option: ";
+        let own option: Int64 = str_to_int(str_trim(choice));
+        if option == 1 {
+            simple_math();
+        } elif option == 2 {
+            area_shapes();
+        } elif option == 3 {
+            perimeter_shapes();
+        } elif option == 4 {
+            volume_solids();
+        } elif option == 5 {
+            surface_area_solids();
+        } elif option == 6 {
+            pythagorean();
+        } elif option == 7 {
+            similar_triangles();
+        } elif option == 8 {
+            angle_check(90);
+        } elif option == 9 {
+            angle_check(180);
+        } elif option == 10 {
+            distance_formula();
+        } elif option == 11 {
+            midpoint_formula();
+        } elif option == 12 {
+            slope_formula();
+        } elif option == 13 {
+            algebra_tools();
+        } elif option == 14 {
+            statistics();
+        } elif option == 15 {
+            quadratic_formula();
+        } elif option == 16 {
+            number_theory();
+        } elif option == 17 {
+            unit_conversion();
+        } elif option == 18 {
+            break;
+        } else {
+            out "Invalid option.";
+        }
+        input cont: Str with "Press Enter to return to the menu...";
+    }
+    tui_end();
+    out "Math Application closed.";
+}

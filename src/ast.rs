@@ -1,6 +1,7 @@
 /// Represents a complete LPPO program consisting of zero or more modules and procedures.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Program {
+    pub ring0: bool,
     pub use_declarations: Vec<UseDeclaration>,
     pub type_aliases: Vec<TypeAlias>,
     pub modules: Vec<Module>,
@@ -114,12 +115,12 @@ pub enum TypeAnnotation {
     Arr(Box<TypeAnnotation>), // Array of specific type
     Void,
     Ref(Box<TypeAnnotation>, Option<String>), // Reference with optional lifetime
-    Own(Box<TypeAnnotation>), // Owned value
-    Mut(Box<TypeAnnotation>), // Mutable reference
-    Custom(String), // User-defined types (structs, enums)
-    Generic(String, Vec<TypeAnnotation>), // Generic types like HashMap<Str, Int64>
-    Tuple(Vec<TypeAnnotation>), // Tuple types
-    Option(Box<TypeAnnotation>), // Option type
+    Own(Box<TypeAnnotation>),                 // Owned value
+    Mut(Box<TypeAnnotation>),                 // Mutable reference
+    Custom(String),                           // User-defined types (structs, enums)
+    Generic(String, Vec<TypeAnnotation>),     // Generic types like HashMap<Str, Int64>
+    Tuple(Vec<TypeAnnotation>),               // Tuple types
+    Option(Box<TypeAnnotation>),              // Option type
     Result(Box<TypeAnnotation>, Box<TypeAnnotation>), // Result type
 }
 
@@ -175,10 +176,7 @@ pub enum Statement {
         else_branch: Option<Vec<Statement>>,
     },
     /// While loop: while cond { ... }
-    While {
-        cond: Expr,
-        body: Vec<Statement>,
-    },
+    While { cond: Expr, body: Vec<Statement> },
     /// For-in loop: for item in expr { ... }
     For {
         var: String,
@@ -187,9 +185,7 @@ pub enum Statement {
         body: Vec<Statement>,
     },
     /// Infinite loop: loop { ... }
-    Loop {
-        body: Vec<Statement>,
-    },
+    Loop { body: Vec<Statement> },
     /// Break out of loop
     Break,
     /// Continue to next loop iteration
@@ -206,29 +202,18 @@ pub enum Statement {
     /// Memory deallocation: dealloc var;
     Dealloc(String),
     /// Move ownership: move var to target
-    Move {
-        source: String,
-        target: String,
-    },
+    Move { source: String, target: String },
     /// Copy value: copy var to target (requires Copy trait)
-    Copy {
-        source: String,
-        target: String,
-    },
+    Copy { source: String, target: String },
     /// Explicit scope block
     Scope {
         name: Option<String>,
         body: Vec<Statement>,
     },
     /// Unsafe block
-    Unsafe {
-        body: Vec<Statement>,
-    },
+    Unsafe { body: Vec<Statement> },
     /// Match expression for pattern matching
-    Match {
-        expr: Expr,
-        arms: Vec<MatchArm>,
-    },
+    Match { expr: Expr, arms: Vec<MatchArm> },
     /// Struct instantiation: let x: Point = Point { x: 10, y: 20 };
     StructInit {
         name: String,
@@ -238,10 +223,7 @@ pub enum Statement {
     /// Expression statement: expr;
     ExprStatement(Expr),
     /// Assignment: var = expr;
-    Assignment {
-        target: String,
-        value: Expr,
-    },
+    Assignment { target: String, value: Expr },
     /// Indexed assignment: arr[i] = expr;
     IndexedAssignment {
         target: Box<Expr>,
@@ -284,10 +266,10 @@ pub enum MemoryLocation {
 /// Ownership kind for variables
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnershipKind {
-    Own,     // Owned value
-    Ref,     // Immutable reference
-    MutRef,  // Mutable reference
-    Borrow,  // Borrowed value
+    Own,    // Owned value
+    Ref,    // Immutable reference
+    MutRef, // Mutable reference
+    Borrow, // Borrowed value
 }
 
 /// Match arm for pattern matching
@@ -393,6 +375,11 @@ pub enum Expr {
     Call {
         func: Box<Expr>,
         args: Vec<Expr>,
+    },
+    /// Struct instantiation expression: Player { hp: 100, name: "Hero" }
+    StructInit {
+        name: String,
+        fields: Vec<(String, Expr)>,
     },
     /// Range expression: start..end
     Range {

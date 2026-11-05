@@ -1,0 +1,122 @@
+{
+  "name": "lppo",
+  "displayName": "LPPO Language Support",
+  "description": "Syntax highlighting, formatting, and language support for the LPPO programming language",
+  "version": "1.0.0",
+  "publisher": "lppo",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:lppo"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Formatters"
+  ],
+  "keywords": [
+    "lppo",
+    "syntax highlighting",
+    "formatter",
+    "language support"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "lppo",
+        "aliases": [
+          "LPPO",
+          "lppo"
+        ],
+        "extensions": [
+          ".lppo"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "lppo",
+        "scopeName": "source.lppo",
+        "path": "./syntaxes/lppo.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "LPPO Configuration",
+      "properties": {
+        "lppo.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the LPPO executable (built binary). Required to run .lppo scripts. Example: /home/user/lppo/target/release/lppo or ./target/release/lppo"
+        },
+        "lppo.runInTerminal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run LPPO scripts in the integrated terminal instead of the output panel."
+        }
+      }
+    },
+    "configurationDefaults": {
+      "[lppo]": {
+        "editor.defaultFormatter": "lppo.lppo",
+        "editor.formatOnSave": true,
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true
+      }
+    },
+    "formatters": [
+      {
+        "language": "lppo",
+        "label": "LPPO Formatter",
+        "command": "lppo-format",
+        "args": [
+          "--stdin"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "lppo.run",
+        "title": "Run LPPO Script",
+        "category": "LPPO",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "lppo.run",
+          "when": "resourceLangId == lppo",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "lppo.run",
+          "when": "resourceLangId == lppo",
+          "group": "1_run"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "lppo.run",
+          "when": "resourceLangId == lppo"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0",
+    "vscode-test": "^1.6.0"
+  }
+}

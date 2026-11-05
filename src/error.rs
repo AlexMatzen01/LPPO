@@ -53,19 +53,19 @@ pub enum ErrorSeverity {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LppoError {
     /// Raised by the lexer when an unexpected character is encountered.
-    UnexpectedCharacter { 
-        ch: char, 
+    UnexpectedCharacter {
+        ch: char,
         location: SourceLocation,
         suggestion: Option<String>,
     },
     /// Raised by the lexer when a string literal is not properly terminated.
-    UnterminatedString { 
+    UnterminatedString {
         location: SourceLocation,
         suggestion: Option<String>,
     },
     /// Raised by the parser when a token was not expected at the given location.
-    UnexpectedToken { 
-        expected: String, 
+    UnexpectedToken {
+        expected: String,
         found: String,
         location: SourceLocation,
         suggestion: Option<String>,
@@ -103,9 +103,7 @@ pub enum LppoError {
         suggestion: Option<String>,
     },
     /// Division by zero error
-    DivisionByZero {
-        location: Option<SourceLocation>,
-    },
+    DivisionByZero { location: Option<SourceLocation> },
     /// Index out of bounds
     IndexOutOfBounds {
         index: i64,
@@ -118,10 +116,7 @@ pub enum LppoError {
         location: Option<SourceLocation>,
     },
     /// Stack overflow in recursion
-    StackOverflow {
-        procedure: String,
-        depth: usize,
-    },
+    StackOverflow { procedure: String, depth: usize },
     /// Memory allocation failure
     AllocationError {
         message: String,
@@ -192,7 +187,7 @@ impl LppoError {
             | LppoError::UnexpectedEndOfInput { .. }
             | LppoError::DuplicateProcedure { .. }
             | LppoError::SyntaxError { .. } => ErrorSeverity::Error,
-            
+
             LppoError::UnknownProcedure { .. }
             | LppoError::UnknownVariable { .. }
             | LppoError::TypeError { .. }
@@ -209,7 +204,7 @@ impl LppoError {
             | LppoError::ModuleNotFound { .. }
             | LppoError::RuntimeError { .. }
             | LppoError::IoError { .. } => ErrorSeverity::Error,
-            
+
             LppoError::StackOverflow { .. } => ErrorSeverity::Fatal,
         }
     }
@@ -236,7 +231,9 @@ impl LppoError {
             LppoError::UnexpectedCharacter { location, .. } => Some(location),
             LppoError::UnterminatedString { location, .. } => Some(location),
             LppoError::UnexpectedToken { location, .. } => Some(location),
-            LppoError::DuplicateProcedure { second_location, .. } => second_location.as_ref(),
+            LppoError::DuplicateProcedure {
+                second_location, ..
+            } => second_location.as_ref(),
             LppoError::UnknownProcedure { location, .. }
             | LppoError::UnknownVariable { location, .. }
             | LppoError::TypeError { location, .. }
@@ -260,7 +257,7 @@ impl LppoError {
     /// Format error with full details including location and suggestion
     pub fn format_detailed(&self, source: Option<&str>) -> String {
         let mut output = String::new();
-        
+
         // Error severity prefix
         let severity_prefix = match self.severity() {
             ErrorSeverity::Info => "info",
@@ -268,28 +265,36 @@ impl LppoError {
             ErrorSeverity::Error => "error",
             ErrorSeverity::Fatal => "fatal error",
         };
-        
+
         output.push_str(&format!("{}: {}\n", severity_prefix, self));
-        
+
         // Add location context if available
         if let Some(location) = self.location() {
-            output.push_str(&format!("  --> line {}, column {}\n", location.line + 1, location.column + 1));
-            
+            output.push_str(&format!(
+                "  --> line {}, column {}\n",
+                location.line + 1,
+                location.column + 1
+            ));
+
             // Show source code context if available
             if let Some(src) = source {
                 if let Some(line_text) = src.lines().nth(location.line) {
                     output.push_str("   |\n");
                     output.push_str(&format!("{:3} | {}\n", location.line + 1, line_text));
-                    output.push_str(&format!("   | {}{}\n", " ".repeat(location.column), "^".repeat(location.length.max(1))));
+                    output.push_str(&format!(
+                        "   | {}{}\n",
+                        " ".repeat(location.column),
+                        "^".repeat(location.length.max(1))
+                    ));
                 }
             }
         }
-        
+
         // Add suggestion if available
         if let Some(suggestion) = self.suggestion() {
             output.push_str(&format!("  = help: {}\n", suggestion));
         }
-        
+
         // Add stack trace for runtime errors
         if let LppoError::RuntimeError { stack_trace, .. } = self {
             if !stack_trace.is_empty() {
@@ -299,7 +304,7 @@ impl LppoError {
                 }
             }
         }
-        
+
         output
     }
 }
@@ -308,13 +313,36 @@ impl Display for LppoError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             LppoError::UnexpectedCharacter { ch, location, .. } => {
-                write!(f, "unexpected character '{}' at line {}, column {}", ch, location.line + 1, location.column + 1)
+                write!(
+                    f,
+                    "unexpected character '{}' at line {}, column {}",
+                    ch,
+                    location.line + 1,
+                    location.column + 1
+                )
             }
             LppoError::UnterminatedString { location, .. } => {
-                write!(f, "unterminated string literal at line {}, column {}", location.line + 1, location.column + 1)
+                write!(
+                    f,
+                    "unterminated string literal at line {}, column {}",
+                    location.line + 1,
+                    location.column + 1
+                )
             }
-            LppoError::UnexpectedToken { expected, found, location, .. } => {
-                write!(f, "expected {} but found '{}' at line {}, column {}", expected, found, location.line + 1, location.column + 1)
+            LppoError::UnexpectedToken {
+                expected,
+                found,
+                location,
+                ..
+            } => {
+                write!(
+                    f,
+                    "expected {} but found '{}' at line {}, column {}",
+                    expected,
+                    found,
+                    location.line + 1,
+                    location.column + 1
+                )
             }
             LppoError::UnexpectedEndOfInput { expected, .. } => {
                 write!(f, "unexpected end of input, expected {}", expected)
@@ -328,9 +356,18 @@ impl Display for LppoError {
             LppoError::UnknownVariable { name, .. } => {
                 write!(f, "unknown variable '{}'", name)
             }
-            LppoError::TypeError { message, expected, found, .. } => {
+            LppoError::TypeError {
+                message,
+                expected,
+                found,
+                ..
+            } => {
                 if let (Some(exp), Some(fnd)) = (expected, found) {
-                    write!(f, "type error: expected {}, found {}: {}", exp, fnd, message)
+                    write!(
+                        f,
+                        "type error: expected {}, found {}: {}",
+                        exp, fnd, message
+                    )
                 } else {
                     write!(f, "type error: {}", message)
                 }
@@ -339,13 +376,21 @@ impl Display for LppoError {
                 write!(f, "division by zero")
             }
             LppoError::IndexOutOfBounds { index, length, .. } => {
-                write!(f, "index {} out of bounds for array of length {}", index, length)
+                write!(
+                    f,
+                    "index {} out of bounds for array of length {}",
+                    index, length
+                )
             }
             LppoError::InvalidArrayAccess { message, .. } => {
                 write!(f, "invalid array access: {}", message)
             }
             LppoError::StackOverflow { procedure, depth } => {
-                write!(f, "stack overflow in procedure '{}' at depth {}", procedure, depth)
+                write!(
+                    f,
+                    "stack overflow in procedure '{}' at depth {}",
+                    procedure, depth
+                )
             }
             LppoError::AllocationError { message, .. } => {
                 write!(f, "memory allocation error: {}", message)
@@ -453,7 +498,9 @@ impl LppoError {
         LppoError::UnknownProcedure {
             name,
             location: None,
-            suggestion: Some("check that the procedure is defined and spelled correctly".to_string()),
+            suggestion: Some(
+                "check that the procedure is defined and spelled correctly".to_string(),
+            ),
         }
     }
 

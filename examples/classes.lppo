@@ -1,0 +1,9 @@
+class Point {
+    x: Int64,
+    y: Int64,
+}
+
+pub proc main() -> Void {
+    out "class Point declared with fields x: Int64, y: Int64";
+    out "classes are defined with the `class` keyword";
+}

@@ -1,0 +1,17 @@
+{
+  "name": "lppo-formatter",
+  "version": "1.0.0",
+  "description": "LPPO code formatter",
+  "main": "out/lppo-format.js",
+  "bin": {
+    "lppo-format": "./out/lppo-format.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
