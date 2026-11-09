@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod project;
 
@@ -40,18 +40,12 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let mut args_iter = raw_args.into_iter();
 
-    // Project builder subcommand: `lppo project <init|build|format|run|debug|git> ...`
-    if let Some(cmd) = args_iter.next() {
-        if cmd == "project" {
-            return run_project(&mut args_iter, debug);
-        }
-    }
+    // Dispatch on the first argument exactly once: project subcommand,
+    // compile mode, or run mode.
+    match args_iter.next().as_deref() {
+        Some("project") => return run_project(&mut args_iter, debug),
 
-    // compile-out / compile mode: bundle bytecode into a copy of the current
-    // executable, producing a standalone runnable native ELF (.exe on Windows,
-    // ELF on Linux). `--compile` is a shorthand for `--compile-out`.
-    if let Some(flag) = args_iter.next() {
-        if flag == "--compile-out" || flag == "--compile" {
+        Some("--compile-out") | Some("--compile") => {
             let out = args_iter.next().ok_or("missing output path")?;
             let src = args_iter.next().ok_or("missing source path")?;
             let source = fs::read_to_string(&src)?;
@@ -87,8 +81,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
 
-        // compile to a bare metal executable: --compile-bare-metal <out> <source.lppo>
-        if flag == "--compile-bare-metal" {
+        Some("--compile-bare-metal") => {
             let out = args_iter.next().ok_or("missing output path")?;
             let src = args_iter.next().ok_or("missing source path")?;
             let source = fs::read_to_string(&src)?;
@@ -101,12 +94,21 @@ fn run() -> Result<(), Box<dyn Error>> {
                 std::env::temp_dir().join(format!("lppo_bytecode_{}.json", std::process::id()));
             fs::write(&temp, &bytes)?;
 
-            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|e| e.parent().map(|p| p.to_string_lossy().into_owned()))
-                    .unwrap_or_else(|| ".".to_string())
-            });
+            let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| {
+                    let mut dir = std::env::current_exe()
+                        .ok()
+                        .and_then(|e| e.parent().map(|p| p.to_path_buf()))
+                        .unwrap_or_else(|| PathBuf::from("."));
+                    // Walk up to the directory containing Cargo.toml (the workspace root).
+                    while !dir.join("Cargo.toml").is_file() {
+                        if !dir.pop() {
+                            break;
+                        }
+                    }
+                    dir
+                });
 
             let status = std::process::Command::new("cargo")
                 .current_dir(&manifest_dir)
@@ -125,7 +127,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
             let built = format!(
                 "{}/target/x86_64-unknown-none/release/lppo-bare-rt",
-                manifest_dir
+                manifest_dir.display()
             );
             fs::copy(&built, &out)?;
 
@@ -146,29 +148,29 @@ fn run() -> Result<(), Box<dyn Error>> {
             }
             return Ok(());
         }
-    }
 
-    // run mode: if first arg given, treat it as a source path; otherwise check for embedded program
-    if let Some(first) = std::env::args().nth(1) {
-        let path_ref = Path::new(&first);
-        if path_ref.exists() {
-            let source = fs::read_to_string(path_ref)?;
-            let root = path_ref.parent().unwrap_or_else(|| Path::new("."));
-            let executor = lppo::build_executor_with_root(&source, root)
-                .map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
-            if !executor.has_procedure("main") {
-                return Err(Box::new(lppo::LppoError::unknown_procedure("main".into())));
+        Some(first) => {
+            // Run mode: treat the first argument as a source path.
+            let path_ref = Path::new(first);
+            if path_ref.exists() {
+                let source = fs::read_to_string(path_ref)?;
+                let root = path_ref.parent().unwrap_or_else(|| Path::new("."));
+                let executor = lppo::build_executor_with_root(&source, root)
+                    .map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
+                if !executor.has_procedure("main") {
+                    return Err(Box::new(lppo::LppoError::unknown_procedure("main".into())));
+                }
+                executor
+                    .run("main")
+                    .map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
+                return Ok(());
             }
-            executor
-                .run("main")
-                .map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
-            return Ok(());
-        } else {
-            // if the arg doesn't exist, try to detect embedded program in current exe
             if debug {
                 eprintln!("[debug] source '{first}' not found; attempting to run embedded program in executable...");
             }
         }
+
+        None => {}
     }
 
     // Try to detect embedded payload in current exe
