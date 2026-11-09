@@ -1,5 +1,7 @@
 # LPPO - A Learning-Focused Programming Language
 
+**Version:** 0.1.3-alpha.8 (alpha)
+
 ## Overview
 
 LPPO (Legible Programming Paradigm Optimizer) is an educational programming language designed to teach systems programming concepts with explicit, readable syntax. It's implemented as an interpreter in Rust.
@@ -263,7 +265,259 @@ cargo run --release -- --compile-bare-metal kernel.bin your_program.lppo
 cargo test
 ```
 
-## Design Philosophy
+### Build options
+
+The following options are accepted by `lppo project build`, `--compile-out`,
+`--compile`, and `--compile-bare-metal` (where applicable):
+
+| Option | Description |
+|--------|-------------|
+| `--release` | Build a release-mode bundle |
+| `--entry <file>` | Entry source file (default: manifest `build.entry`) |
+| `--output <path>` | Output executable path (default: manifest `build.output`) |
+| `--strip` | Strip unreachable/dead procedures from the bytecode payload |
+| `--obfuscate` | XOR-obfuscate the bytecode payload so plaintext strings are not stored verbatim in the output binary |
+| `--linker <path>` | Linker to use (applied to bare-metal/native builds via `RUSTFLAGS`) |
+| `--link-arg <arg>` | Additional argument forwarded to the linker (repeatable) |
+
+`--strip` and `--obfuscate` can also be set as defaults in `lppo.toml` under
+`[build]` (`strip = true`, `obfuscate = true`, `link_args = [...]`); CLI flags
+override the manifest.
+
+Examples:
+
+```bash
+# Compile a project with stripping and obfuscation
+lppo project build --strip --obfuscate --output my_app
+
+# Compile a single source file with obfuscation
+lppo --compile-out my_app --obfuscate program.lppo
+
+# Bare-metal build with a custom linker and linker args
+lppo --compile-bare-metal kernel.bin --linker ld.lld --link-arg --strip-all program.lppo
+```
+
+## Standard library
+
+### Collections
+
+LPPO provides `Vec<T>` (backed by `Arr<T>`) and `Map<K, V>` (backed by `Object`) collections.
+Element/value types are checked statically but manipulated dynamically at runtime.
+
+```lppo
+let own nums: Arr<Int64> = vec_new();
+let own nums1 = vec_push(nums, 10);
+let own nums2 = vec_push(nums1, 20);
+out "len:", vec_len(nums2);
+out "get[0]:", vec_get(nums2, 0);
+let own nums3 = vec_set(nums2, 0, 99);
+out "get[0] after set:", vec_get(nums3, 0);
+let own v = vec_pop(nums3);
+
+let own m: Map<Str, Int64> = map_new();
+let own m1 = map_insert(m, "a", 1);
+let own m2 = map_insert(m1, "b", 2);
+out "map get a:", map_get(m2, "a");
+out "map len:", map_len(m2);
+out "map keys:", map_keys(m2);
+let own m3 = map_remove(m2, "a");
+```
+
+Available built-ins: `vec_new`, `vec_push`, `vec_pop`, `vec_get`, `vec_set`, `vec_len`,
+`map_new`, `map_insert`, `map_get`, `map_remove`, `map_len`, `map_keys`.
+
+### Memory pools
+
+A simple global byte pool is exposed via `pool_alloc(size)`, `pool_free(id)`, and
+`pool_used()`.
+
+```lppo
+let own pid = pool_alloc(256);
+out "pool used:", pool_used();
+out "freed:", pool_free(pid);
+out "pool used after free:", pool_used();
+```
+
+### Async/await
+
+`async { expr }` evaluates `expr` in a background task and returns a `Future`. `await`
+blocks until the future completes and yields its value. This is separate from `pause`
+(user input waiting).
+
+```lppo
+let own f: Future = async { 42 };
+out "launched";
+let own v: Int64 = await f;
+out "awaited:", v;
+```
+
+### Threading
+
+`spawn { expr }` evaluates `expr` in a new OS thread and returns a `JoinHandle`. `await`
+on a join handle blocks until the thread finishes.
+
+```lppo
+let own h: JoinHandle = spawn { 99 };
+out "spawned";
+let own v: Int64 = await h;
+out "joined:", v;
+```
+
+`spawn { <statements> };` is also available as a fire-and-forget statement.
+
+### Math
+
+`eval(s)` parses and evaluates an integer math expression string with `+ - * / ^`
+and parentheses (standard precedence). `sqrt(n)` returns the integer square root
+(floor). `either(a, b)` returns `[a+b, a-b]` — handy for +/- pairs like the
+quadratic formula.
+
+```lppo
+out "eval 2+3*4:", eval("2+3*4");   # 14
+out "eval (2+3)*4:", eval("(2+3)*4"); # 20
+out "eval 2^10:", eval("2^10");     # 1024
+out "sqrt 16:", sqrt(16);           # 4
+let own roots: Arr<Int64> = either(5, 1);
+out "either 5, 1:", roots;          # [6, 4]
+```
+
+## Examples
+
+See `examples/` for runnable programs demonstrating each feature:
+
+- `examples/collections.lppo` - Vec and Map collections
+- `examples/memory_pool.lppo` - pool_alloc / pool_free / pool_used
+- `examples/async_await.lppo` - async blocks and await
+- `examples/threading.lppo` - spawn, join, and fire-and-forget threads
+- `examples/math.lppo` - eval, sqrt, either (including quadratic formula)
+
+Run any example with:
+
+```bash
+cargo run -- examples/collections.lppo
+```
+
+## Package Management (`lppo pkg`)
+
+LPPO includes an integrated Rust/Cargo package manager. The package library index
+lives at `~/.LPPO/packages.json` and installed packages are tracked separately at
+`~/.LPPO/installed.json`.
+
+### Package library location
+
+- `~/.LPPO/packages.json` — package library index (catalog of available packages).
+- `~/.LPPO/installed.json` — installed package database (what is installed locally).
+- `~/.LPPO/packages/<name>/` — retrieved package source checkouts.
+- `~/.LPPO/cache/` — downloads, git checkouts, and build artifacts.
+
+LPPO automatically creates `~/.LPPO/` and `packages.json` on first use. All writes
+are atomic (temp file + rename) to prevent corruption.
+
+### Package format
+
+Every LPPO package is a genuine Rust/Cargo project with a `Cargo.toml`. Package
+metadata is described in `packages.json` using Serde JSON, including name, version,
+description, authors, license, repository, source (Git branch/tag/commit/subdirectory
+or local path), LPPO version compatibility, dependencies on other LPPO packages
+(machine-readable), and Cargo build configuration.
+
+### CLI commands
+
+```bash
+lppo pkg search <query>    # search the package library
+lppo pkg install <pkg>     # resolve deps, build with Cargo, track install
+lppo pkg remove <pkg>      # remove an installed package
+lppo pkg update [pkg]      # update a package (or all)
+lppo pkg list              # list installed packages
+lppo pkg info <pkg>        # show package metadata
+lppo pkg build <pkg>       # build a package without marking installed
+lppo pkg publish <path>    # validate and publish a Cargo package to the library
+lppo pkg install <git-url> # install directly from a Git repository URL
+```
+
+Example:
+
+```bash
+lppo pkg install LPPX2D
+lppo pkg list
+lppo pkg remove LPPX2D
+```
+
+### Dependency resolution
+
+LPPO resolves dependencies between LPPO packages (declared in `packages.json`)
+separately from Cargo's Rust crate resolution (declared in each package's
+`Cargo.toml`). It builds a directed dependency graph, detects circular
+dependencies, resolves semantic version constraints, and installs dependencies
+before their dependents.
+
+### Using an installed package in LPPO
+
+Installed Rust packages expose an LPPO-facing API (`lppo_interface.json`). Once
+installed, a package can be imported and its functions called from LPPO:
+
+```lppo
+use LPPX2D;
+
+pub proc main() -> Void {
+    x2d_window_create("demo", 800, 600);
+    x2d_begin_frame(1);
+    x2d_canvas_clear(0, 0, 0, 1);
+    x2d_draw_rectangle(100, 100, 200, 150, 255, 0, 0);
+    x2d_end_frame(1);
+}
+```
+
+Calls are dispatched through the compiler's native integration boundary (FFI
+against the package's compiled `cdylib`).
+
+### Graphics extensions (LPPX)
+
+LPPX (Legible Programming Platform eXtensions) is the official extension platform
+for LPPO. The initial extensions, maintained in the separate `LPPX` Git
+repository, are:
+
+- **LPPX2D** — 2D graphics framework (`lppo-x2d`).
+- **LPPX3D** — 3D graphics framework (`lppo-x3d`).
+- **LPPXCommon** — shared Rust crate (math, windowing, input, timing).
+
+Both are independently installable, versioned, and built with Cargo. See the
+`LPPX` repository for details.
+
+## Version Tracking (`version-cli`)
+
+LPPO ships with a dedicated version tracking CLI/TUI in `version-cli/`. It tracks
+semantic versioning (major.minor.patch), an auto-incrementing build number, and a
+release channel (alpha / beta / release). State is stored in `.version.json`.
+
+Start state: **v1.0.1-beta.0**.
+
+```bash
+# Interactive TUI (recommended)
+cargo run -p version-cli
+
+# CLI
+cargo run -p version-cli -- version          # print full version string
+cargo run -p version-cli -- show             # show full state
+cargo run -p version-cli -- set 1 2 3        # set major.minor.patch manually
+cargo run -p version-cli -- bump-build       # auto-increment build number
+cargo run -p version-cli -- channel release  # switch channel (alpha|beta|release)
+cargo run -p version-cli -- reset-build      # reset build to 0
+```
+
+### Releasing
+
+In the TUI, choose **Release & Push to GitHub**. This:
+
+1. Saves `.version.json`
+2. Updates `readme.md` (version line) and `CHANGELOG.md` (new release entry)
+3. Commits with message `chore(release): <version> <commit message>`
+4. Tags the commit `v<version>`
+5. Pushes the branch and tags to `origin`
+6. Creates a GitHub release via `gh release create` (prerelease for alpha/beta)
+
+Requires `gh` to be authenticated (`gh auth login`) with `repo` scope.
+
 
 LPPO emphasizes:
 

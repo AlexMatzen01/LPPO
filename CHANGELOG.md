@@ -1,5 +1,46 @@
 # LPPO Changelog
 
+## Unreleased
+
+## 0.1.3-alpha.8 - 2026-11-09 (alpha)
+
+Release v0.1.3-alpha.8
+
+### 🎉 NEW: Extended Build Options
+
+LPPO build commands now accept additional build arguments for linking,
+obfuscation, and stripping, accepted by `lppo project build`,
+`--compile-out`/`--compile`, and `--compile-bare-metal` (where applicable):
+
+- **`--strip`** - Strip unreachable/dead procedures from the bytecode payload
+  (dead-code elimination from `main`). Also settable as `build.strip` in
+  `lppo.toml`.
+- **`--obfuscate`** - XOR-obfuscate the bytecode payload so plaintext strings
+  are not stored verbatim in the output binary. Obfuscated payloads are
+  decoded automatically at load time. Also settable as `build.obfuscate` in
+  `lppo.toml`.
+- **`--linker <path>`** - Linker to use, forwarded to bare-metal/native builds
+  via `RUSTFLAGS` (`-C linker=...`).
+- **`--link-arg <arg>`** - Additional linker arguments (repeatable), forwarded
+  via `RUSTFLAGS` (`-C link-arg=...`).
+
+`--strip` and `--obfuscate` can be set as defaults in `lppo.toml` under
+`[build]`; CLI flags override the manifest.
+
+Bundled executables (`.lppo` → native binary) copy the interpreter and embed
+the bytecode payload rather than running a separate link step, so linker
+options apply to bare-metal builds.
+
+### 🎉 NEW: Standard Library Collections, Concurrency, and Math
+
+- **Collections**: `vec_new/push/pop/get/set/len` and `map_new/insert/get/remove/len/keys`.
+- **Memory pools**: `pool_alloc(size)`, `pool_free(id)`, `pool_used()`.
+- **Async/await**: `async { expr }` returns a `Future`; `await` blocks on it.
+- **Threading**: `spawn { expr }` returns a `JoinHandle`; `spawn { stmts };` is
+  fire-and-forget.
+- **Math eval**: `eval(s)` parses `+ - * / ^` expressions with parentheses;
+  `sqrt(n)` integer square root; `either(a, b)` returns `[a+b, a-b]`.
+
 ## v5.3.0 - File I/O System - Fully Functional Update (2025-11-21)
 
 ### 🎉 NEW: Complete File I/O System
