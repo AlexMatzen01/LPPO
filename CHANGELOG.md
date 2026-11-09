@@ -6,6 +6,10 @@
 
 Release v0.1.3-alpha.8
 
+## 0.1.3-alpha.8 - 2026-11-09 (alpha)
+
+Release v0.1.3-alpha.8
+
 ### 🎉 NEW: Extended Build Options
 
 LPPO build commands now accept additional build arguments for linking,
