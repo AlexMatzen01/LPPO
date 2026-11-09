@@ -8,6 +8,7 @@
     "vscode": "^1.80.0"
   },
   "main": "./out/extension.js",
+  "icon": "icons/lppo-logo.png",
   "activationEvents": [
     "onLanguage:lppo"
   ],
@@ -30,9 +31,21 @@
           "lppo"
         ],
         "extensions": [
-          ".lppo"
+          ".lppo",
+          ".lpph"
         ],
+        "icon": {
+          "dark": "./icons/lppo-icon.png",
+          "light": "./icons/lppo-icon.png"
+        },
         "configuration": "./language-configuration.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "lppo-file-icons",
+        "label": "LPPO File Icons",
+        "path": "./icons/theme.json"
       }
     ],
     "grammars": [

@@ -1,0 +1,11 @@
+{
+  "iconDefinitions": {
+    "lppoFile": {
+      "iconPath": "./icons/lppo-icon.png"
+    }
+  },
+  "fileExtensions": {
+    "lppo": "lppoFile",
+    "lpph": "lppoFile"
+  }
+}
