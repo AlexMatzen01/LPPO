@@ -1,0 +1,20 @@
+[package]
+name = "version-cli"
+version = "1.0.1"
+edition = "2021"
+description = "LPPO version tracking TUI: semver + build number + release channel with git/GitHub release integration"
+
+[[bin]]
+name = "version-cli"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.27"
+ratatui = "0.26"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = "0.4"
+
+[profile.release]
+opt-level = 3

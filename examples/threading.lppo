@@ -1,0 +1,34 @@
+pub proc worker(task_id: Int64) -> Int64 {
+    out "thread:", task_id, " starting";
+    return task_id * 100;
+}
+
+pub proc main() -> Void {
+    out "=== Threading ===";
+
+    out "main: spawning worker threads";
+    let own h1: JoinHandle = spawn { worker(1) };
+    let own h2: JoinHandle = spawn { worker(2) };
+    let own h3: JoinHandle = spawn { worker(3) };
+
+    out "main: all threads spawned";
+
+    out "main: joining h1";
+    let own r1: Int64 = await h1;
+    out "main: h1 result:", r1;
+
+    out "main: joining h2";
+    let own r2: Int64 = await h2;
+    out "main: h2 result:", r2;
+
+    out "main: joining h3";
+    let own r3: Int64 = await h3;
+    out "main: h3 result:", r3;
+
+    out "main: total:", r1 + r2 + r3;
+
+    out "=== fire-and-forget spawn ===";
+    spawn { out "  [spawned block] running in background thread"; };
+    out "main: fire-and-forget spawn launched";
+    out "Threading demo complete.";
+}

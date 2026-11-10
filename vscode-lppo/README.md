@@ -6,6 +6,7 @@ Syntax highlighting, formatting, and language support for the LPPO programming l
 
 - Syntax highlighting for `.lppo` and `.lpph` files
 - LPPO formatter (built-in and external binary)
+- Symbol navigation: document outline (Outline view), Go to Definition, Find References, and Hover info for classes, structs, enums, traits, modules, impl blocks, procedures, methods, fields, and enum variants
 - Run LPPO scripts directly from VS Code
 
 ## Requirements

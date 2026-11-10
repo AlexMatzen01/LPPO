@@ -38,6 +38,7 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
+const symbols_1 = require("./symbols");
 function activate(context) {
     console.log('LPPO Language Support is now active');
     // Register document formatting provider
@@ -77,6 +78,88 @@ function activate(context) {
         }
     });
     context.subscriptions.push(formattingProvider);
+    // Register symbol providers: document outline, go-to-definition,
+    // find references, and hover info for classes, structs, enums, traits,
+    // modules, impls, procedures, methods, fields, and enum variants.
+    const documentSymbolProvider = vscode.languages.registerDocumentSymbolProvider('lppo', {
+        provideDocumentSymbols(document) {
+            return (0, symbols_1.parseSymbols)(document.getText()).map(symbols_1.toDocumentSymbol);
+        },
+    });
+    context.subscriptions.push(documentSymbolProvider);
+    const definitionProvider = vscode.languages.registerDefinitionProvider('lppo', {
+        provideDefinition(document, position) {
+            const word = (0, symbols_1.getWordAt)(document, position);
+            if (!word) {
+                return undefined;
+            }
+            const symbols = (0, symbols_1.flattenSymbols)((0, symbols_1.parseSymbols)(document.getText()));
+            const definition = symbols.find((symbol) => (0, symbols_1.rangeContains)(symbol.selectionRange, position));
+            const target = definition ??
+                symbols.find((symbol) => symbol.name === word && (0, symbols_1.rangeContains)(symbol.range, position)) ??
+                symbols.find((symbol) => symbol.name === word);
+            if (!target) {
+                return undefined;
+            }
+            return new vscode.Location(document.uri, target.range);
+        },
+    });
+    context.subscriptions.push(definitionProvider);
+    const referenceProvider = vscode.languages.registerReferenceProvider('lppo', {
+        provideReferences(document, position, context) {
+            const word = (0, symbols_1.getWordAt)(document, position);
+            if (!word) {
+                return [];
+            }
+            const symbols = (0, symbols_1.flattenSymbols)((0, symbols_1.parseSymbols)(document.getText()));
+            const definition = symbols.find((symbol) => (0, symbols_1.rangeContains)(symbol.selectionRange, position));
+            const target = definition ?? symbols.find((symbol) => symbol.name === word);
+            if (!target) {
+                return [];
+            }
+            const regex = new RegExp(`\\b${(0, symbols_1.escapeRegExp)(target.name)}\\b`, 'g');
+            const text = document.getText();
+            const locations = [];
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const start = document.positionAt(match.index);
+                const end = document.positionAt(match.index + target.name.length);
+                if (!context.includeDeclaration &&
+                    definition &&
+                    start.isEqual(definition.selectionRange.start) &&
+                    end.isEqual(definition.selectionRange.end)) {
+                    continue;
+                }
+                locations.push(new vscode.Location(document.uri, new vscode.Range(start, end)));
+            }
+            return locations;
+        },
+    });
+    context.subscriptions.push(referenceProvider);
+    const hoverProvider = vscode.languages.registerHoverProvider('lppo', {
+        provideHover(document, position) {
+            const word = (0, symbols_1.getWordAt)(document, position);
+            if (!word) {
+                return undefined;
+            }
+            const symbols = (0, symbols_1.flattenSymbols)((0, symbols_1.parseSymbols)(document.getText()));
+            const target = symbols.find((symbol) => (0, symbols_1.rangeContains)(symbol.selectionRange, position)) ??
+                symbols.find((symbol) => symbol.name === word);
+            if (!target) {
+                return undefined;
+            }
+            const markdown = new vscode.MarkdownString();
+            markdown.appendMarkdown(`**${(0, symbols_1.kindLabel)(target.kind)}** \`${target.name}\``);
+            if (target.containerName) {
+                markdown.appendMarkdown(`\n\n*Container:* ${target.containerName}`);
+            }
+            if (target.detail) {
+                markdown.appendMarkdown(`\n\n\`\`\`lppo\n${target.detail}\n\`\`\``);
+            }
+            return new vscode.Hover(markdown, target.range);
+        },
+    });
+    context.subscriptions.push(hoverProvider);
     // Register document range formatting provider
     const rangeFormattingProvider = vscode.languages.registerDocumentRangeFormattingEditProvider('lppo', {
         async provideDocumentRangeFormattingEdits(document, range) {

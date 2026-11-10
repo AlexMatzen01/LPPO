@@ -1,0 +1,25 @@
+pub proc compute_square(x: Int64) -> Int64 {
+    return x * x;
+}
+
+pub proc main() -> Void {
+    out "=== Async/Await ===";
+
+    out "main: launching async task";
+    let own f: Future = async { compute_square(7) };
+    out "main: async task launched, doing other work...";
+
+    out "main: doing background computation";
+    out "main: result of 7*2:", 7 * 2;
+
+    out "main: awaiting async result";
+    let own v: Int64 = await f;
+    out "main: awaited result:", v;
+
+    out "=== chained async ===";
+    let own f2: Future = async { async { 42 } };
+    let own inner: Int64 = await await f2;
+    out "main: chained await result:", inner;
+
+    out "Async/await demo complete.";
+}

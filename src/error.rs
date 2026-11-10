@@ -175,6 +175,40 @@ pub enum LppoError {
         message: String,
         location: Option<SourceLocation>,
     },
+    /// A package was not found in the package library.
+    PackageNotFound {
+        name: String,
+    },
+    /// A package dependency declaration is invalid.
+    InvalidDependency {
+        package: String,
+        dependency: String,
+        reason: String,
+    },
+    /// A selected package version violates a constraint.
+    VersionConflict {
+        package: String,
+        version: String,
+        reason: String,
+    },
+    /// A circular dependency was detected, with the full chain reported.
+    CircularDependency {
+        chain: Vec<String>,
+    },
+    /// A package build (Cargo) failed.
+    BuildFailed {
+        package: String,
+        reason: String,
+    },
+    /// Retrieving package source (e.g. git clone) failed.
+    SourceRetrievalFailed {
+        package: String,
+        reason: String,
+    },
+    /// JSON serialization/deserialization failed.
+    SerializationError {
+        message: String,
+    },
 }
 
 impl LppoError {
@@ -206,6 +240,14 @@ impl LppoError {
             | LppoError::IoError { .. } => ErrorSeverity::Error,
 
             LppoError::StackOverflow { .. } => ErrorSeverity::Fatal,
+
+            LppoError::PackageNotFound { .. }
+            | LppoError::InvalidDependency { .. }
+            | LppoError::VersionConflict { .. }
+            | LppoError::CircularDependency { .. }
+            | LppoError::BuildFailed { .. }
+            | LppoError::SourceRetrievalFailed { .. }
+            | LppoError::SerializationError { .. } => ErrorSeverity::Error,
         }
     }
 
@@ -425,6 +467,44 @@ impl Display for LppoError {
             LppoError::IoError { message, .. } => {
                 write!(f, "I/O error: {}", message)
             }
+            LppoError::PackageNotFound { name } => {
+                write!(f, "package '{}' not found in the package library", name)
+            }
+            LppoError::InvalidDependency {
+                package,
+                dependency,
+                reason,
+            } => write!(
+                f,
+                "invalid dependency '{dependency}' required by package '{package}': {reason}"
+            ),
+            LppoError::VersionConflict {
+                package,
+                version,
+                reason,
+            } => write!(
+                f,
+                "version conflict for package '{package}' (selected {version}): {reason}"
+            ),
+            LppoError::CircularDependency { chain } => {
+                write!(
+                    f,
+                    "circular dependency detected: {}",
+                    chain.join(" -> ")
+                )
+            }
+            LppoError::BuildFailed { package, reason } => {
+                write!(f, "build failed for package '{package}': {reason}")
+            }
+            LppoError::SourceRetrievalFailed { package, reason } => {
+                write!(
+                    f,
+                    "failed to retrieve source for package '{package}': {reason}"
+                )
+            }
+            LppoError::SerializationError { message } => {
+                write!(f, "serialization error: {message}")
+            }
         }
     }
 }
@@ -529,5 +609,48 @@ impl LppoError {
             message,
             location: None,
         }
+    }
+
+    /// Create a PackageNotFound error.
+    pub fn package_not_found(name: String) -> Self {
+        LppoError::PackageNotFound { name }
+    }
+
+    /// Create an InvalidDependency error.
+    pub fn invalid_dependency(package: String, dependency: String, reason: String) -> Self {
+        LppoError::InvalidDependency {
+            package,
+            dependency,
+            reason,
+        }
+    }
+
+    /// Create a VersionConflict error.
+    pub fn version_conflict(package: String, version: String, reason: String) -> Self {
+        LppoError::VersionConflict {
+            package,
+            version,
+            reason,
+        }
+    }
+
+    /// Create a CircularDependency error.
+    pub fn circular_dependency(chain: Vec<String>) -> Self {
+        LppoError::CircularDependency { chain }
+    }
+
+    /// Create a BuildFailed error.
+    pub fn build_failed(package: String, reason: String) -> Self {
+        LppoError::BuildFailed { package, reason }
+    }
+
+    /// Create a SourceRetrievalFailed error.
+    pub fn source_retrieval_failed(package: String, reason: String) -> Self {
+        LppoError::SourceRetrievalFailed { package, reason }
+    }
+
+    /// Create a SerializationError error.
+    pub fn serialization_error(message: String) -> Self {
+        LppoError::SerializationError { message }
     }
 }

@@ -7,6 +7,8 @@ use crate::ast::{
     TypeAnnotation, UnaryOp,
 };
 use crate::error::{LppoError, LppoResult};
+use crate::pkg::library::PackageContext;
+use crate::pkg::native::NativeRegistry;
 
 use crate::ast::OwnershipKind;
 
@@ -160,7 +162,15 @@ impl TypeContext {
 }
 
 /// Type check a complete program
+/// Type-check a program against the global package context.
 pub fn typecheck_program(program: &Program) -> LppoResult<()> {
+    typecheck_program_with_context(program, &PackageContext::Global)
+}
+
+/// Type-check a program, resolving installed Rust package functions against
+/// the given package context (global `~/.LPPO/` or project-local
+/// `<project>/.lppo/`).
+pub fn typecheck_program_with_context(program: &Program, context: &PackageContext) -> LppoResult<()> {
     let mut ctx = TypeContext::new();
 
     // Register built-in functions
@@ -279,6 +289,23 @@ pub fn typecheck_program(program: &Program) -> LppoResult<()> {
         TypeAnnotation::Int64,
     );
 
+    // Math evaluation / helpers
+    ctx.add_procedure(
+        "eval".to_string(),
+        vec![TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "sqrt".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "either".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+    );
+
     // System commands
     ctx.add_procedure(
         "system".to_string(),
@@ -297,6 +324,126 @@ pub fn typecheck_program(program: &Program) -> LppoResult<()> {
         vec![TypeAnnotation::Str],
         TypeAnnotation::Str,
     );
+
+    // Collection (Vec / HashMap) built-ins. Vec is backed by Arr<T>; Map<K,V> by Object.
+    // Element types are shown as Int64/Str for type-checking; the runtime is dynamic.
+    ctx.add_procedure(
+        "vec_new".to_string(),
+        vec![],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+    );
+    ctx.add_procedure(
+        "vec_push".to_string(),
+        vec![
+            TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+    );
+    ctx.add_procedure(
+        "vec_pop".to_string(),
+        vec![TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64))],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "vec_get".to_string(),
+        vec![
+            TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "vec_set".to_string(),
+        vec![
+            TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+            TypeAnnotation::Int64,
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+    );
+    ctx.add_procedure(
+        "vec_len".to_string(),
+        vec![TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64))],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "map_new".to_string(),
+        vec![],
+        TypeAnnotation::Map(
+            Box::new(TypeAnnotation::Str),
+            Box::new(TypeAnnotation::Int64),
+        ),
+    );
+    ctx.add_procedure(
+        "map_insert".to_string(),
+        vec![
+            TypeAnnotation::Map(
+                Box::new(TypeAnnotation::Str),
+                Box::new(TypeAnnotation::Int64),
+            ),
+            TypeAnnotation::Str,
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Map(
+            Box::new(TypeAnnotation::Str),
+            Box::new(TypeAnnotation::Int64),
+        ),
+    );
+    ctx.add_procedure(
+        "map_get".to_string(),
+        vec![
+            TypeAnnotation::Map(
+                Box::new(TypeAnnotation::Str),
+                Box::new(TypeAnnotation::Int64),
+            ),
+            TypeAnnotation::Str,
+        ],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "map_remove".to_string(),
+        vec![
+            TypeAnnotation::Map(
+                Box::new(TypeAnnotation::Str),
+                Box::new(TypeAnnotation::Int64),
+            ),
+            TypeAnnotation::Str,
+        ],
+        TypeAnnotation::Map(
+            Box::new(TypeAnnotation::Str),
+            Box::new(TypeAnnotation::Int64),
+        ),
+    );
+    ctx.add_procedure(
+        "map_len".to_string(),
+        vec![TypeAnnotation::Map(
+            Box::new(TypeAnnotation::Str),
+            Box::new(TypeAnnotation::Int64),
+        )],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "map_keys".to_string(),
+        vec![TypeAnnotation::Map(
+            Box::new(TypeAnnotation::Str),
+            Box::new(TypeAnnotation::Int64),
+        )],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Str)),
+    );
+
+    // Memory pool built-ins.
+    ctx.add_procedure(
+        "pool_alloc".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "pool_free".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Void,
+    );
+    ctx.add_procedure("pool_used".to_string(), vec![], TypeAnnotation::Int64);
 
     // ANSI colors
     ctx.add_procedure(
@@ -402,6 +549,8 @@ pub fn typecheck_program(program: &Program) -> LppoResult<()> {
     ctx.add_procedure("tui_hide_cursor".to_string(), vec![], TypeAnnotation::Int64);
     ctx.add_procedure("tui_show_cursor".to_string(), vec![], TypeAnnotation::Int64);
     ctx.add_procedure("tui_refresh".to_string(), vec![], TypeAnnotation::Int64);
+    // Shading language: run a bundled `.x2d` shader through the CPU backend.
+    ctx.add_procedure("x2d_run".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Void);
     ctx.add_procedure(
         "tui_input".to_string(),
         vec![
@@ -490,6 +639,11 @@ pub fn typecheck_program(program: &Program) -> LppoResult<()> {
         // Halt
         ctx.add_procedure("hlt".to_string(), vec![], TypeAnnotation::Void);
     }
+
+    // Register functions exposed by installed Rust packages (e.g. LPPX2D,
+    // LPPX3D) so `use <Package>;` followed by calls to those functions
+    // type-checks against their declared signatures.
+    NativeRegistry::register_in_type_context_with(&mut ctx, context)?;
 
     // First pass: register all procedures, structs, and enums
     for proc in &program.procedures {
@@ -926,7 +1080,8 @@ fn typecheck_statement(
         | Statement::Dealloc(_)
         | Statement::Match { .. }
         | Statement::StructInit { .. }
-        | Statement::Pause { .. } => Ok(None),
+        | Statement::Pause { .. }
+        | Statement::Spawn { .. } => Ok(None),
     }
 }
 
@@ -1254,6 +1409,14 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
             Ok(TypeAnnotation::Void)
         }
 
+        Expr::Async { .. } => Ok(TypeAnnotation::Custom("Future".to_string())),
+
+        Expr::Spawn { .. } => Ok(TypeAnnotation::Custom("JoinHandle".to_string())),
+
+        Expr::Join(_) => Ok(TypeAnnotation::Void),
+
+        Expr::Await(_) => Ok(TypeAnnotation::Int64),
+
         // For unimplemented expression types, return a placeholder
         _ => Ok(TypeAnnotation::Void),
     }
@@ -1287,6 +1450,10 @@ fn types_compatible(expected: &TypeAnnotation, actual: &TypeAnnotation) -> bool 
                     .zip(a_types.iter())
                     .all(|(e, a)| types_compatible(e, a))
         }
+        (
+            TypeAnnotation::Map(ek, ev),
+            TypeAnnotation::Map(ak, av),
+        ) => types_compatible(ek, ak) && types_compatible(ev, av),
         _ => false,
     }
 }

@@ -9,8 +9,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use lppo::error::{LppoError, LppoResult};
-use lppo::{build_executor_with_root, compile_to_bytes_with_root, load_executor_from_bytes};
+use lppo::{
+    build_executor_with_root, compile_to_bytes_with_root, load_executor_from_bytes,
+    PackageContext,
+};
 use serde::{Deserialize, Serialize};
+use lppo::pkg::cli::PkgSubcommand;
 
 const MARKER: &[u8] = b"LPPO-EMBED-1\n";
 const MANIFEST_NAME: &str = "lppo.toml";
@@ -40,6 +44,14 @@ pub struct BuildSection {
     pub entry: String,
     #[serde(default = "default_output")]
     pub output: String,
+    #[serde(default)]
+    pub strip: bool,
+    #[serde(default)]
+    pub obfuscate: bool,
+    #[serde(default)]
+    pub linker: Option<String>,
+    #[serde(default)]
+    pub link_args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -62,6 +74,19 @@ fn default_entry() -> String {
 
 fn default_output() -> String {
     "target/{name}".to_string()
+}
+
+/// Options controlling how a project is compiled into a bundled executable.
+#[derive(Debug, Clone, Default)]
+pub struct BuildOptions {
+    pub release: bool,
+    pub strip: bool,
+    pub obfuscate: bool,
+    /// Linker to use (applied to native/bare-metal builds that invoke a
+    /// linker; bundled executables do not run a separate link step).
+    pub linker: Option<String>,
+    /// Additional arguments forwarded to the linker (repeatable).
+    pub link_args: Vec<String>,
 }
 
 /// An LPPO project rooted at a directory containing `lppo.toml`.
@@ -186,8 +211,9 @@ fn compile_project_sources(project: &Project) -> LppoResult<Vec<u8>> {
 }
 
 /// Write a bundled executable by copying the current executable and appending
-/// the marker, length, and compiled bytecode payload.
-fn write_bundled_executable(out: &Path, bytes: &[u8]) -> LppoResult<()> {
+/// the procedure payload (`LPPO-EMBED-1`). Existing `LPPO-EMBED-1` executables
+/// still load because readers stop after the procedure payload.
+fn write_bundled_executable(out: &Path, proc_bytes: &[u8]) -> LppoResult<()> {
     let exe = std::env::current_exe()
         .map_err(|e| LppoError::io_error(format!("failed to get current exe: {}", e)))?;
     let mut target = fs::File::create(out)
@@ -199,12 +225,12 @@ fn write_bundled_executable(out: &Path, bytes: &[u8]) -> LppoResult<()> {
     target
         .write_all(MARKER)
         .map_err(|e| LppoError::io_error(format!("failed to write marker: {}", e)))?;
-    let len = (bytes.len() as u64).to_le_bytes();
+    let len = (proc_bytes.len() as u64).to_le_bytes();
     target
         .write_all(&len)
         .map_err(|e| LppoError::io_error(format!("failed to write length: {}", e)))?;
     target
-        .write_all(bytes)
+        .write_all(proc_bytes)
         .map_err(|e| LppoError::io_error(format!("failed to write payload: {}", e)))?;
     #[cfg(unix)]
     {
@@ -259,7 +285,7 @@ pub fn cmd_init(name: &str, path: Option<&Path>) -> LppoResult<()> {
         .map_err(|e| LppoError::io_error(format!("failed to create project dirs: {}", e)))?;
 
     let manifest = format!(
-        "[project]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[build]\nentry = \"src/main.lppo\"\noutput = \"target/{{name}}\"\n",
+        "[project]\nname = \"{}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[build]\nentry = \"src/main.lppo\"\noutput = \"target/{{name}}\"\nstrip = false\nobfuscate = false\nlink_args = []\n",
         name
     );
     fs::write(target_dir.join(MANIFEST_NAME), manifest)
@@ -301,8 +327,9 @@ pub fn cmd_init(name: &str, path: Option<&Path>) -> LppoResult<()> {
 }
 
 /// `lppo project build [--release] [--entry <file>] [--output <path>]`
+/// [--strip] [--obfuscate] [--linker <path>] [--link-arg <arg>]...
 /// Compile all `.lppo` files in the project into a single bundled executable.
-pub fn cmd_build(release: bool, entry: Option<&str>, output: Option<&str>) -> LppoResult<()> {
+pub fn cmd_build(options: BuildOptions, entry: Option<&str>, output: Option<&str>) -> LppoResult<()> {
     let project = match Project::discover(
         &std::env::current_dir()
             .map_err(|e| LppoError::io_error(format!("failed to get current dir: {}", e)))?,
@@ -329,7 +356,18 @@ pub fn cmd_build(release: bool, entry: Option<&str>, output: Option<&str>) -> Lp
     // Resolve imports relative to the entry file's directory so that
     // `use math;` from src/main.lppo finds src/math.lppo.
     let root = entry_path.parent().unwrap_or(&project.root).to_path_buf();
-    let bytes = compile_to_bytes_with_root(&source, &root)?;
+
+    // Package context for resolving installed-package imports and shader refs.
+    let context = PackageContext::discover(&root)?;
+
+    // Manifest options act as defaults; CLI options override them.
+    let compile_options = lppo::CompileOptions {
+        strip: options.strip,
+        obfuscate: options.obfuscate,
+    };
+
+    let proc_bytes =
+        lppo::compile_to_bytes_with_options(&source, &root, compile_options)?;
 
     let out_path = match output {
         Some(o) => PathBuf::from(o),
@@ -346,20 +384,21 @@ pub fn cmd_build(release: bool, entry: Option<&str>, output: Option<&str>) -> Lp
         })?;
     }
 
-    write_bundled_executable(&out_path, &bytes)?;
+    write_bundled_executable(&out_path, &proc_bytes)?;
 
-    if release {
-        println!(
-            "Built release bundle: {} ({} bytes)",
-            out_path.display(),
-            bytes.len()
-        );
-    } else {
-        println!(
-            "Built bundle: {} ({} bytes)",
-            out_path.display(),
-            bytes.len()
-        );
+    let proc_part = format!("{} proc bytes", proc_bytes.len());
+
+    let mode = if options.release { "release" } else { "debug" };
+    println!(
+        "Built {} bundle: {} ({}){}{}",
+        mode,
+        out_path.display(),
+        proc_part,
+        if options.strip { "; stripped declaration-only procedures" } else { "" },
+        if options.obfuscate { "; obfuscated payload" } else { "" }
+    );
+    if options.linker.is_some() || !options.link_args.is_empty() {
+        println!("  note: linker options apply to native/bare-metal builds; bundled executables copy the interpreter binary instead of linking.");
     }
     Ok(())
 }
@@ -484,6 +523,23 @@ pub fn cmd_git(args: &[String]) -> LppoResult<()> {
     }
     Ok(())
 }
+
+/// `lppo project pkg <subcommand> ...`
+/// Run a package-manager subcommand within this project's local package
+/// store (`<project>/.lppo/`).
+pub fn cmd_pkg(args: &[String]) -> LppoResult<()> {
+    let project = match Project::discover(
+        &std::env::current_dir()
+            .map_err(|e| LppoError::io_error(format!("failed to get current dir: {}", e)))?,
+    )? {
+        Some(p) => p,
+        None => return Err(LppoError::io_error("no lppo.toml found".into())),
+    };
+    let context = PackageContext::Project(project.root.join(".lppo"));
+    let subcommand = PkgSubcommand::parse(args)?;
+    subcommand.run_with_context(context)
+}
+
 
 //////////////////////////////////////////////////////////////////////////////
 // Formatter

@@ -1,8 +1,8 @@
 {
   "name": "lppo",
   "displayName": "LPPO Language Support",
-  "description": "Syntax highlighting, formatting, and language support for the LPPO programming language",
-  "version": "1.0.0",
+  "description": "Syntax highlighting, formatting, symbol navigation, and language support for the LPPO programming language",
+  "version": "1.1.0",
   "publisher": "lppo",
   "engines": {
     "vscode": "^1.80.0"

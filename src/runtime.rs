@@ -2,11 +2,53 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // Global registry for background task handles scheduled by async pauses.
 static BACKGROUND_HANDLES: Lazy<Mutex<Vec<JoinHandle<()>>>> = Lazy::new(|| Mutex::new(Vec::new()));
+
+// Registry of async futures and spawned thread join handles.
+// id -> (join handle, receiver for the produced value).
+static FUTURES: Lazy<Mutex<HashMap<u64, (JoinHandle<()>, mpsc::Receiver<Value>)>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static NEXT_ID: Lazy<Mutex<AtomicU64>> = Lazy::new(|| Mutex::new(AtomicU64::new(1)));
+
+// Simple global memory pool: id -> allocated byte buffer.
+static MEMORY_POOL: Lazy<Mutex<HashMap<u64, Vec<u8>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static NEXT_POOL_ID: Lazy<Mutex<AtomicU64>> = Lazy::new(|| Mutex::new(AtomicU64::new(1)));
+
+fn next_id() -> u64 {
+    NEXT_ID.lock().unwrap().fetch_add(1, Ordering::Relaxed)
+}
+
+fn next_pool_id() -> u64 {
+    NEXT_POOL_ID.lock().unwrap().fetch_add(1, Ordering::Relaxed)
+}
+
+/// Register a background task and return its handle id.
+fn register_future(handle: JoinHandle<()>, rx: mpsc::Receiver<Value>) -> u64 {
+    let id = next_id();
+    FUTURES.lock().unwrap().insert(id, (handle, rx));
+    id
+}
+
+/// Await a future / join handle, blocking until it completes and returning its value.
+fn await_handle(id: u64) -> LppoResult<Value> {
+    let entry = FUTURES.lock().unwrap().remove(&id);
+    if let Some((handle, rx)) = entry {
+        let _ = handle.join();
+        match rx.recv() {
+            Ok(v) => Ok(v),
+            Err(_) => Err(LppoError::type_error("future/channel closed".into())),
+        }
+    } else {
+        Err(LppoError::type_error(format!("unknown future/join handle id {id}")))
+    }
+}
 
 // Simple LCG-based pseudo-random number generator seeded from system time.
 static RNG: Lazy<Mutex<SimpleRng>> = Lazy::new(|| {
@@ -52,6 +94,163 @@ impl SimpleRng {
 fn random_range(min: i64, max: i64) -> i64 {
     let mut rng = RNG.lock().unwrap();
     rng.range(min, max)
+}
+
+/// Integer square root (floor) using Newton's method.
+fn int_sqrt(n: i64) -> i64 {
+    if n == 0 {
+        return 0;
+    }
+    let mut x = n;
+    loop {
+        let y = (x + n / x) / 2;
+        if y >= x {
+            return x;
+        }
+        x = y;
+    }
+}
+
+/// Tiny recursive-descent math expression evaluator used by `eval`.
+/// Supports integers, + - * / ^ ( ) with standard precedence.
+struct MathParser {
+    chars: Vec<char>,
+    pos: usize,
+}
+
+impl MathParser {
+    fn new(s: &str) -> Self {
+        Self {
+            chars: s.chars().collect(),
+            pos: 0,
+        }
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.chars.get(self.pos).copied()
+    }
+
+    fn next(&mut self) -> Option<char> {
+        let c = self.chars.get(self.pos).copied();
+        if c.is_some() {
+            self.pos += 1;
+        }
+        c
+    }
+
+    fn skip_ws(&mut self) {
+        while matches!(self.peek(), Some(c) if c.is_whitespace()) {
+            self.next();
+        }
+    }
+
+    fn parse(&mut self) -> Result<i64, String> {
+        self.skip_ws();
+        let val = self.parse_add_sub()?;
+        self.skip_ws();
+        if self.pos != self.chars.len() {
+            return Err(format!("unexpected character at position {}", self.pos));
+        }
+        Ok(val)
+    }
+
+    fn parse_add_sub(&mut self) -> Result<i64, String> {
+        let mut left = self.parse_mul_div()?;
+        loop {
+            self.skip_ws();
+            match self.peek() {
+                Some('+') => {
+                    self.next();
+                    let right = self.parse_mul_div()?;
+                    left = left.checked_add(right).ok_or_else(|| "overflow".to_string())?;
+                }
+                Some('-') => {
+                    self.next();
+                    let right = self.parse_mul_div()?;
+                    left = left.checked_sub(right).ok_or_else(|| "overflow".to_string())?;
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
+    }
+
+    fn parse_mul_div(&mut self) -> Result<i64, String> {
+        let mut left = self.parse_pow()?;
+        loop {
+            self.skip_ws();
+            match self.peek() {
+                Some('*') => {
+                    self.next();
+                    let right = self.parse_pow()?;
+                    left = left.checked_mul(right).ok_or_else(|| "overflow".to_string())?;
+                }
+                Some('/') => {
+                    self.next();
+                    let right = self.parse_pow()?;
+                    if right == 0 {
+                        return Err("division by zero".into());
+                    }
+                    left /= right;
+                }
+                _ => break,
+            }
+        }
+        Ok(left)
+    }
+
+    fn parse_pow(&mut self) -> Result<i64, String> {
+        let base = self.parse_primary()?;
+        self.skip_ws();
+        if self.peek() == Some('^') {
+            self.next();
+            let exp = self.parse_pow()?; // right-associative
+            if exp < 0 {
+                return Err("negative exponent".into());
+            }
+            return base.checked_pow(exp as u32).ok_or_else(|| "overflow".to_string());
+        }
+        Ok(base)
+    }
+
+    fn parse_primary(&mut self) -> Result<i64, String> {
+        self.skip_ws();
+        match self.peek() {
+            Some('(') => {
+                self.next();
+                let val = self.parse_add_sub()?;
+                self.skip_ws();
+                if self.next() != Some(')') {
+                    return Err("missing closing parenthesis".into());
+                }
+                Ok(val)
+            }
+            Some(c) if c.is_ascii_digit() || c == '-' => {
+                let sign: i64 = if c == '-' { self.next(); -1 } else { 1 };
+                let mut val: i64 = 0;
+                let mut has_digit = false;
+                while matches!(self.peek(), Some(d) if d.is_ascii_digit()) {
+                    let digit = (self.next().unwrap() as i64) - '0' as i64;
+                    val = val
+                        .checked_mul(10i64)
+                        .and_then(|v| v.checked_add(digit))
+                        .ok_or_else(|| "overflow".to_string())?;
+                    has_digit = true;
+                }
+                if !has_digit {
+                    return Err("expected number".into());
+                }
+                Ok(sign * val)
+            }
+            Some(c) => Err(format!("unexpected character '{c}'")),
+            None => Err("unexpected end of expression".into()),
+        }
+    }
+}
+
+fn eval_math_expr(s: &str) -> Result<i64, String> {
+    let mut p = MathParser::new(s);
+    p.parse()
 }
 
 use crate::ast::{BinaryOp, Expr, UnaryOp};
@@ -133,6 +332,8 @@ pub enum Operation {
     },
     /// Expression statement - evaluate for side effects
     ExprStatement(Expr),
+    /// Spawn a block of operations in a new thread (fire-and-forget).
+    Spawn { ops: Vec<Operation> },
 }
 
 /// Runtime value types used during evaluation.
@@ -149,6 +350,10 @@ pub enum Value {
         body: Expr,
         captured_env: HashMap<String, Value>,
     },
+    /// Handle to an async future / spawned task result.
+    Future { id: u64 },
+    /// Handle to a spawned thread join handle.
+    JoinHandle { id: u64 },
 }
 
 fn pattern_matches(
@@ -265,6 +470,8 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::Str(a), Value::Str(b)) => a == b,
         (Value::Array(a), Value::Array(b)) => a == b,
         (Value::Object(a), Value::Object(b)) => a == b,
+        (Value::Future { id: a }, Value::Future { id: b }) => a == b,
+        (Value::JoinHandle { id: a }, Value::JoinHandle { id: b }) => a == b,
         _ => false,
     }
 }
@@ -988,6 +1195,61 @@ pub(crate) fn eval_expr(
                             ));
                         }
                     }
+                    "eval" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "eval requires 1 argument (expression string)".into(),
+                            ));
+                        }
+                        if let Value::Str(s) = &arg_vals[0] {
+                            match eval_math_expr(s) {
+                                Ok(v) => return Ok(Value::Int(v)),
+                                Err(e) => {
+                                    return Err(LppoError::type_error(format!(
+                                        "eval error: {}",
+                                        e
+                                    )))
+                                }
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "eval argument must be a string".into(),
+                            ));
+                        }
+                    }
+                    "sqrt" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "sqrt requires 1 argument (value)".into(),
+                            ));
+                        }
+                        if let Value::Int(v) = arg_vals[0] {
+                            if v < 0 {
+                                return Err(LppoError::type_error(
+                                    "sqrt argument must be non-negative".into(),
+                                ));
+                            }
+                            return Ok(Value::Int(int_sqrt(v)));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "sqrt argument must be an integer".into(),
+                            ));
+                        }
+                    }
+                    "either" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "either requires 2 arguments (base, delta)".into(),
+                            ));
+                        }
+                        if let (Value::Int(a), Value::Int(b)) = (&arg_vals[0], &arg_vals[1]) {
+                            return Ok(Value::Array(vec![Value::Int(a + b), Value::Int(a - b)]));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "either arguments must be integers".into(),
+                            ));
+                        }
+                    }
                     "json_parse" => {
                         if arg_vals.len() != 1 {
                             return Err(LppoError::type_error(
@@ -1576,6 +1838,265 @@ pub(crate) fn eval_expr(
                             name
                         )));
                     }
+                    // Collections: Vec (backed by Array)
+                    "vec_new" => {
+                        if arg_vals.len() != 0 {
+                            return Err(LppoError::type_error("vec_new takes no arguments".into()));
+                        }
+                        return Ok(Value::Array(Vec::new()));
+                    }
+                    "vec_push" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "vec_push requires 2 arguments (array, value)".into(),
+                            ));
+                        }
+                        if let Value::Array(mut arr) = arg_vals[0].clone() {
+                            arr.push(arg_vals[1].clone());
+                            return Ok(Value::Array(arr));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "vec_push first argument must be an array".into(),
+                            ));
+                        }
+                    }
+                    "vec_pop" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "vec_pop requires 1 argument (array)".into(),
+                            ));
+                        }
+                        if let Value::Array(mut arr) = arg_vals[0].clone() {
+                            match arr.pop() {
+                                Some(v) => return Ok(v),
+                                None => {
+                                    return Err(LppoError::type_error(
+                                        "vec_pop on empty array".into(),
+                                    ))
+                                }
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "vec_pop argument must be an array".into(),
+                            ));
+                        }
+                    }
+                    "vec_get" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "vec_get requires 2 arguments (array, index)".into(),
+                            ));
+                        }
+                        if let (Value::Array(arr), Value::Int(idx)) = (&arg_vals[0], &arg_vals[1]) {
+                            match arr.get(*idx as usize) {
+                                Some(v) => return Ok(v.clone()),
+                                None => {
+                                    return Err(LppoError::type_error(
+                                        "vec_get index out of bounds".into(),
+                                    ))
+                                }
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "vec_get arguments must be (array, int)".into(),
+                            ));
+                        }
+                    }
+                    "vec_set" => {
+                        if arg_vals.len() != 3 {
+                            return Err(LppoError::type_error(
+                                "vec_set requires 3 arguments (array, index, value)".into(),
+                            ));
+                        }
+                        let idx = match &arg_vals[1] {
+                            Value::Int(i) => *i as usize,
+                            _ => {
+                                return Err(LppoError::type_error(
+                                    "vec_set index must be an integer".into(),
+                                ))
+                            }
+                        };
+                        let val = arg_vals[2].clone();
+                        if let Value::Array(mut arr) = arg_vals[0].clone() {
+                            if let Some(slot) = arr.get_mut(idx) {
+                                *slot = val;
+                                return Ok(Value::Array(arr));
+                            } else {
+                                return Err(LppoError::type_error(
+                                    "vec_set index out of bounds".into(),
+                                ));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "vec_set first argument must be an array".into(),
+                            ));
+                        }
+                    }
+                    "vec_len" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "vec_len requires 1 argument (array)".into(),
+                            ));
+                        }
+                        if let Value::Array(arr) = &arg_vals[0] {
+                            return Ok(Value::Int(arr.len() as i64));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "vec_len argument must be an array".into(),
+                            ));
+                        }
+                    }
+                    // Collections: HashMap (backed by Object)
+                    "map_new" => {
+                        if arg_vals.len() != 0 {
+                            return Err(LppoError::type_error("map_new takes no arguments".into()));
+                        }
+                        return Ok(Value::Object(Vec::new()));
+                    }
+                    "map_insert" => {
+                        if arg_vals.len() != 3 {
+                            return Err(LppoError::type_error(
+                                "map_insert requires 3 arguments (map, key, value)".into(),
+                            ));
+                        }
+                        if let (Value::Object(fields), Value::Str(key)) = (&arg_vals[0], &arg_vals[1])
+                        {
+                            let mut fields = fields.clone();
+                            if let Some(entry) = fields.iter_mut().find(|(k, _)| k == key) {
+                                entry.1 = arg_vals[2].clone();
+                            } else {
+                                fields.push((key.clone(), arg_vals[2].clone()));
+                            }
+                            return Ok(Value::Object(fields));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "map_insert arguments must be (map, string, value)".into(),
+                            ));
+                        }
+                    }
+                    "map_get" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "map_get requires 2 arguments (map, key)".into(),
+                            ));
+                        }
+                        if let (Value::Object(fields), Value::Str(key)) = (&arg_vals[0], &arg_vals[1])
+                        {
+                            match fields.iter().find(|(k, _)| k == key) {
+                                Some((_, v)) => return Ok(v.clone()),
+                                None => {
+                                    return Err(LppoError::type_error(
+                                        "map_get key not found".into(),
+                                    ))
+                                }
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "map_get arguments must be (map, string)".into(),
+                            ));
+                        }
+                    }
+                    "map_remove" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "map_remove requires 2 arguments (map, key)".into(),
+                            ));
+                        }
+                        if let (Value::Object(fields), Value::Str(key)) = (&arg_vals[0], &arg_vals[1])
+                        {
+                            let mut fields = fields.clone();
+                            if let Some(pos) = fields.iter().position(|(k, _)| k == key) {
+                                fields.remove(pos);
+                                return Ok(Value::Object(fields));
+                            } else {
+                                return Err(LppoError::type_error(
+                                    "map_remove key not found".into(),
+                                ));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "map_remove first argument must be a map".into(),
+                            ));
+                        }
+                    }
+                    "map_len" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "map_len requires 1 argument (map)".into(),
+                            ));
+                        }
+                        if let Value::Object(fields) = &arg_vals[0] {
+                            return Ok(Value::Int(fields.len() as i64));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "map_len argument must be a map".into(),
+                            ));
+                        }
+                    }
+                    "map_keys" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "map_keys requires 1 argument (map)".into(),
+                            ));
+                        }
+                        if let Value::Object(fields) = &arg_vals[0] {
+                            let keys: Vec<Value> = fields
+                                .iter()
+                                .map(|(k, _)| Value::Str(k.clone()))
+                                .collect();
+                            return Ok(Value::Array(keys));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "map_keys argument must be a map".into(),
+                            ));
+                        }
+                    }
+                    // Memory pool
+                    "pool_alloc" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "pool_alloc requires 1 argument (size)".into(),
+                            ));
+                        }
+                        if let Value::Int(size) = arg_vals[0] {
+                            if size < 0 {
+                                return Err(LppoError::type_error(
+                                    "pool_alloc size must be non-negative".into(),
+                                ));
+                            }
+                            let id = next_pool_id();
+                            MEMORY_POOL
+                                .lock()
+                                .unwrap()
+                                .insert(id, vec![0u8; size as usize]);
+                            return Ok(Value::Int(id as i64));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "pool_alloc argument must be an integer".into(),
+                            ));
+                        }
+                    }
+                    "pool_free" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "pool_free requires 1 argument (id)".into(),
+                            ));
+                        }
+                        if let Value::Int(id) = arg_vals[0] {
+                            MEMORY_POOL.lock().unwrap().remove(&(id as u64));
+                            return Ok(Value::Int(0));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "pool_free argument must be an integer".into(),
+                            ));
+                        }
+                    }
+                    "pool_used" => {
+                        if arg_vals.len() != 0 {
+                            return Err(LppoError::type_error("pool_used takes no arguments".into()));
+                        }
+                        return Ok(Value::Int(MEMORY_POOL.lock().unwrap().len() as i64));
+                    }
                     _ => {}
                 }
             }
@@ -1612,6 +2133,11 @@ pub(crate) fn eval_expr(
                     // Execute the full procedure body and return its value so that
                     // procedures can be used in expressions (e.g. `let x = foo(5);`).
                     if let Expr::Var(proc_name) = func.as_ref() {
+                        // Dispatch to functions exposed by installed Rust packages
+                        // (e.g. LPPX2D, LPPX3D) via FFI against their cdylib.
+                        if crate::pkg::native::NativeRegistry::is_registered(proc_name) {
+                            return crate::pkg::native::call_native(proc_name, &arg_vals);
+                        }
                         // Look up the procedure
                         if let Some(proc_body) = procedures.get(proc_name) {
                             // Check arity
@@ -1698,9 +2224,57 @@ pub(crate) fn eval_expr(
             ))
         }
         Expr::Await(expr) => {
-            // For now, simply evaluate the expression synchronously
-            // In a real async runtime, this would suspend and resume
-            eval_expr(expr, env, procedures, ring0)
+            let handle = eval_expr(expr, env, procedures, ring0)?;
+            let id = match handle {
+                Value::Future { id } => id,
+                Value::JoinHandle { id } => id,
+                Value::Int(id) => id as u64,
+                other => {
+                    return Err(LppoError::type_error(format!(
+                        "await expects a future/join handle, got {other:?}"
+                    )))
+                }
+            };
+            await_handle(id)
+        }
+        Expr::Async { body } => {
+            let snapshot = env.clone();
+            let procs = procedures.clone();
+            let ring0 = ring0;
+            let body = body.clone();
+            let (tx, rx) = mpsc::channel();
+            let handle = std::thread::spawn(move || {
+                let mut local_env = snapshot;
+                let result = eval_expr(&body, &mut local_env, &procs, ring0);
+                let _ = tx.send(result.unwrap_or(Value::Int(0)));
+            });
+            Ok(Value::Future { id: register_future(handle, rx) })
+        }
+        Expr::Spawn { body } => {
+            let snapshot = env.clone();
+            let procs = procedures.clone();
+            let ring0 = ring0;
+            let body = body.clone();
+            let (tx, rx) = mpsc::channel();
+            let handle = std::thread::spawn(move || {
+                let mut local_env = snapshot;
+                let result = eval_expr(&body, &mut local_env, &procs, ring0);
+                let _ = tx.send(result.unwrap_or(Value::Int(0)));
+            });
+            Ok(Value::JoinHandle { id: register_future(handle, rx) })
+        }
+        Expr::Join(handle_expr) => {
+            let id = match eval_expr(handle_expr, env, procedures, ring0)? {
+                Value::JoinHandle { id } => id,
+                Value::Future { id } => id,
+                Value::Int(id) => id as u64,
+                other => {
+                    return Err(LppoError::type_error(format!(
+                        "join expects a future/join handle, got {other:?}"
+                    )))
+                }
+            };
+            await_handle(id)
         }
         Expr::Handle {
             expr,
@@ -1715,20 +2289,39 @@ pub(crate) fn eval_expr(
 }
 
 /// Executes compiled LPPO procedures.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Executor {
     procedures: HashMap<String, ProcedureBody>,
     ring0: bool,
+    context: crate::pkg::library::PackageContext,
 }
 
 impl Executor {
-    /// Create a new executor from compiled procedures.
+    /// Create a new executor from compiled procedures (global package context).
     pub fn new(procedures: HashMap<String, ProcedureBody>, ring0: bool) -> Self {
-        Self { procedures, ring0 }
+        Self { procedures, ring0, context: crate::pkg::library::PackageContext::Global }
+    }
+
+    /// Create a new executor with the given package context.
+    pub fn with_context(
+        procedures: HashMap<String, ProcedureBody>,
+        ring0: bool,
+        context: crate::pkg::library::PackageContext,
+    ) -> Self {
+        Self { procedures, ring0, context }
     }
 
     /// Run the specified entry procedure.
     pub fn run(&self, entry: &str) -> LppoResult<()> {
+        // Install the native package context for this thread so that installed
+        // package functions resolve against the right package database
+        // (global `~/.LPPO/` or project-local `<project>/.lppo/`).
+        let _guard = crate::pkg::native::ContextGuard::install(self.context.clone());
+        // Load installed package functions into the native registry so that
+        // `eval_expr` can dispatch to them at runtime (needed for bundled
+        // executables loaded from disk where compilation-time registration
+        // doesn't persist across processes).
+        crate::pkg::native::NativeRegistry::ensure_loaded_with(&self.context)?;
         let procedure = self
             .procedures
             .get(entry)
@@ -1781,8 +2374,10 @@ impl Executor {
                             let procs = self.procedures.clone();
                             scope.spawn(move || {
                                 // evaluate in snapshot environment
+                                let _guard = crate::pkg::native::ContextGuard::install(self.context.clone());
                                 let v = eval_expr(&e, &mut snapshot, &procs, self.ring0)
                                     .expect("eval in thread");
+                                drop(_guard);
                                 println!("{}", value_to_string(&v));
                             });
                         }
@@ -2275,6 +2870,18 @@ impl Executor {
                     // Evaluate expression for side effects (e.g., method calls)
                     let _ = eval_expr(expr, env, &self.procedures, self.ring0)?;
                 }
+                Operation::Spawn { ops } => {
+                    // Fire-and-forget thread: snapshot the environment and run
+                    // the block in a new thread.
+                    let snapshot = env.clone();
+                    let procs = self.procedures.clone();
+                    let ring0 = self.ring0;
+                    let ops = ops.clone();
+                    std::thread::spawn(move || {
+                        let mut local_env = snapshot;
+                        let _ = execute_ops_standalone(&ops, &mut local_env, &procs, ring0);
+                    });
+                }
             }
         }
         Ok(ControlFlow::None)
@@ -2284,6 +2891,17 @@ impl Executor {
     pub fn has_procedure(&self, name: &str) -> bool {
         self.procedures.contains_key(name)
     }
+}
+
+/// Execute a slice of operations against an environment (used by spawned threads).
+fn execute_ops_standalone(
+    ops: &[Operation],
+    env: &mut HashMap<String, Value>,
+    procedures: &HashMap<String, ProcedureBody>,
+    ring0: bool,
+) -> LppoResult<ControlFlow> {
+    let dummy = Executor::new(procedures.clone(), ring0);
+    dummy.execute_ops(ops, env)
 }
 
 // Convert an LPPO runtime Value into a serde_json::Value (for JSON serialization).
@@ -2304,6 +2922,8 @@ fn value_to_json(v: &Value) -> serde_json::Value {
             serde_json::Value::Object(map)
         }
         Value::Closure { .. } => serde_json::Value::String("<closure>".to_string()),
+        Value::Future { id } => serde_json::Value::String(format!("<future {id}>")),
+        Value::JoinHandle { id } => serde_json::Value::String(format!("<join-handle {id}>")),
     }
 }
 
@@ -2489,6 +3109,8 @@ fn value_to_string(v: &Value) -> String {
         Value::Closure { params, .. } => {
             format!("<closure with {} params>", params.len())
         }
+        Value::Future { id } => format!("<future {id}>"),
+        Value::JoinHandle { id } => format!("<join-handle {id}>"),
     }
 }
 
@@ -2502,6 +3124,8 @@ fn is_truthy(v: &Value) -> bool {
         Value::Array(arr) => !arr.is_empty(),
         Value::Object(fields) => !fields.is_empty(),
         Value::Closure { .. } => true, // Closures are always truthy
+        Value::Future { .. } => true,
+        Value::JoinHandle { .. } => true,
     }
 }
 
@@ -2510,11 +3134,68 @@ pub fn serialize_procedures(procedures: &HashMap<String, ProcedureBody>) -> Lppo
     serde_json::to_vec(procedures).map_err(|e| LppoError::type_error(e.to_string()))
 }
 
+/// Marker prefix prepended to an XOR-obfuscated bytecode payload.
+pub const OBFUSCATION_MARKER: &[u8] = b"LPPO-OBF-1\n";
+/// Default XOR key used to obfuscate payloads when no custom key is provided.
+const OBFUSCATION_KEY: &[u8] = b"LPPO-obfuscation-key-v1";
+
+/// XOR-encode a serialized bytecode payload with an obfuscation marker and key
+/// so the plaintext bytecode is not stored verbatim in the output binary.
+pub fn obfuscate_payload(bytes: &[u8]) -> LppoResult<Vec<u8>> {
+    let mut out = Vec::with_capacity(bytes.len() + OBFUSCATION_MARKER.len() + 1 + OBFUSCATION_KEY.len());
+    out.extend_from_slice(OBFUSCATION_MARKER);
+    out.push(OBFUSCATION_KEY.len() as u8);
+    out.extend_from_slice(OBFUSCATION_KEY);
+    let mut encoded = bytes.to_vec();
+    for (i, b) in encoded.iter_mut().enumerate() {
+        *b ^= OBFUSCATION_KEY[i % OBFUSCATION_KEY.len()];
+    }
+    out.extend_from_slice(&encoded);
+    Ok(out)
+}
+
 /// Deserialize procedures from JSON bytes and return an Executor.
+///
+/// Payloads prefixed with [`OBFUSCATION_MARKER`] are XOR-decoded before
+/// deserialization.
 pub fn executor_from_bytes(bytes: &[u8]) -> LppoResult<Executor> {
+    let bytes = if bytes.starts_with(OBFUSCATION_MARKER) && bytes.len() > OBFUSCATION_MARKER.len() + 1 {
+        let key_len = bytes[OBFUSCATION_MARKER.len()] as usize;
+        let start = OBFUSCATION_MARKER.len() + 1;
+        if bytes.len() < start + key_len {
+            return Err(LppoError::type_error("truncated obfuscated payload".into()));
+        }
+        let key = &bytes[start..start + key_len];
+        let mut payload = bytes[start + key_len..].to_vec();
+        for (i, b) in payload.iter_mut().enumerate() {
+            *b ^= key[i % key.len()];
+        }
+        payload
+    } else {
+        bytes.to_vec()
+    };
     let map: HashMap<String, ProcedureBody> =
-        serde_json::from_slice(bytes).map_err(|e| LppoError::type_error(e.to_string()))?;
+        serde_json::from_slice(&bytes).map_err(|e| LppoError::type_error(e.to_string()))?;
     Ok(Executor::new(map, false))
+}
+
+/// Deserialize procedures from a bundle payload produced by
+/// [`write_bundled_executable`] (`crate::project`).
+///
+/// Layout: `[u64 proc_len][proc JSON]`.
+pub fn executor_from_bundle_bytes(bytes: &[u8]) -> LppoResult<Executor> {
+    if bytes.len() < 8 {
+        return Err(LppoError::type_error("truncated bundle payload".into()));
+    }
+    let proc_len = u64::from_le_bytes(bytes[0..8].try_into().unwrap()) as usize;
+    if bytes.len() < 8 + proc_len {
+        return Err(LppoError::type_error("truncated procedure payload".into()));
+    }
+    let proc_json = &bytes[8..8 + proc_len];
+
+    let procedures: HashMap<String, ProcedureBody> =
+        serde_json::from_slice(proc_json).map_err(|e| LppoError::type_error(e.to_string()))?;
+    Ok(Executor::new(procedures, false))
 }
 
 #[cfg(test)]

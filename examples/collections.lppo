@@ -1,0 +1,38 @@
+pub proc main() -> Void {
+    out "=== Vec Collections ===";
+
+    let own nums: Arr<Int64> = vec_new();
+    let own nums1: Arr<Int64> = vec_push(nums, 10);
+    let own nums2: Arr<Int64> = vec_push(nums1, 20);
+    let own nums3: Arr<Int64> = vec_push(nums2, 30);
+
+    out "len:", vec_len(nums3);
+    out "get[0]:", vec_get(nums3, 0);
+    out "get[1]:", vec_get(nums3, 1);
+    out "get[2]:", vec_get(nums3, 2);
+
+    let own nums4: Arr<Int64> = vec_set(nums3, 1, 99);
+    out "get[1] after set:", vec_get(nums4, 1);
+
+    let own popped: Int64 = vec_pop(nums4);
+    out "popped:", popped;
+    out "len of nums4 (unchanged):", vec_len(nums4);
+
+    out "";
+    out "=== Map Collections ===";
+
+    let own m: Map<Str, Int64> = map_new();
+    let own m1: Map<Str, Int64> = map_insert(m, "apples", 3);
+    let own m2: Map<Str, Int64> = map_insert(m1, "bananas", 5);
+    let own m3: Map<Str, Int64> = map_insert(m2, "cherries", 7);
+
+    out "map len:", map_len(m3);
+    out "map get apples:", map_get(m3, "apples");
+    out "map get bananas:", map_get(m3, "bananas");
+    out "map get cherries:", map_get(m3, "cherries");
+    out "map keys:", map_keys(m3);
+
+    let own m4: Map<Str, Int64> = map_remove(m3, "bananas");
+    out "map len after remove:", map_len(m4);
+    out "map keys after remove:", map_keys(m4);
+}

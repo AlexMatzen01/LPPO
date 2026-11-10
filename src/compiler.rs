@@ -200,6 +200,10 @@ fn compile_statement(statement: Statement) -> Operation {
             on_timeout,
             is_async,
         },
+        Statement::Spawn { body } => {
+            let ops = body.into_iter().map(compile_statement).collect();
+            Operation::Spawn { ops }
+        }
     }
 }
 

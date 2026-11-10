@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "repositories": [
+    {
+      "name": "lppo-official",
+      "url": "https://github.com/lppo-lang/packages",
+      "type": "git",
+      "description": "Official LPPO package repository"
+    },
+    {
+      "name": "local",
+      "url": "/home/alex/Documents/lppo-packages",
+      "type": "path",
+      "description": "Local package directory"
+    }
+  ]
+}

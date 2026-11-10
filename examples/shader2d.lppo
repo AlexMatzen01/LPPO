@@ -1,0 +1,29 @@
+// LPPX2D example: 2D graphics using raylib via LPPO FFI
+//
+// Build: lppo project build --entry examples/shader2d.lppo --output target/shader2d
+// Run:   ./target/shader2d   (opens an 800x600 raylib window)
+//
+// Requires: LPPX2D package installed (~/.LPPO/packages/liblppo_x2d.so)
+
+use LPPX2D;
+
+pub proc main() -> Void {
+    out "=== LPPX2D Shader Example ===";
+    out "Opening 800x600 raylib window...";
+
+    let win: Int64 = x2d_window_create("LPPX2D Demo", 800, 600);
+    out "Window created, id:", win;
+
+    x2d_begin_frame(win);
+    x2d_canvas_clear(0, 0, 0, 255);
+
+    // Draw a red rectangle
+    x2d_draw_rectangle(100, 100, 200, 150, 255, 0, 0, 255);
+
+    // Draw a blue circle (color args padded to 8-arg FFI convention)
+    x2d_draw_circle(400, 300, 50, 0, 0, 255, 255, 0);
+
+    x2d_end_frame(win);
+
+    out "2D shader example complete.";
+}

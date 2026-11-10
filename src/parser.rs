@@ -700,6 +700,15 @@ impl<'a> Parser<'a> {
                 };
                 Ok(TypeAnnotation::Own(Box::new(inner)))
             }
+            Token::TypeHashMap => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let key = self.parse_type()?;
+                self.expect(Token::Comma)?;
+                let val = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Map(Box::new(key), Box::new(val)))
+            }
             // Handle generic type tokens like Vec, HashMap, etc.
             tok if self.token_as_identifier(tok).is_some() => {
                 let type_name = self.token_as_identifier(tok).unwrap();
@@ -922,10 +931,9 @@ impl<'a> Parser<'a> {
             Token::While => self.parse_while(),
             Token::For => self.parse_for(),
             Token::Loop => self.parse_loop(),
+            Token::Spawn => self.parse_spawn(),
             Token::Pause => {
                 self.advance()?; // consume 'pause'
-
-                // Optional clauses: with <expr>, timeout <expr>, until <expr>, assign <ident>, on_mismatch <expr>, on_timeout <expr>
                 let mut prompt: Option<Expr> = None;
                 let mut timeout_ms: Option<Expr> = None;
                 let mut until: Option<Expr> = None;
@@ -1209,6 +1217,18 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn parse_spawn(&mut self) -> LppoResult<Statement> {
+        self.advance()?; // consume 'spawn'
+        self.expect(Token::LBrace)?;
+        let mut body = Vec::new();
+        while self.lookahead != Token::RBrace {
+            body.push(self.parse_statement()?);
+        }
+        self.expect(Token::RBrace)?;
+        self.expect(Token::Semicolon)?;
+        Ok(Statement::Spawn { body })
+    }
+
     fn parse_generic_params(&mut self) -> LppoResult<Vec<String>> {
         let mut params = Vec::new();
         if self.lookahead == Token::Less {
@@ -1354,6 +1374,11 @@ impl<'a> Parser<'a> {
                 "Result<{}, {}>",
                 self.type_to_string(ok),
                 self.type_to_string(err)
+            ),
+            TypeAnnotation::Map(k, v) => format!(
+                "Map<{}, {}>",
+                self.type_to_string(k),
+                self.type_to_string(v)
             ),
         }
     }
@@ -1965,6 +1990,24 @@ impl<'a> Parser<'a> {
                 Ok(Expr::UnaryOp {
                     op: UnaryOp::BitNot,
                     operand: Box::new(operand),
+                })
+            }
+            Token::Async => {
+                self.advance()?; // consume 'async'
+                self.expect(Token::LBrace)?;
+                let body = self.parse_expression()?;
+                self.expect(Token::RBrace)?;
+                Ok(Expr::Async {
+                    body: Box::new(body),
+                })
+            }
+            Token::Spawn => {
+                self.advance()?; // consume 'spawn'
+                self.expect(Token::LBrace)?;
+                let body = self.parse_expression()?;
+                self.expect(Token::RBrace)?;
+                Ok(Expr::Spawn {
+                    body: Box::new(body),
                 })
             }
             Token::Ref => {

@@ -1,0 +1,31 @@
+pub proc main() -> Void {
+    out "=== Memory Pool ===";
+
+    out "pool used initially:", pool_used();
+
+    let own id1: Int64 = pool_alloc(256);
+    out "allocated id1:", id1;
+    out "pool used after alloc 1:", pool_used();
+
+    let own id2: Int64 = pool_alloc(512);
+    out "allocated id2:", id2;
+    out "pool used after alloc 2:", pool_used();
+
+    let own id3: Int64 = pool_alloc(128);
+    out "allocated id3:", id3;
+    out "pool used after alloc 3:", pool_used();
+
+    out "freeing id2:", id2;
+    out "pool free:", pool_free(id2);
+    out "pool used after free:", pool_used();
+
+    out "freeing id1:", id1;
+    out "pool free:", pool_free(id1);
+    out "pool used after free 2:", pool_used();
+
+    out "freeing id3:", id3;
+    out "pool free:", pool_free(id3);
+    out "pool used after free 3:", pool_used();
+
+    out "Memory pool demo complete.";
+}

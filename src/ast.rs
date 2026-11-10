@@ -122,6 +122,7 @@ pub enum TypeAnnotation {
     Tuple(Vec<TypeAnnotation>),               // Tuple types
     Option(Box<TypeAnnotation>),              // Option type
     Result(Box<TypeAnnotation>, Box<TypeAnnotation>), // Result type
+    Map(Box<TypeAnnotation>, Box<TypeAnnotation>),    // Map<K, V> hash map
 }
 
 /// Parameter with explicit type and ownership annotations
@@ -247,6 +248,8 @@ pub enum Statement {
         /// Async flag: if true, schedule remaining ops in background and return immediately
         is_async: bool,
     },
+    /// Spawn a block of statements in a new thread (fire-and-forget threading).
+    Spawn { body: Vec<Statement> },
 }
 
 /// Qualified name for namespaced identifiers like module::submodule::name
@@ -394,6 +397,12 @@ pub enum Expr {
     },
     /// Await expression: await expr
     Await(Box<Expr>),
+    /// Async block expression: async { expr } - evaluates in a background task, returns a Future.
+    Async { body: Box<Expr> },
+    /// Spawn expression: spawn { expr } - evaluates in a new thread, returns a JoinHandle.
+    Spawn { body: Box<Expr> },
+    /// Join a spawned thread / future handle: await also works on handles.
+    Join(Box<Expr>),
     /// Handle expression for effect handling: handle expr with type { handlers }
     Handle {
         expr: Box<Expr>,

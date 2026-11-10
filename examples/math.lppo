@@ -1,0 +1,38 @@
+pub proc main() -> Void {
+    out "=== eval: multi-operator math expressions ===";
+
+    out "eval 2+3*4:", eval("2+3*4");
+    out "eval (2+3)*4:", eval("(2+3)*4");
+    out "eval 2^10:", eval("2^10");
+    out "eval 10/3:", eval("10/3");
+    out "eval -5+3:", eval("-5+3");
+    out "eval 1+2+3+4+5:", eval("1+2+3+4+5");
+
+    out "";
+    out "=== sqrt: integer square root ===";
+    out "sqrt 16:", sqrt(16);
+    out "sqrt 25:", sqrt(25);
+    out "sqrt 2:", sqrt(2);
+    out "sqrt 0:", sqrt(0);
+
+    out "";
+    out "=== either: base +/- delta ===";
+    let own r: Arr<Int64> = either(5, 1);
+    out "either 5, 1:", r;
+    let own q: Arr<Int64> = either(3, -7);
+    out "either 3, -7:", q;
+
+    out "";
+    out "=== quadratic formula: x^2 - 5x + 6 = 0 ===";
+    let own a: Int64 = 1;
+    let own b: Int64 = -5;
+    let own c: Int64 = 6;
+    let own disc: Int64 = (b * b) - (4 * a * c);
+    out "discriminant:", disc;
+    let own roots: Arr<Int64> = either((-b), sqrt(disc));
+    out "root1 (+):", roots[0] / (2 * a);
+    out "root2 (-):", roots[1] / (2 * a);
+
+    out "";
+    out "Math demo complete.";
+}

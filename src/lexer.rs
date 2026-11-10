@@ -190,6 +190,7 @@ pub enum Token {
     CondVar,
     RwLock,
     Spinlock,
+    Spawn,
 
     // V5.2: Extended Type System (150+ new type features)
     TypeF32,
@@ -1502,6 +1503,7 @@ impl<'a> Lexer<'a> {
                     "block" => Token::Block,
                     "thread" => Token::Thread,
                     "warp" => Token::Warp,
+                    "spawn" => Token::Spawn,
                     "global" => Token::Global,
                     "shared" => Token::Shared,
                     "local" => Token::Local,
@@ -1614,6 +1616,7 @@ impl<'a> Lexer<'a> {
                     "Array" => Token::TypeArray,
                     "Slice" => Token::TypeSlice,
                     "HashMap" => Token::TypeHashMap,
+                    "Map" => Token::TypeHashMap,
                     "HashSet" => Token::TypeHashSet,
                     "BTreeMap" => Token::TypeBTreeMap,
                     "BTreeSet" => Token::TypeBTreeSet,

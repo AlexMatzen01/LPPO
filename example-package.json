@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "package": {
+    "identifier": "mypackage",
+    "display_name": "My Package",
+    "version": "1.0.0",
+    "author": "Your Name <you@example.com>",
+    "description": "A short description of your package",
+    "license": "MIT",
+    "repository": "https://github.com/yourname/mypackage",
+    "lppo_version": ">=5.0.0",
+    "dependencies": {},
+    "build": {
+      "system": "cargo",
+      "manifest": "Cargo.toml",
+      "features": [],
+      "release": true
+    }
+  }
+}

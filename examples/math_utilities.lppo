@@ -26,4 +26,14 @@ pub proc main() -> Void {
     let own abs_x: Int64 = abs(x);
     let own power: Int64 = pow(abs_x, y);
     out "abs(-5)^3 =", power;
+
+    out "\nSquare Root:";
+    let own x: Int64 = 25;
+    let own result: Int64 = sqrt(x);
+    out "The square root of 25 is", result;
+
+    out "\nEvaluate:";
+    let own x: Str = "5+5+5+5";
+    let own result: Int64 = eval(x);
+    out "Evaluated expression:", result;
 }
