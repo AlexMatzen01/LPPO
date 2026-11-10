@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.5-beta.2 - 2026-11-10 (beta)
+
+Release v0.1.5-beta.2
+
 ## 0.1.5-beta.1 - 2026-11-10 (beta)
 
 Release v0.1.5-beta.1
