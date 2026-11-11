@@ -15,8 +15,8 @@
     },
     {
       "name": "LPPNet",
-      "url": "/home/alex/Documents/LPPNet",
-      "type": "path",
+      "url": "https://github.com/AlexMatzen01/LPPNet",
+      "type": "git",
       "description": "LPPNet package (networking framework)"
     },
     {

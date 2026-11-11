@@ -13,6 +13,7 @@ use lppo::{
     build_executor_with_root, compile_to_bytes_with_root, load_executor_from_bytes,
     PackageContext,
 };
+use lppo::pkg::library::{global_lppo_dir, repositories_json_path};
 use serde::{Deserialize, Serialize};
 use lppo::pkg::cli::PkgSubcommand;
 
@@ -302,6 +303,17 @@ pub fn cmd_init(name: &str, path: Option<&Path>) -> LppoResult<()> {
     fs::write(target_dir.join(".gitignore"), gitignore)
         .map_err(|e| LppoError::io_error(format!("failed to write .gitignore: {}", e)))?;
 
+    // Create .lppo directory and copy global repositories.json into it.
+    let lppo_dir = target_dir.join(".lppo");
+    fs::create_dir_all(&lppo_dir).map_err(|e| {
+        LppoError::io_error(format!("failed to create .lppo directory: {}", e))
+    })?;
+    if let Ok(global_repos) = repositories_json_path() {
+        if global_repos.is_file() {
+            let _ = fs::copy(&global_repos, lppo_dir.join("repositories.json"));
+        }
+    }
+
     // Initialize git repository
     let status = Command::new("git")
         .current_dir(&target_dir)
@@ -322,6 +334,7 @@ pub fn cmd_init(name: &str, path: Option<&Path>) -> LppoResult<()> {
     println!("  - created lppo.toml manifest");
     println!("  - created src/main.lppo entry point");
     println!("  - created .gitignore");
+    println!("  - created .lppo/ with repositories.json");
     println!("  - initialized git repository");
     Ok(())
 }
