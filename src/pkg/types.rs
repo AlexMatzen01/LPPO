@@ -404,13 +404,16 @@ pub struct PackageManifest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageManifestData {
     /// Unique package identifier (used as import/install key).
+    #[serde(alias = "name")]
     pub identifier: String,
-    /// Human-readable display name.
-    pub display_name: String,
+    /// Human-readable display name (falls back to `identifier` if absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     /// SemVer version string.
     pub version: String,
     /// Author name and email.
-    pub author: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
     /// Short description.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,

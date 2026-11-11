@@ -2,16 +2,16 @@
   "schema_version": 1,
   "repositories": [
     {
-      "name": "lppo-official",
-      "url": "https://github.com/lppo-lang/packages",
+      "name": "LPPX2D",
+      "url": "https://github.com/AlexMatzen01/LPPX2D",
       "type": "git",
-      "description": "Official LPPO package repository"
+      "description": "LPPX2D package (2D graphics framework)"
     },
     {
-      "name": "local",
-      "url": "/home/alex/Documents/lppo-packages",
-      "type": "path",
-      "description": "Local package directory"
+      "name": "LPPX3D",
+      "url": "https://github.com/AlexMatzen01/LPPX3D",
+      "type": "git",
+      "description": "LPPX3D package (3D graphics framework)"
     }
   ]
 }

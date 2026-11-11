@@ -13,11 +13,8 @@
 //! ```
 
 use crate::error::{LppoError, LppoResult};
-use crate::pkg::library::load_package_manifest;
 use crate::pkg::manager::PackageManager;
-use crate::pkg::types::{
-    InstalledPackageEntry, PackagesIndex, Repositories, Repository,
-};
+use crate::pkg::types::{PackagesIndex, Repositories, Repository};
 use std::path::Path;
 
 /// Subcommands supported by `lppo pkg`.
@@ -183,19 +180,15 @@ impl PkgSubcommand {
                 }
             }
             PkgSubcommand::Search { query } => {
-                let index = PackagesIndex::load_with(&context)?;
-                let q = query.to_lowercase();
-                let results: Vec<&InstalledPackageEntry> = index
-                    .packages
-                    .values()
-                    .filter(|p| p.identifier.to_lowercase().contains(&q))
-                    .collect();
+                let pm = PackageManager::load_with_context(context.clone())?;
+                let results = pm.search_available(&query);
                 if results.is_empty() {
                     println!("No packages matching '{query}'.");
                 } else {
                     println!("Packages matching '{query}':");
-                    for p in results {
-                        println!("  {} v{} - {}", p.identifier, p.version, p.path.display());
+                    for (id, version, installed) in results {
+                        let status = if installed { " (installed)" } else { "" };
+                        println!("  {} {}{}", id, version, status);
                     }
                 }
             }
@@ -222,35 +215,35 @@ impl PkgSubcommand {
                 }
             }
             PkgSubcommand::Info { name } => {
-                let index = PackagesIndex::load_with(&context)?;
-                let entry = index
-                    .get(&name)
-                    .ok_or_else(|| LppoError::package_not_found(name.clone()))?;
-                println!("Package: {}", entry.identifier);
-                println!("  Version: {}", entry.version);
-                println!("  Path: {}", entry.path.display());
-                if !entry.repository.is_empty() {
-                    println!("  Repository: {}", entry.repository);
-                }
-                // Also try to read the package.json manifest for more info.
-                if let Ok(manifest) = load_package_manifest(&entry.path) {
-                    let data = &manifest.package;
-                    if let Some(desc) = &data.description {
-                        println!("  Description: {desc}");
-                    }
-                    if let Some(license) = &data.license {
-                        println!("  License: {license}");
-                    }
-                    if let Some(lppo_ver) = &data.lppo_version {
-                        println!("  LPPO version: {lppo_ver}");
-                    }
-                    if !data.dependencies.is_empty() {
+                let pm = PackageManager::load_with_context(context.clone())?;
+                // First try installed packages.
+                if let Ok(entry) = pm.info(&name) {
+                    println!("Package: {}", entry.name);
+                    println!("  Version: {}", entry.version);
+                    println!("  Source: {:?}", entry.source);
+                    println!("  Path: {}", entry.source_path.display());
+                    if !entry.dependencies.is_empty() {
                         println!("  Dependencies:");
-                        for (dep, req) in &data.dependencies {
+                        for (dep, req) in &entry.dependencies {
                             println!("    {dep}: {req}");
                         }
                     }
+                    return Ok(());
                 }
+                // Fall back to searching repositories for available packages.
+                let results = pm.search_available(&name);
+                let matches: Vec<&(String, String, bool)> = results
+                    .iter()
+                    .filter(|(id, _, _)| id == &name)
+                    .collect();
+                if let Some((id, version, _)) = matches.first() {
+                    println!("Package: {id}");
+                    println!("  Version: {version}");
+                    println!("  Status: available (not installed)");
+                    println!("  Run 'lppo pkg install {id}' to install it.");
+                    return Ok(());
+                }
+                return Err(LppoError::package_not_found(name.clone()));
             }
             PkgSubcommand::Build { name } => {
                 let mut pm = PackageManager::load_with_context(context.clone())?;

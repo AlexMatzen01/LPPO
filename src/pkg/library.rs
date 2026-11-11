@@ -462,15 +462,22 @@ impl PackagesIndex {
                     continue;
                 }
                 let manifest_path = pkg_dir.join("package.json");
-                if !manifest_path.is_file() {
-                    continue;
-                }
+                let manifest_path = if manifest_path.is_file() {
+                    manifest_path
+                } else {
+                    let alt = pkg_dir.join("lppo_package.json");
+                    if alt.is_file() {
+                        alt
+                    } else {
+                        continue;
+                    }
+                };
                 let manifest: PackageManifest = match fs::read_to_string(&manifest_path) {
-                    Ok(contents) => match serde_json::from_str(&contents) {
-                        Ok(m) => m,
-                        Err(e) => {
+                    Ok(contents) => match try_parse_manifest(&contents) {
+                        Some(m) => m,
+                        None => {
                             eprintln!(
-                                "warning: failed to parse package.json in {}: {e}",
+                                "warning: failed to parse package manifest in {}",
                                 pkg_dir.display()
                             );
                             continue;
@@ -478,7 +485,7 @@ impl PackagesIndex {
                     },
                     Err(e) => {
                         eprintln!(
-                            "warning: failed to read package.json in {}: {e}",
+                            "warning: failed to read package manifest in {}: {e}",
                             pkg_dir.display()
                         );
                         continue;
@@ -555,13 +562,21 @@ impl InstalledDb {
 
 /// Load a package's `package.json` manifest from its source directory.
 pub fn load_package_manifest(source_path: &Path) -> LppoResult<PackageManifest> {
+    // Prefer package.json; fall back to lppo_package.json for older packages.
     let manifest_path = source_path.join("package.json");
-    if !manifest_path.is_file() {
-        return Err(LppoError::io_error(format!(
-            "package.json not found in {}",
-            source_path.display()
-        )));
-    }
+    let manifest_path = if manifest_path.is_file() {
+        manifest_path
+    } else {
+        let alt = source_path.join("lppo_package.json");
+        if alt.is_file() {
+            alt
+        } else {
+            return Err(LppoError::io_error(format!(
+                "package.json or lppo_package.json not found in {}",
+                source_path.display()
+            )));
+        }
+    };
     let contents = fs::read_to_string(&manifest_path).map_err(|e| {
         LppoError::io_error(format!(
             "failed to read package manifest '{}': {}",
@@ -569,15 +584,31 @@ pub fn load_package_manifest(source_path: &Path) -> LppoResult<PackageManifest> 
             e
         ))
     })?;
-    let manifest: PackageManifest =
-        serde_json::from_str(&contents).map_err(|e| {
+    // Try the new wrapped format { schema_version, package: { ... } } first,
+    // then the old flat format { name, version, ... }.
+    let mut manifest: PackageManifest =
+        try_parse_manifest(&contents).ok_or_else(|| {
             LppoError::serialization_error(format!(
-                "failed to parse package manifest '{}': {}",
-                manifest_path.display(),
-                e
+                "failed to parse package manifest '{}': unknown format",
+                manifest_path.display()
             ))
         })?;
+    // Fallback display_name to identifier if absent.
+    if manifest.package.display_name.is_none() {
+        manifest.package.display_name = Some(manifest.package.identifier.clone());
+    }
     Ok(manifest)
+}
+
+/// Try to parse a manifest string in either new wrapped format
+/// `{ schema_version, package: { ... } }` or old flat format `{ name, version, ... }`.
+pub fn try_parse_manifest(contents: &str) -> Option<PackageManifest> {
+    serde_json::from_str::<PackageManifest>(contents).ok().or_else(|| {
+        serde_json::from_str::<PackageManifestData>(contents).ok().map(|data| PackageManifest {
+            schema_version: 1,
+            package: data,
+        })
+    })
 }
 
 /// Current UTC timestamp (unix seconds), used for install records. Avoids a

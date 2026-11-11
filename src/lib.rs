@@ -308,13 +308,13 @@ fn resolve_program(
         // If the import names an installed Rust package, its LPPO-facing
         // functions are registered globally by the type checker (via
         // NativeRegistry). Skip on-disk file resolution for it.
-        // Check both project-local and global installed packages.
+        // Check both project-local and global installed packages (case-insensitive).
         if let Some(first) = path.first() {
             let installed = InstalledTracker::load_with(context.clone())
-                .map(|t| t.is_installed(first))
+                .map(|t| t.is_installed_any_case(first))
                 .unwrap_or(false);
             let global_installed = InstalledTracker::load()
-                .map(|t| t.is_installed(first))
+                .map(|t| t.is_installed_any_case(first))
                 .unwrap_or(false);
             if installed || global_installed {
                 continue;

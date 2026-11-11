@@ -46,9 +46,21 @@ impl InstalledTracker {
         self.db.package_names()
     }
 
-    /// Check whether a package is installed.
+    /// Check whether a package is installed (exact match).
     pub fn is_installed(&self, name: &str) -> bool {
         self.db.get(name).is_some()
+    }
+
+    /// Check whether a package is installed (case-insensitive).
+    pub fn is_installed_any_case(&self, name: &str) -> bool {
+        let lower = name.to_lowercase();
+        self.db.packages.keys().any(|k| k.to_lowercase() == lower)
+    }
+
+    /// Look up an installed package record (case-insensitive).
+    pub fn get_any_case(&self, name: &str) -> Option<&InstalledPackage> {
+        let lower = name.to_lowercase();
+        self.db.packages.iter().find(|(k, _)| k.to_lowercase() == lower).map(|(_, v)| v)
     }
 
     /// Look up an installed package record.

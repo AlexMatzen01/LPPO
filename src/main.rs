@@ -58,6 +58,14 @@ fn lppo_version_string() -> String {
     }
 }
 
+fn hash_file(path: &Path) -> u64 {
+    use std::hash::Hasher;
+    let contents = fs::read(path).unwrap_or_default();
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    h.write(&contents);
+    h.finish()
+}
+
 fn ensure_installed_in_path() -> Result<(), Box<dyn Error>> {
     let home = std::env::var("HOME")
         .map(PathBuf::from)
@@ -70,13 +78,19 @@ fn ensure_installed_in_path() -> Result<(), Box<dyn Error>> {
     let target = bin_dir.join("lppo");
     let current = std::env::current_exe()?;
 
-    // Only copy if the target doesn't exist or differs.
-    let needs_copy = match fs::metadata(&target) {
-        Ok(meta) => {
-            let cur_meta = fs::metadata(&current)?;
-            meta.len() != cur_meta.len()
+    // Only copy if the target doesn't exist or differs in content.
+    let needs_copy = match (fs::metadata(&target), fs::metadata(&current)) {
+        (Ok(t_meta), Ok(c_meta)) => {
+            if t_meta.len() != c_meta.len() {
+                true
+            } else {
+                // Same size — compare content hashes to be sure.
+                let t_hash = hash_file(&target);
+                let c_hash = hash_file(&current);
+                t_hash != c_hash
+            }
         }
-        Err(_) => true,
+        _ => true,
     };
     if needs_copy {
         fs::copy(&current, &target)?;
@@ -107,8 +121,9 @@ fn ensure_installed_in_path() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // Add ~/.LPPO/bin to PATH by appending to shell rc files if not present.
-    let path_entry = format!("export PATH=\"$HOME/.LPPO/bin:$PATH\"");
+    // Add ~/.LPPO/bin and ~/.LPPO to PATH by appending to shell rc files if not present.
+    let bin_path_entry = format!("export PATH=\"$HOME/.LPPO/bin:$PATH\"");
+    let lppo_path_entry = format!("export PATH=\"$HOME/.LPPO:$PATH\"");
     let rc_files = [
         home.join(".bashrc"),
         home.join(".zshrc"),
@@ -119,7 +134,11 @@ fn ensure_installed_in_path() -> Result<(), Box<dyn Error>> {
             let contents = fs::read_to_string(rc)?;
             if !contents.contains("LPPO/bin") {
                 let mut file = fs::OpenOptions::new().append(true).open(rc)?;
-                writeln!(file, "\n# LPPO\n{}", path_entry)?;
+                writeln!(file, "\n# LPPO\n{}", bin_path_entry)?;
+            }
+            if !contents.contains("LPPO:$PATH") {
+                let mut file = fs::OpenOptions::new().append(true).open(rc)?;
+                writeln!(file, "{}", lppo_path_entry)?;
             }
         }
     }

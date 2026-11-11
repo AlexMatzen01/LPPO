@@ -9,16 +9,18 @@ use crate::error::{LppoError, LppoResult};
 use crate::pkg::builder::CargoBuilder;
 use crate::pkg::installed::InstalledTracker;
 use crate::pkg::library::{
-    ensure_dirs, package_module_dir, load_package_manifest, PackageContext,
+    ensure_dirs, package_module_dir, load_package_manifest, PackageContext, try_parse_manifest,
 };
 use crate::pkg::source::SourceRetriever;
 use crate::pkg::types::{
-    BuildConfig, InstalledPackage, PackageSource, Repositories,
+    BuildConfig, InstalledPackage, PackageManifest, PackageManifestData, PackageSource,
+    Repository, Repositories,
 };
 use serde_json;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 /// The package manager.
 pub struct PackageManager {
@@ -64,6 +66,158 @@ impl PackageManager {
             .collect()
     }
 
+    /// Search available packages across all configured repositories (path repos
+    /// only, since git repos require cloning). Returns matches with their repo
+    /// name and whether they're installed.
+    pub fn search_available(&self, query: &str) -> Vec<(String, String, bool)> {
+        let q = query.to_lowercase();
+        let mut results: Vec<(String, String, bool)> = Vec::new();
+
+        // Also include installed packages.
+        for p in self.tracker.all_packages() {
+            if p.name.to_lowercase().contains(&q) {
+                results.push((p.name.clone(), format!("v{}", p.version), true));
+            }
+        }
+
+        // Scan path repositories for available packages.
+        if let Ok(repos) = Repositories::load_with(&self.context) {
+            for r in &repos.repositories {
+                if r.r#type.as_str() == "path" {
+                    self.scan_path_repo_for_available(&r, &q, &mut results);
+                } else if r.r#type.as_str() == "git" {
+                    self.scan_git_repo_for_available(&r, &q, &mut results);
+                }
+            }
+        }
+
+        results
+    }
+
+    /// Scan a path repository for available packages matching the query.
+    fn scan_path_repo_for_available(
+        &self,
+        repo: &Repository,
+        q: &str,
+        results: &mut Vec<(String, String, bool)>,
+    ) {
+        let repo_dir = Path::new(&repo.url);
+        for manifest_name in ["package.json", "lppo_package.json"] {
+            let root_manifest = repo_dir.join(manifest_name);
+            if root_manifest.is_file() {
+                if let Ok(contents) = fs::read_to_string(&root_manifest) {
+                    if let Some(manifest) = try_parse_manifest(&contents) {
+                        let id = &manifest.package.identifier;
+                        if id.to_lowercase().contains(q) {
+                            let installed = self.tracker.is_installed(id);
+                            if !results.iter().any(|(n, _, _)| n == id) {
+                                results.push((
+                                    id.clone(),
+                                    format!("v{}", manifest.package.version),
+                                    installed,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Ok(entries) = fs::read_dir(repo_dir) {
+            for entry in entries.flatten() {
+                let sub_dir = entry.path();
+                if sub_dir.is_dir() {
+                    for manifest_name in ["package.json", "lppo_package.json"] {
+                        let manifest_path = sub_dir.join(manifest_name);
+                        if manifest_path.is_file() {
+                            if let Ok(contents) = fs::read_to_string(&manifest_path) {
+                                if let Some(manifest) = try_parse_manifest(&contents) {
+                                    let id = &manifest.package.identifier;
+                                    if id.to_lowercase().contains(q) {
+                                        let installed = self.tracker.is_installed(id);
+                                        if !results.iter().any(|(n, _, _)| n == id) {
+                                            results.push((
+                                                id.clone(),
+                                                format!("v{}", manifest.package.version),
+                                                installed,
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Clone a git repository to a temp dir and scan for available packages.
+    fn scan_git_repo_for_available(
+        &self,
+        repo: &Repository,
+        q: &str,
+        results: &mut Vec<(String, String, bool)>,
+    ) {
+        use std::process::Command;
+        let temp_dir = std::env::temp_dir().join(format!("lppo_repo_scan_{}", repo.name));
+        let _ = fs::remove_dir_all(&temp_dir);
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let status = Command::new("git")
+            .arg("clone")
+            .arg("--depth")
+            .arg("1")
+            .arg(&repo.url)
+            .arg(&temp_dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if status.map_or(false, |s| !s.success()) {
+            let _ = fs::remove_dir_all(&temp_dir);
+            return;
+        }
+
+        self.scan_dir_for_available(&temp_dir, q, results);
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    /// Recursively scan a directory for package manifests matching the query.
+    fn scan_dir_for_available(
+        &self,
+        dir: &Path,
+        q: &str,
+        results: &mut Vec<(String, String, bool)>,
+    ) {
+        for manifest_name in ["package.json", "lppo_package.json"] {
+            let manifest_path = dir.join(manifest_name);
+            if manifest_path.is_file() {
+                if let Ok(contents) = fs::read_to_string(&manifest_path) {
+                    if let Some(manifest) = try_parse_manifest(&contents) {
+                        let id = &manifest.package.identifier;
+                        if id.to_lowercase().contains(q) {
+                            let installed = self.tracker.is_installed(id);
+                            if !results.iter().any(|(n, _, _)| n == id) {
+                                results.push((
+                                    id.clone(),
+                                    format!("v{}", manifest.package.version),
+                                    installed,
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let sub_dir = entry.path();
+                if sub_dir.is_dir() {
+                    self.scan_dir_for_available(&sub_dir, q, results);
+                }
+            }
+        }
+    }
+
     /// Get information about an installed package.
     pub fn info(&self, name: &str) -> LppoResult<&InstalledPackage> {
         self.tracker
@@ -91,26 +245,48 @@ impl PackageManager {
 
         // Resolve the package from repositories.
         let repos = Repositories::load_with(&self.context)?;
-        let repo = repos
-            .repositories
-            .iter()
-            .find(|r| {
-                match r.r#type.as_str() {
-                    "path" => {
-                        let pkg_dir = Path::new(&r.url).join(identifier);
-                        pkg_dir.join("package.json").is_file()
-                    }
-                    _ => false,
-                }
-            });
+        let mut found_source: Option<PackageSource> = None;
 
-        let source = match repo {
-            Some(r) => {
-                let pkg_dir = Path::new(&r.url).join(identifier);
-                PackageSource::Path(crate::pkg::types::LocalSource {
-                    path: pkg_dir.to_string_lossy().to_string(),
-                })
+        for r in &repos.repositories {
+            match r.r#type.as_str() {
+                "path" => {
+                    let repo_dir = Path::new(&r.url);
+                    // Case 1: repo root IS the package (package.json at root).
+                    if repo_dir.join("package.json").is_file() {
+                        if let Ok(contents) = fs::read_to_string(&repo_dir.join("package.json")) {
+                            if let Ok(manifest) = serde_json::from_str::<PackageManifest>(&contents) {
+                                if manifest.package.identifier == identifier {
+                                    found_source = Some(PackageSource::Path(crate::pkg::types::LocalSource {
+                                        path: repo_dir.to_string_lossy().to_string(),
+                                    }));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // Case 2: repo contains subdirectories, each a package.
+                    let pkg_dir = repo_dir.join(identifier);
+                    if pkg_dir.join("package.json").is_file() {
+                        found_source = Some(PackageSource::Path(crate::pkg::types::LocalSource {
+                            path: pkg_dir.to_string_lossy().to_string(),
+                        }));
+                        break;
+                    }
+                }
+                "git" => {
+                    if let Ok(pkg_dir) = self.check_git_repo_for_package(r, identifier) {
+                        found_source = Some(PackageSource::Path(crate::pkg::types::LocalSource {
+                            path: pkg_dir.to_string_lossy().to_string(),
+                        }));
+                        break;
+                    }
+                }
+                _ => {}
             }
+        }
+
+        let source = match found_source {
+            Some(s) => s,
             None => {
                 return Err(LppoError::package_not_found(format!(
                     "package '{identifier}' not found in any repository. Use 'lppo pkg repo add' to add a repository."
@@ -120,6 +296,92 @@ impl PackageManager {
 
         self.install_single(identifier, &source)?;
         Ok(())
+    }
+
+    /// Clone a git repository to a temp dir and check if it contains a package
+    /// with the given identifier. Returns the path to the package subdirectory
+    /// if found.
+    fn check_git_repo_for_package(
+        &self,
+        repo: &Repository,
+        identifier: &str,
+    ) -> LppoResult<PathBuf> {
+        use std::process::Command;
+        let temp_dir = std::env::temp_dir().join(format!("lppo_repo_check_{}", repo.name));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).map_err(|e| {
+            LppoError::io_error(format!(
+                "failed to create temp dir '{}': {}",
+                temp_dir.display(),
+                e
+            ))
+        })?;
+
+        let status = Command::new("git")
+            .arg("clone")
+            .arg("--depth")
+            .arg("1")
+            .arg(&repo.url)
+            .arg(&temp_dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|e| {
+                LppoError::source_retrieval_failed(
+                    identifier.to_string(),
+                    format!("git clone failed: {e}"),
+                )
+            })?;
+        if !status.success() {
+            let _ = fs::remove_dir_all(&temp_dir);
+            return Err(LppoError::source_retrieval_failed(
+                identifier.to_string(),
+                format!("git clone of '{}' failed", repo.url),
+            ));
+        }
+
+        // Check if the repo root has package.json or lppo_package.json.
+        if let Some(pkg_dir) = Self::find_manifest_in_dir(&temp_dir, identifier)? {
+            let _ = fs::remove_dir_all(&temp_dir.join(".git"));
+            return Ok(pkg_dir);
+        }
+
+        // Check subdirectories for package.json or lppo_package.json.
+        if let Ok(entries) = fs::read_dir(&temp_dir) {
+            for entry in entries.flatten() {
+                let sub_dir = entry.path();
+                if sub_dir.is_dir() {
+                    if let Some(pkg_dir) = Self::find_manifest_in_dir(&sub_dir, identifier)? {
+                        let _ = fs::remove_dir_all(&temp_dir.join(".git"));
+                        return Ok(pkg_dir);
+                    }
+                }
+            }
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+        Err(LppoError::package_not_found(format!(
+            "package '{identifier}' not found in repository '{}' ({})",
+            repo.name, repo.url
+        )))
+    }
+
+    /// Look for `package.json` or `lppo_package.json` in `dir`. If found and
+    /// its identifier matches, return the directory path.
+    fn find_manifest_in_dir(dir: &Path, identifier: &str) -> LppoResult<Option<PathBuf>> {
+        for name in ["package.json", "lppo_package.json"] {
+            let manifest_path = dir.join(name);
+            if manifest_path.is_file() {
+                if let Ok(contents) = fs::read_to_string(&manifest_path) {
+                    if let Some(manifest) = try_parse_manifest(&contents) {
+                        if manifest.package.identifier == identifier {
+                            return Ok(Some(dir.to_path_buf()));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 
     /// Install a single package (assumes dependencies already resolved).
@@ -156,6 +418,15 @@ impl PackageManager {
             ))
         })?;
         copy_dir_contents(&staged_dir, &module_dir)?;
+
+        // If both package.json and lppo_package.json exist, prefer
+        // lppo_package.json (the one we matched on) and remove package.json
+        // so the generated index picks up the correct identifier.
+        let pkg_json = module_dir.join("package.json");
+        let lppo_pkg_json = module_dir.join("lppo_package.json");
+        if lppo_pkg_json.is_file() && pkg_json.is_file() {
+            let _ = fs::remove_file(&pkg_json);
+        }
 
         // 4. Locate Cargo.toml and read build config.
         let build_config = BuildConfig {
