@@ -504,47 +504,20 @@ impl PackageManager {
         Ok(())
     }
 
-    /// Update packages. With no name, reads the remote repositories.json from
-    /// https://github.com/AlexMatzen01/LPPO/blob/main/repositories.json and
-    /// updates all installed packages. With a name, updates just that package.
+    /// Update packages. With a name, updates just that package if a newer
+    /// version is available on the remote repository. With no name, syncs the
+    /// remote repositories.json and updates all installed packages.
     pub fn update(&mut self, name: Option<&str>) -> LppoResult<()> {
         match name {
             Some(n) => {
                 if !self.tracker.is_installed(n) {
                     return Err(LppoError::package_not_found(n.to_string()));
                 }
-                self.remove(n)?;
-                self.install(n)?;
+                self.update_single(n)?;
             }
             None => {
                 // Fetch the remote repositories.json from GitHub.
-                let raw_url = "https://raw.githubusercontent.com/AlexMatzen01/LPPO/main/repositories.json";
-                println!("Fetching remote repositories from {raw_url}...");
-                let output = std::process::Command::new("curl")
-                    .arg("-sL")
-                    .arg(raw_url)
-                    .output();
-
-                if let Ok(out) = output {
-                    if out.status.success() {
-                        let contents = String::from_utf8_lossy(&out.stdout);
-                        if let Ok(repos) = serde_json::from_str::<Repositories>(&contents) {
-                            // Save the fetched repositories locally.
-                            let mut local_repos = repos.clone();
-                            local_repos.save_with(&self.context)?;
-                            println!("Updated repositories from GitHub.");
-                            for r in &repos.repositories {
-                                println!("  {} ({}) - {}", r.name, r.r#type, r.url);
-                            }
-                        } else {
-                            println!("Warning: could not parse remote repositories.json.");
-                        }
-                    } else {
-                        println!("Warning: could not fetch remote repositories (curl failed).");
-                    }
-                } else {
-                    println!("Warning: `curl` not available, skipping remote repository sync.");
-                }
+                self.sync_remote_repositories()?;
 
                 // Attempt to update each installed package.
                 let installed_names: Vec<String> = self.tracker.installed_names();
@@ -553,10 +526,268 @@ impl PackageManager {
                     return Ok(());
                 }
                 for n in installed_names {
-                    let _ = self.update(Some(&n));
+                    let _ = self.update_single(&n);
                 }
                 println!("Update complete.");
             }
+        }
+        Ok(())
+    }
+
+    /// Check a single installed package for updates and apply if out of date.
+    fn update_single(&mut self, name: &str) -> LppoResult<()> {
+        let installed = match self.tracker.get(name) {
+            Some(pkg) => pkg,
+            None => return Err(LppoError::package_not_found(name.to_string())),
+        };
+
+        let installed_version = &installed.version;
+        let remote_version = match &installed.source {
+            PackageSource::Git(git) => match self.fetch_remote_version(git) {
+                Ok(v) => v,
+                Err(e) => {
+                    println!("Skipping update for '{name}': {e}");
+                    return Ok(());
+                }
+            },
+            PackageSource::Path(local) => {
+                println!("Skipping update for '{name}' (path repository: no remote version available: {})", local.path);
+                return Ok(());
+            }
+        };
+
+        match semver_cmp(installed_version, &remote_version) {
+            std::cmp::Ordering::Less => {
+                println!(
+                    "Updating '{name}' from v{installed_version} to v{remote_version}..."
+                );
+                self.remove(name)?;
+                self.install(name)?;
+                println!("Updated '{name}' to v{remote_version}.");
+            }
+            std::cmp::Ordering::Equal => {
+                println!("'{name}' is up to date (v{installed_version}).");
+            }
+            std::cmp::Ordering::Greater => {
+                println!(
+                    "'{name}' is ahead of remote (local v{installed_version}, remote v{remote_version})."
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Fetch the latest package version from a remote Git repository by
+    /// cloning to a temp dir and reading package.json.
+    fn fetch_remote_version(&self, git: &crate::pkg::types::GitSource) -> LppoResult<String> {
+        use std::process::Command;
+
+        let safe_name: String = git
+            .url
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .collect();
+        let temp_dir = std::env::temp_dir().join(format!("lppo_update_{safe_name}"));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).map_err(|e| {
+            LppoError::source_retrieval_failed(
+                "update".to_string(),
+                format!("failed to create temp dir: {e}"),
+            )
+        })?;
+
+        let cache_dir = temp_dir.join("cache");
+        fs::create_dir_all(&cache_dir).map_err(|e| {
+            LppoError::source_retrieval_failed(
+                "update".to_string(),
+                format!("failed to create cache dir: {e}"),
+            )
+        })?;
+
+        let status = Command::new("git")
+            .current_dir(&cache_dir)
+            .arg("init")
+            .arg("--bare")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|e| {
+                LppoError::source_retrieval_failed(
+                    "update".to_string(),
+                    format!("git init --bare failed: {e}"),
+                )
+            })?;
+        if !status.success() {
+            return Err(LppoError::source_retrieval_failed(
+                "update".to_string(),
+                "git init --bare failed".to_string(),
+            ));
+        }
+
+        let _ = Command::new("git")
+            .current_dir(&cache_dir)
+            .arg("remote")
+            .arg("add")
+            .arg("origin")
+            .arg(&git.url)
+            .status();
+        let status = Command::new("git")
+            .current_dir(&cache_dir)
+            .arg("fetch")
+            .arg("--force")
+            .arg("origin")
+            .arg(&git.url)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|e| {
+                LppoError::source_retrieval_failed(
+                    "update".to_string(),
+                    format!("git fetch failed: {e}"),
+                )
+            })?;
+        if !status.success() {
+            return Err(LppoError::source_retrieval_failed(
+                "update".to_string(),
+                format!("git fetch from '{}' failed", git.url),
+            ));
+        }
+
+        let ref_spec = Self::resolve_git_ref_for_update(&cache_dir, git)?;
+
+        let clone_dir = temp_dir.join("clone");
+        let status = Command::new("git")
+            .current_dir(&cache_dir)
+            .arg("clone")
+            .arg("--no-local")
+            .arg("--branch")
+            .arg(&ref_spec)
+            .arg("--single-branch")
+            .arg("--depth")
+            .arg("1")
+            .arg(".")
+            .arg(&clone_dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|e| {
+                LppoError::source_retrieval_failed(
+                    "update".to_string(),
+                    format!("git clone failed: {e}"),
+                )
+            })?;
+        if !status.success() {
+            return Err(LppoError::source_retrieval_failed(
+                "update".to_string(),
+                format!("git clone of '{}' failed", git.url),
+            ));
+        }
+
+        let source_root = match &git.subdirectory {
+            Some(sub) => clone_dir.join(sub),
+            None => clone_dir.clone(),
+        };
+
+        let manifest_path = if source_root.join("lppo_package.json").is_file() {
+            source_root.join("lppo_package.json")
+        } else {
+            source_root.join("package.json")
+        };
+
+        let version = if manifest_path.is_file() {
+            let contents = fs::read_to_string(&manifest_path).map_err(|e| {
+                LppoError::source_retrieval_failed(
+                    "update".to_string(),
+                    format!("failed to read package.json: {e}"),
+                )
+            })?;
+            try_parse_manifest(&contents)
+                .map(|m| m.package.version)
+                .ok_or_else(|| {
+                    LppoError::source_retrieval_failed(
+                        "update".to_string(),
+                        format!("failed to parse package.json in '{}'", git.url),
+                    )
+                })?
+        } else {
+            // Scan subdirectories for package.json.
+            let mut found = None;
+            if let Ok(entries) = fs::read_dir(&source_root) {
+                for entry in entries.flatten() {
+                    let sub = entry.path();
+                    if sub.is_dir() {
+                        for mn in ["package.json", "lppo_package.json"] {
+                            let mp = sub.join(mn);
+                            if mp.is_file() {
+                                if let Ok(contents) = fs::read_to_string(&mp) {
+                                    if let Some(manifest) = try_parse_manifest(&contents) {
+                                        found = Some(manifest.package.version);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if found.is_some() {
+                        break;
+                    }
+                }
+            }
+            found.ok_or_else(|| {
+                LppoError::source_retrieval_failed(
+                    "update".to_string(),
+                    format!("package.json not found in repository '{}'", git.url),
+                )
+            })?
+        };
+
+        let _ = fs::remove_dir_all(&temp_dir);
+        Ok(version)
+    }
+
+    /// Resolve a git ref for update checking (mirrors SourceRetriever logic).
+    fn resolve_git_ref_for_update(
+        cache_dir: &Path,
+        git: &crate::pkg::types::GitSource,
+    ) -> LppoResult<String> {
+        if let Some(commit) = &git.commit {
+            Ok(commit.clone())
+        } else if let Some(tag) = &git.tag {
+            Ok(format!("refs/tags/{tag}"))
+        } else if let Some(branch) = &git.branch {
+            Ok(format!("refs/heads/{branch}"))
+        } else {
+            Ok("refs/heads/main".to_string())
+        }
+    }
+
+    /// Sync the remote repositories.json from GitHub into the local context.
+    fn sync_remote_repositories(&mut self) -> LppoResult<()> {
+        let raw_url = "https://raw.githubusercontent.com/AlexMatzen01/LPPO/main/repositories.json";
+        println!("Fetching remote repositories from {raw_url}...");
+        let output = std::process::Command::new("curl")
+            .arg("-sL")
+            .arg(raw_url)
+            .output();
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                let contents = String::from_utf8_lossy(&out.stdout);
+                if let Ok(repos) = serde_json::from_str::<Repositories>(&contents) {
+                    let mut local_repos = repos.clone();
+                    local_repos.save_with(&self.context)?;
+                    println!("Updated repositories from GitHub.");
+                    for r in &repos.repositories {
+                        println!("  {} ({}) - {}", r.name, r.r#type, r.url);
+                    }
+                } else {
+                    println!("Warning: could not parse remote repositories.json.");
+                }
+            } else {
+                println!("Warning: could not fetch remote repositories (curl failed).");
+            }
+        } else {
+            println!("Warning: `curl` not available, skipping remote repository sync.");
         }
         Ok(())
     }
@@ -681,5 +912,18 @@ mod tests {
         assert_eq!(results[0].name, "LPPX2D");
         let results = pm.search("nonexistent");
         assert!(results.is_empty());
+    }
+}
+
+/// Compare two semantic version strings. Returns Ordering::Less if a < b,
+/// Equal if a == b, Greater if a > b. Falls back to string comparison if
+/// either version fails to parse as SemVer.
+fn semver_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    match (
+        crate::pkg::types::SemVer::parse(a),
+        crate::pkg::types::SemVer::parse(b),
+    ) {
+        (Ok(va), Ok(vb)) => va.cmp(&vb),
+        _ => a.cmp(b),
     }
 }

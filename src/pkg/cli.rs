@@ -30,6 +30,8 @@ pub enum PkgSubcommand {
     RepoList,
     RepoAdd { name: String, url: String, r#type: String },
     RepoRemove { name: String },
+    /// Package update
+    Update { name: Option<String> },
 }
 
 impl PkgSubcommand {
@@ -37,7 +39,7 @@ impl PkgSubcommand {
     pub fn parse(args: &[String]) -> LppoResult<Self> {
         let Some(sub) = args.first() else {
             return Err(LppoError::io_error(
-                "missing pkg subcommand. Usage: lppo pkg <search|install|remove|list|info|build|repo> ...".to_string(),
+                "missing pkg subcommand. Usage: lppo pkg <search|install|remove|list|info|build|update|repo> ...".to_string(),
             ));
         };
         match sub.as_str() {
@@ -82,6 +84,10 @@ impl PkgSubcommand {
                     name: name.clone(),
                 })
             }
+            "update" => {
+                let name = args.get(1).map(|s| s.clone());
+                Ok(PkgSubcommand::Update { name })
+            }
             "repo" => {
                 let repo_sub = args.get(1).ok_or_else(|| {
                     LppoError::io_error(
@@ -120,7 +126,7 @@ impl PkgSubcommand {
                 }
             }
             other => Err(LppoError::io_error(format!(
-                "unknown pkg subcommand '{other}'. Expected one of: search, install, remove, list, info, build, repo"
+                "unknown pkg subcommand '{other}'. Expected one of: search, install, remove, list, info, build, update, repo"
             ))),
         }
     }
@@ -248,6 +254,11 @@ impl PkgSubcommand {
             PkgSubcommand::Build { name } => {
                 let mut pm = PackageManager::load_with_context(context.clone())?;
                 pm.build(&name)?;
+            }
+            PkgSubcommand::Update { name } => {
+                let mut pm = PackageManager::load_with_context(context.clone())?;
+                pm.update(name.as_deref())?;
+                PackagesIndex::regenerate_with(&context)?;
             }
         }
         Ok(())
