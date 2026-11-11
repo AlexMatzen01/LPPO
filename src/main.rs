@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 mod project;
 
+use lppo::buffer::{buf_append, buf_byte, buf_clear, buf_get, buf_len, buf_new, buf_set};
+
 use project::{
     cmd_build, cmd_debug, cmd_format, cmd_git, cmd_init, cmd_pkg, cmd_run, BuildOptions,
 };
@@ -64,6 +66,21 @@ fn hash_file(path: &Path) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     h.write(&contents);
     h.finish()
+}
+
+/// Anchor the lppo_buf_* symbols so they are exported from the binary and
+/// not dead-code eliminated. Native packages (e.g. LPPWeb) resolve these
+/// symbols from the main executable via /proc/self/exe.
+#[no_mangle]
+pub extern "C" fn lppo_buffer_anchor() -> i64 {
+    let id = buf_new();
+    let _ = buf_set(id, "anchor");
+    let _ = buf_append(id, "anchor");
+    let _ = buf_len(id);
+    let _ = buf_get(id);
+    let _ = buf_byte(id, 0);
+    let _ = buf_clear(id);
+    id as i64
 }
 
 fn ensure_installed_in_path() -> Result<(), Box<dyn Error>> {
@@ -147,6 +164,8 @@ fn ensure_installed_in_path() -> Result<(), Box<dyn Error>> {
 }
 
 fn main() {
+    // Anchor buffer symbols so native packages can resolve them.
+    let _ = lppo_buffer_anchor();
     if let Err(error) = run() {
         if let Some(lppo_err) = error.downcast_ref::<lppo::LppoError>() {
             eprint!("{}", lppo_err.format_detailed(None));

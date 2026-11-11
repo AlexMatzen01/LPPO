@@ -254,6 +254,7 @@ fn eval_math_expr(s: &str) -> Result<i64, String> {
 }
 
 use crate::ast::{BinaryOp, Expr, UnaryOp};
+use crate::buffer::{buf_append, buf_byte, buf_clear, buf_get, buf_len, buf_new, buf_set};
 use crate::error::{LppoError, LppoResult};
 use serde::{Deserialize, Serialize};
 
@@ -1178,6 +1179,142 @@ pub(crate) fn eval_expr(
                         } else {
                             return Err(LppoError::type_error(
                                 "pow arguments must be integers".into(),
+                            ));
+                        }
+                    }
+                    "buf_new" => {
+                        if arg_vals.len() != 0 {
+                            return Err(LppoError::type_error(
+                                "buf_new takes no arguments".into(),
+                            ));
+                        }
+                        return Ok(Value::Int(buf_new() as i64));
+                    }
+                    "buf_set" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "buf_set requires 2 arguments (id, data)".into(),
+                            ));
+                        }
+                        if let (Value::Int(id), Value::Str(data)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            if buf_set(*id as u64, data) {
+                                return Ok(Value::Bool(true));
+                            } else {
+                                return Err(LppoError::type_error(format!(
+                                    "unknown buffer id {}",
+                                    id
+                                )));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "buf_set arguments must be (int, string)".into(),
+                            ));
+                        }
+                    }
+                    "buf_get" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "buf_get requires 1 argument (id)".into(),
+                            ));
+                        }
+                        if let Value::Int(id) = &arg_vals[0] {
+                            if let Some(contents) = buf_get(*id as u64) {
+                                return Ok(Value::Str(contents));
+                            } else {
+                                return Err(LppoError::type_error(format!(
+                                    "unknown buffer id {}",
+                                    id
+                                )));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "buf_get argument must be an integer".into(),
+                            ));
+                        }
+                    }
+                    "buf_append" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "buf_append requires 2 arguments (id, data)".into(),
+                            ));
+                        }
+                        if let (Value::Int(id), Value::Str(data)) = (&arg_vals[0], &arg_vals[1]) {
+                            if buf_append(*id as u64, data) {
+                                return Ok(Value::Bool(true));
+                            } else {
+                                return Err(LppoError::type_error(format!(
+                                    "unknown buffer id {}",
+                                    id
+                                )));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "buf_append arguments must be (int, string)".into(),
+                            ));
+                        }
+                    }
+                    "buf_len" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "buf_len requires 1 argument (id)".into(),
+                            ));
+                        }
+                        if let Value::Int(id) = &arg_vals[0] {
+                            if let Some(n) = buf_len(*id as u64) {
+                                return Ok(Value::Int(n));
+                            } else {
+                                return Err(LppoError::type_error(format!(
+                                    "unknown buffer id {}",
+                                    id
+                                )));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "buf_len argument must be an integer".into(),
+                            ));
+                        }
+                    }
+                    "buf_clear" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "buf_clear requires 1 argument (id)".into(),
+                            ));
+                        }
+                        if let Value::Int(id) = &arg_vals[0] {
+                            if buf_clear(*id as u64) {
+                                return Ok(Value::Bool(true));
+                            } else {
+                                return Err(LppoError::type_error(format!(
+                                    "unknown buffer id {}",
+                                    id
+                                )));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "buf_clear argument must be an integer".into(),
+                            ));
+                        }
+                    }
+                    "buf_byte" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "buf_byte requires 2 arguments (id, index)".into(),
+                            ));
+                        }
+                        if let (Value::Int(id), Value::Int(index)) = (&arg_vals[0], &arg_vals[1]) {
+                            if let Some(b) = buf_byte(*id as u64, *index) {
+                                return Ok(Value::Int(b));
+                            } else {
+                                return Err(LppoError::type_error(format!(
+                                    "unknown buffer id {} or index out of bounds",
+                                    id
+                                )));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "buf_byte arguments must be (int, int)".into(),
                             ));
                         }
                     }

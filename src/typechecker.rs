@@ -282,6 +282,43 @@ pub fn typecheck_program_with_context(program: &Program, context: &PackageContex
         TypeAnnotation::Int64,
     );
 
+    // Buffer functions
+    ctx.add_procedure(
+        "buf_new".to_string(),
+        vec![],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "buf_set".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Str],
+        TypeAnnotation::Bool,
+    );
+    ctx.add_procedure(
+        "buf_get".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "buf_append".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Str],
+        TypeAnnotation::Bool,
+    );
+    ctx.add_procedure(
+        "buf_len".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "buf_clear".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Bool,
+    );
+    ctx.add_procedure(
+        "buf_byte".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+
     // Random numbers
     ctx.add_procedure(
         "random".to_string(),

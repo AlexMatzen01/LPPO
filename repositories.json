@@ -15,9 +15,15 @@
     },
     {
       "name": "LPPNet",
-      "url": "https://github.com/AlexMatzen01/LPPNet",
-      "type": "git",
+      "url": "/home/alex/Documents/LPPNet",
+      "type": "path",
       "description": "LPPNet package (networking framework)"
+    },
+    {
+      "name": "LPPWeb",
+      "url": "https://github.com/AlexMatzen01/LPPWeb",
+      "type": "git",
+      "description": "LPPWeb package (web server framework, requires LPPNet)"
     }
   ]
 }
