@@ -1,6 +1,6 @@
 # LPPO - A Learning-Focused Programming Language
 
-**Version:** 0.1.8-alpha.2 (alpha)
+**Version:** 0.1.8-alpha.3 (alpha)
 
 ## Overview
 

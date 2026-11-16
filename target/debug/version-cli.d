@@ -1,0 +1,1 @@
+/home/alex/Documents/lppo/target/debug/version-cli: /home/alex/Documents/lppo/version-cli/src/docs.rs /home/alex/Documents/lppo/version-cli/src/git.rs /home/alex/Documents/lppo/version-cli/src/main.rs /home/alex/Documents/lppo/version-cli/src/state.rs /home/alex/Documents/lppo/version-cli/src/tui.rs

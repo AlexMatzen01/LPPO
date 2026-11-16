@@ -1,13 +1,56 @@
-# Rust build artifacts
-/target/
-Cargo.lock
+# ==========================================
+# AI Coding Agent Artifacts & Scratchpads
+# ==========================================
 
-# Executables
-*.exe
-*.out
+# General Agent Scratchpads & Temporary Outputs
+.agent/
+.agents/
+.ai/
+agent-artifacts/
+agent_artifacts/
+ai-scratchpad/
+scratchpad/
+*.agent.log
+*.trace.json
 
-# Temporary files
-/tmp/
+# Claude Code (Anthropic)
+.claude/settings.local.json
+.claude/todos/
+.claude/sessions/
+CLAUDE.local.md
 
-# Test files
-/test/
+# Cursor
+.cursor/mcp.json
+.cursor/plans/
+.cursor/chats/
+.cursor/debug.log
+
+# OpenAI Codex CLI & ChatGPT
+.codex/
+codex-logs/
+
+# Windsurf / Codeium
+.windsurf/
+.codeium/
+
+# Cline / Roo Code / Kilo Code
+.cline/
+.roo/
+.kilocode/
+.kilo/
+
+# Aider
+.aider*
+!.aider.conf.yml
+!.aiderignore
+
+# GitHub Copilot
+.github/copilot-instructions.local.md
+
+# Local Vector Stores, Memory & SQLite Caches
+.chroma/
+.lancedb/
+.faiss/
+*.sqlite-wal
+*.sqlite-shm
+agent-memory.db
