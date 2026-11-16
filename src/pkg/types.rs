@@ -429,6 +429,9 @@ pub struct PackageManifestData {
     /// Dependencies: package identifier -> version requirement.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub dependencies: BTreeMap<String, String>,
+    /// Network ports the package declares it will use (e.g. for web sockets).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ports: Vec<u16>,
     /// Build configuration.
     #[serde(default)]
     pub build: PackageBuild,

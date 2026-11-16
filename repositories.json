@@ -24,6 +24,12 @@
       "url": "https://github.com/AlexMatzen01/LPPWeb",
       "type": "git",
       "description": "LPPWeb package (web server framework, requires LPPNet)"
+    },
+    {
+      "name": "LPPwgpu",
+      "url": "https://github.com/AlexMatzen01/LPPwgpu",
+      "type": "git",
+      "description": "Lppwgpu package (wgpu integration)"
     }
   ]
 }
