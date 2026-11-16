@@ -1,6 +1,6 @@
 # LPPO - A Learning-Focused Programming Language
 
-**Version:** 0.1.8-alpha.3 (alpha)
+**Version:** 0.1.9-alpha.1 (alpha)
 
 ## Overview
 
@@ -182,18 +182,23 @@ Notes:
 - Move semantics
 - Some ownership tracking
 
+✅ **Recently Implemented**
+- Async/await (`async`, `await`, `spawn`, `join`)
+- Standard library collections (`Arr<T>`, `Map<K,V>`)
+- Memory pools (`pool_alloc`, `pool_free`, `pool_used`)
+- SIMD operations (`simd_add`, `simd_sub`, `simd_mul`, `simd_div`, `simd_splat`, `simd_extract`, `simd_insert`, `simd_shuffle`, `simd_reduce`)
+- Direct memory addressing and pointers (`addr_of`, `ptr_read`, `ptr_write`, `ptr_offset`)
+- Volatile memory operations (`volatile_read`, `volatile_write`)
+- Inline assembly (`inline_asm`)
+- Bitwise manipulation (`&`, `|`, `^`, `~`)
+
 ### Not Implemented
 
 ❌ **Features in Documentation But Not in Code**
-- Async/await (separate from pause)
-- SIMD operations
-- Standard library collections (HashMap, Vec, etc.)
-- Effect system
+- Effect system (parsed but not handled at runtime)
 - JIT compilation
 - GPU computing
-- Memory pools
 - Networking (TCP/UDP)
-- And many others claimed in older docs
 
 ## Quick Start
 
@@ -385,16 +390,23 @@ out "either 5, 1:", roots;          # [6, 4]
 
 See `examples/` for runnable programs demonstrating each feature:
 
-- `examples/collections.lppo` - Vec and Map collections
-- `examples/memory_pool.lppo` - pool_alloc / pool_free / pool_used
-- `examples/async_await.lppo` - async blocks and await
-- `examples/threading.lppo` - spawn, join, and fire-and-forget threads
-- `examples/math.lppo` - eval, sqrt, either (including quadratic formula)
+- `examples/collections/collections.lppo` - Vec and Map collections
+- `examples/memory/memory_pool.lppo` - pool_alloc / pool_free / pool_used
+- `examples/memory/memory_safety.lppo` - scope, heap/stack alloc, explicit dealloc
+- `examples/memory/borrow_checker.lppo` - references and borrow checking
+- `examples/memory/unsafe_block.lppo` - unsafe blocks bypass borrow checker
+- `examples/concurrency/async_await.lppo` - async blocks and await
+- `examples/concurrency/threading.lppo` - spawn, join, and fire-and-forget threads
+- `examples/math/math.lppo` - eval, sqrt, either (including quadratic formula)
+- `examples/simd/simd_demo.lppo` - SIMD operations (splat, add, sub, mul, div, extract, insert, shuffle, reduce)
+- `examples/pointers/pointers.lppo` - direct memory addressing (addr_of, ptr_read, ptr_write, ptr_offset)
+- `examples/volatile/volatile.lppo` - volatile memory operations (volatile_read, volatile_write)
+- `examples/inline_asm/inline_asm.lppo` - inline assembly (inline_asm)
 
 Run any example with:
 
 ```bash
-cargo run -- examples/collections.lppo
+cargo run -- examples/collections/collections.lppo
 ```
 
 ## Package Management (`lppo pkg`)
