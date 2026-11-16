@@ -28,11 +28,13 @@ This document honestly describes what LPPO actually implements.
 - Type annotations required on all variables and parameters
 - Array type checking
 - Return type validation
-- Ownership state tracking (basic)
+- Ownership state tracking (move/copy enforcement)
+- **Compile-time borrow checking** (Rust-like): immutable/mutable references, aliasing rules, scope-based drop analysis
+- **Compile-time memory safety**: heap vs stack allocation enforcement, automatic deallocation at scope exit, no garbage collector needed
 
 ### Limitations
 - No type inference
-- Ownership tracking incomplete (borrow checking not fully implemented)
+- Borrow checking does not cross procedure boundaries for arguments
 - Limited generic support
 - No trait system implementation
 
@@ -83,19 +85,32 @@ This document honestly describes what LPPO actually implements.
 - Pattern matching (basic support only)
 - Closures (parsed but limited execution)
 - Ranges (basic support)
-- Move semantics (tracked but not enforced)
 - Module system (parsed but not executed)
+- Traits (parsed but not enforced)
+- Generic implementations (parsed but limited typechecking)
+
+### Recently Implemented
+- Compile-time memory safety (Rust-like borrow checker): ownership tracking, borrow checking, scope-based auto-deallocation
+- Manual memory allocation/deallocation with heap vs stack enforcement (`alloc <T> var on heap/stack [size]`, `dealloc var`)
+- Scope-based automatic deallocation for heap variables (no garbage collector needed)
+- `unsafe` blocks to bypass borrow checker
+- References (`ref`, `ref mut`) and dereferencing (`deref`)
+- Move/copy semantics with compile-time enforcement
+- Standard library collections (Vec/Arr, HashMap/Map)
+- Async/await (`async`, `await`, `spawn`, `join`)
+- SIMD operations (`simd_add`, `simd_sub`, `simd_mul`, `simd_div`, `simd_splat`, `simd_extract`, `simd_insert`, `simd_shuffle`, `simd_reduce`)
+- Direct memory addressing and pointers (`addr_of`, `ptr_read`, `ptr_write`, `ptr_offset`)
+- Volatile memory operations (`volatile_read`, `volatile_write`)
+- Inline assembly (`inline_asm`)
+- Bitwise manipulation (`&`, `|`, `^`, `~`)
+- Foreign function interface (via native packages / libloading)
 
 ### Not Implemented
-- Standard library collections (Vec, HashMap, etc.)
 - Networking (TCP/UDP)
-- Async/await (separate from pause statement)
-- Manual memory allocation/deallocation
-- Heap vs stack management
-- Foreign function interface
-- Macros
-- Traits
-- Generic implementations
+- Macros (token only, no expansion)
+- Effect system (parsed but not handled at runtime)
+- JIT compilation
+- GPU computing
 
 ## Error Handling
 

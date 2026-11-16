@@ -1,0 +1,21 @@
+pub proc main() -> Void {
+    out "=== Inline Assembly ===";
+
+    out "";
+    out "--- nop (no operation) ---";
+    let own r0: Int64 = inline_asm("nop", [0]);
+    out "inline_asm(\"nop\", [0]):", r0;
+
+    out "";
+    out "--- add two values ---";
+    let own r1: Int64 = inline_asm("add", [10, 20]);
+    out "inline_asm(\"add\", [10, 20]):", r1;
+
+    out "";
+    out "--- add three values ---";
+    let own r2: Int64 = inline_asm("add", [1, 2, 3]);
+    out "inline_asm(\"add\", [1, 2, 3]):", r2;
+
+    out "";
+    out "=== Inline assembly demo complete. ===";
+}

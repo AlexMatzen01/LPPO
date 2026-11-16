@@ -1,0 +1,19 @@
+pub proc main() -> Void {
+    out "=== Volatile Memory Operations ===";
+
+    out "";
+    out "--- volatile_write then volatile_read ---";
+    let own addr: Int64 = addr_of("sensor");
+    volatile_write(addr, 255);
+    let own v: Int64 = volatile_read(addr);
+    out "volatile_read after volatile_write(addr, 255):", v;
+
+    out "";
+    out "--- volatile write a different value ---";
+    volatile_write(addr, 128);
+    let own v2: Int64 = volatile_read(addr);
+    out "volatile_read after volatile_write(addr, 128):", v2;
+
+    out "";
+    out "=== Volatile demo complete. ===";
+}

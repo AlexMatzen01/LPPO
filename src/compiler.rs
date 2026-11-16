@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::ast::{Expr, Procedure, Program, QualifiedName, Statement};
+use crate::ast::{Expr, MemoryLocation, Procedure, Program, QualifiedName, Statement};
 use crate::error::{LppoError, LppoResult};
 use crate::runtime::{Operation, ProcedureBody};
 
@@ -34,16 +34,22 @@ pub fn compile_program(program: Program) -> LppoResult<HashMap<String, Procedure
 }
 
 fn compile_procedure(procedure: Procedure) -> ProcedureBody {
-    let operations = procedure
+    let mut ctx = CompileCtx::new();
+    let operations: Vec<Operation> = procedure
         .statements
         .into_iter()
-        .map(compile_statement)
+        .map(|stmt| compile_statement(stmt, &mut ctx))
         .collect();
+    // At end of procedure, deallocate any remaining heap-allocated variables
+    let mut final_ops = operations;
+    for var in ctx.current_heap_vars() {
+        final_ops.push(Operation::Dealloc(var));
+    }
     // Convert Parameters to just their names for runtime (types are compile-time only)
     let param_names: Vec<String> = procedure.params.into_iter().map(|p| p.name).collect();
     ProcedureBody {
         params: param_names,
-        operations,
+        operations: final_ops,
     }
 }
 
@@ -55,7 +61,52 @@ fn qualified_name_to_string(qn: &QualifiedName) -> String {
     }
 }
 
-fn compile_statement(statement: Statement) -> Operation {
+/// Compilation context that tracks heap-allocated variables per scope level
+/// for automatic deallocation at scope exit (no garbage collector needed).
+struct CompileCtx {
+    /// Stack of heap-allocated variable names per scope level
+    heap_stack: Vec<HashSet<String>>,
+}
+
+impl CompileCtx {
+    fn new() -> Self {
+        CompileCtx {
+            heap_stack: vec![HashSet::new()],
+        }
+    }
+
+    /// Enter a new scope level
+    fn enter_scope(&mut self) {
+        self.heap_stack.push(HashSet::new());
+    }
+
+    /// Exit the current scope level, returning heap variables to deallocate
+    fn exit_scope(&mut self) -> Vec<String> {
+        self.heap_stack.pop().unwrap_or_default().into_iter().collect()
+    }
+
+    /// Mark a variable as heap-allocated in the current scope
+    fn mark_heap(&mut self, var: String) {
+        self.heap_stack.last_mut().unwrap().insert(var);
+    }
+
+    /// Remove a variable from heap tracking (explicitly deallocated)
+    fn unmark_heap(&mut self, var: &str) {
+        if let Some(top) = self.heap_stack.last_mut() {
+            top.remove(var);
+        }
+    }
+
+    /// Get all heap-allocated variables in the current (top) scope
+    fn current_heap_vars(&self) -> Vec<String> {
+        self.heap_stack.last().cloned().unwrap_or_default().into_iter().collect()
+    }
+}
+
+fn compile_statement(
+    statement: Statement,
+    ctx: &mut CompileCtx,
+) -> Operation {
     match statement {
         Statement::Emit(exprs) => Operation::Emit(exprs),
         Statement::Parallel(branches) => Operation::Parallel(branches),
@@ -74,13 +125,27 @@ fn compile_statement(statement: Statement) -> Operation {
             else_branch,
         } => {
             // compile nested statements into operations
-            let then_ops = then_branch.into_iter().map(compile_statement).collect();
+            let mut then_ops = Vec::new();
+            for stmt in then_branch {
+                then_ops.push(compile_statement(stmt, ctx));
+            }
             let elif_ops = elifs
                 .into_iter()
-                .map(|(c, stmts)| (c, stmts.into_iter().map(compile_statement).collect()))
+                .map(|(c, stmts)| {
+                    let mut ops = Vec::new();
+                    for stmt in stmts {
+                        ops.push(compile_statement(stmt, ctx));
+                    }
+                    (c, ops)
+                })
                 .collect();
-            let else_ops =
-                else_branch.map(|stmts| stmts.into_iter().map(compile_statement).collect());
+            let else_ops = else_branch.map(|stmts| {
+                let mut ops = Vec::new();
+                for stmt in stmts {
+                    ops.push(compile_statement(stmt, ctx));
+                }
+                ops
+            });
             Operation::If {
                 cond,
                 then_ops,
@@ -89,7 +154,10 @@ fn compile_statement(statement: Statement) -> Operation {
             }
         }
         Statement::While { cond, body } => {
-            let ops = body.into_iter().map(compile_statement).collect();
+            let mut ops = Vec::new();
+            for stmt in body {
+                ops.push(compile_statement(stmt, ctx));
+            }
             Operation::While { cond, ops }
         }
         Statement::For {
@@ -99,11 +167,17 @@ fn compile_statement(statement: Statement) -> Operation {
             body,
         } => {
             // Type annotation is compile-time only, runtime doesn't track it
-            let ops = body.into_iter().map(compile_statement).collect();
+            let mut ops = Vec::new();
+            for stmt in body {
+                ops.push(compile_statement(stmt, ctx));
+            }
             Operation::For { var, iterable, ops }
         }
         Statement::Loop { body } => {
-            let ops = body.into_iter().map(compile_statement).collect();
+            let mut ops = Vec::new();
+            for stmt in body {
+                ops.push(compile_statement(stmt, ctx));
+            }
             Operation::Loop { ops }
         }
         Statement::Break => Operation::Break,
@@ -123,17 +197,23 @@ fn compile_statement(statement: Statement) -> Operation {
         Statement::Alloc {
             var,
             typ: _,
-            location: _,
-            size: _,
+            location,
+            size,
         } => {
-            // For now, treat alloc as creating an array of the specified size
-            // This is a simplified implementation
-            Operation::Let(var, Expr::Array(vec![]))
+            // Track heap-allocated variables for automatic deallocation
+            if matches!(location, MemoryLocation::Heap) {
+                ctx.mark_heap(var.clone());
+            }
+            Operation::Alloc {
+                var,
+                location,
+                size,
+            }
         }
         Statement::Dealloc(var) => {
-            // Dealloc is a no-op in our simplified runtime (we rely on Rust's GC)
-            // But we can remove the variable from scope
-            Operation::Let(var, Expr::Int(0)) // placeholder
+            // Explicit deallocation: remove from heap tracking
+            ctx.unmark_heap(&var);
+            Operation::Dealloc(var)
         }
         Statement::Move { source, target } => {
             // Move is semantically like let target = source
@@ -144,13 +224,25 @@ fn compile_statement(statement: Statement) -> Operation {
             Operation::Let(target, Expr::Var(source))
         }
         Statement::Scope { name: _, body } => {
-            // Scope blocks just execute their body
-            let ops = body.into_iter().map(compile_statement).collect();
+            // Enter a new scope, compile body, then insert Dealloc for heap vars
+            ctx.enter_scope();
+            let mut ops = Vec::new();
+            for stmt in body {
+                ops.push(compile_statement(stmt, ctx));
+            }
+            // Insert Dealloc operations for heap-allocated variables at scope exit
+            for var in ctx.exit_scope() {
+                ops.push(Operation::Dealloc(var));
+            }
             Operation::Scope { ops }
         }
         Statement::Unsafe { body } => {
             // Unsafe blocks are treated as normal blocks at runtime
-            let ops = body.into_iter().map(compile_statement).collect();
+            // but bypass borrow checking at compile time
+            let mut ops = Vec::new();
+            for stmt in body {
+                ops.push(compile_statement(stmt, ctx));
+            }
             Operation::Unsafe { ops }
         }
         Statement::Match { expr: _, arms: _ } => {
@@ -201,7 +293,10 @@ fn compile_statement(statement: Statement) -> Operation {
             is_async,
         },
         Statement::Spawn { body } => {
-            let ops = body.into_iter().map(compile_statement).collect();
+            let mut ops = Vec::new();
+            for stmt in body {
+                ops.push(compile_statement(stmt, ctx));
+            }
             Operation::Spawn { ops }
         }
     }
@@ -238,5 +333,91 @@ mod tests {
         };
         let compiled = compile_program(program).expect("compile");
         assert!(compiled.contains_key("main"));
+    }
+
+    #[test]
+    fn heap_alloc_is_deallocated_at_scope_exit() {
+        let program = Program {
+            ring0: false,
+            use_declarations: vec![],
+            type_aliases: vec![],
+            modules: vec![],
+            procedures: vec![Procedure {
+                name: "main".to_string(),
+                params: vec![],
+                return_type: TypeAnnotation::Void,
+                lifetimes: vec![],
+                is_public: false,
+                is_unsafe: false,
+                statements: vec![
+                    Statement::Scope {
+                        name: None,
+                        body: vec![Statement::Alloc {
+                            var: "buf".to_string(),
+                            typ: TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+                            location: MemoryLocation::Heap,
+                            size: Expr::Int(1024),
+                        }],
+                    },
+                ],
+            }],
+            structs: vec![],
+            enums: vec![],
+            traits: vec![],
+            impls: vec![],
+        };
+        let compiled = compile_program(program).expect("compile");
+        let main = compiled.get("main").unwrap();
+        // Should have an Alloc followed by a Dealloc inside the scope
+        let scope_ops: Vec<&Operation> = main
+            .operations
+            .iter()
+            .flat_map(|op| match op {
+                Operation::Scope { ops } => ops.iter().collect(),
+                _ => Vec::new(),
+            })
+            .collect();
+        assert!(scope_ops.iter().any(|op| matches!(op, Operation::Alloc { .. })));
+        assert!(scope_ops.iter().any(|op| matches!(op, Operation::Dealloc(_))));
+    }
+
+    #[test]
+    fn stack_alloc_is_not_deallocated() {
+        let program = Program {
+            ring0: false,
+            use_declarations: vec![],
+            type_aliases: vec![],
+            modules: vec![],
+            procedures: vec![Procedure {
+                name: "main".to_string(),
+                params: vec![],
+                return_type: TypeAnnotation::Void,
+                lifetimes: vec![],
+                is_public: false,
+                is_unsafe: false,
+                statements: vec![
+                    Statement::Scope {
+                        name: None,
+                        body: vec![Statement::Alloc {
+                            var: "x".to_string(),
+                            typ: TypeAnnotation::Int64,
+                            location: MemoryLocation::Stack,
+                            size: Expr::Int(0),
+                        }],
+                    },
+                ],
+            }],
+            structs: vec![],
+            enums: vec![],
+            traits: vec![],
+            impls: vec![],
+        };
+        let compiled = compile_program(program).expect("compile");
+        let main = compiled.get("main").unwrap();
+        // Stack alloc should NOT generate a Dealloc
+        assert!(!main.operations.iter().any(|op| matches!(
+            op,
+            Operation::Dealloc(var) if var.as_str() == "x"
+        )));
     }
 }

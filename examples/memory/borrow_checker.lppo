@@ -1,0 +1,18 @@
+pub proc main() -> Void {
+    out "=== Borrow Checker: References ===";
+
+    let x: Int64 = 42;
+
+    // Immutable borrow - multiple allowed
+    let r1: ref Int64 = ref x;
+    let r2: ref Int64 = ref x;
+    out "r1 =", deref r1;
+    out "r2 =", deref r2;
+
+    // Mutable borrow - exclusive
+    let mut y: Int64 = 100;
+    let r3: ref Int64 = ref mut y;
+    out "through mutable ref =", deref r3;
+
+    out "=== Borrow Checker demo complete ===";
+}

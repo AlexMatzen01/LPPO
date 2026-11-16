@@ -1,0 +1,15 @@
+pub proc main() -> Void {
+    out "=== Unsafe Block ===";
+
+    // Normal code is borrow-checked
+    let x: Int64 = 42;
+    out "x =", x;
+
+    // Unsafe block bypasses borrow checker
+    unsafe {
+        let y: Int64 = 99;
+        out "unsafe y =", y;
+    }
+
+    out "=== Unsafe demo complete ===";
+}

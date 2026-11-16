@@ -260,7 +260,7 @@ pub struct QualifiedName {
 }
 
 /// Memory location specification
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum MemoryLocation {
     Heap,
     Stack,

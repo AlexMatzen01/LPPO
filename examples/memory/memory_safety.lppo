@@ -1,0 +1,28 @@
+pub proc main() -> Void {
+    out "=== Memory Safety: Scope & Auto-Dealloc ===";
+
+    scope {
+        alloc <Arr<Int64>> buf on heap [1024];
+        out "allocated buffer on heap";
+        // buf is automatically deallocated when scope exits
+    }
+    out "scope exited, buf deallocated";
+
+    out "=== Memory Safety: Stack Alloc ===";
+    scope {
+        alloc <Int64> x on stack [0];
+        out "stack var x =", x;
+        // x is stack-allocated, no dealloc needed
+    }
+    out "scope exited";
+
+    out "=== Memory Safety: Explicit Dealloc ===";
+    scope {
+        alloc <Arr<Int64>> buf on heap [256];
+        dealloc buf;
+        out "explicitly deallocated buf";
+    }
+    out "scope exited";
+
+    out "=== Memory Safety demo complete ===";
+}

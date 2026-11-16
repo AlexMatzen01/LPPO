@@ -10,4 +10,4 @@ src/../repositories.json:
 # env-dep:LPPO_VERSION_CHANNEL=alpha
 # env-dep:LPPO_VERSION_MAJOR=0
 # env-dep:LPPO_VERSION_MINOR=1
-# env-dep:LPPO_VERSION_PATCH=8
+# env-dep:LPPO_VERSION_PATCH=9

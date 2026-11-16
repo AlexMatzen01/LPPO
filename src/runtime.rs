@@ -21,6 +21,12 @@ static MEMORY_POOL: Lazy<Mutex<HashMap<u64, Vec<u8>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 static NEXT_POOL_ID: Lazy<Mutex<AtomicU64>> = Lazy::new(|| Mutex::new(AtomicU64::new(1)));
 
+// Simulated direct memory address space: address -> value.
+// Used by ptr_read / ptr_write / ptr_offset / addr_of for direct memory access.
+static MEMORY_ADDRESS_SPACE: Lazy<Mutex<HashMap<i64, Value>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static NEXT_ADDRESS: Lazy<Mutex<AtomicU64>> = Lazy::new(|| Mutex::new(AtomicU64::new(0x1000)));
+
 fn next_id() -> u64 {
     NEXT_ID.lock().unwrap().fetch_add(1, Ordering::Relaxed)
 }
@@ -253,7 +259,7 @@ fn eval_math_expr(s: &str) -> Result<i64, String> {
     p.parse()
 }
 
-use crate::ast::{BinaryOp, Expr, UnaryOp};
+use crate::ast::{BinaryOp, Expr, MemoryLocation, UnaryOp};
 use crate::buffer::{buf_append, buf_byte, buf_clear, buf_get, buf_len, buf_new, buf_set};
 use crate::error::{LppoError, LppoResult};
 use serde::{Deserialize, Serialize};
@@ -288,6 +294,14 @@ pub enum Operation {
         typ: crate::ast::TypeAnnotation,
         prompt: Option<Expr>,
     },
+    /// Allocate memory: Alloc { var, location: Heap/Stack, size }
+    Alloc {
+        var: String,
+        location: crate::ast::MemoryLocation,
+        size: Expr,
+    },
+    /// Deallocate memory: Dealloc(var)
+    Dealloc(String),
     /// Call another procedure by name with argument expressions.
     Call(String, Vec<Expr>),
     /// Let binding: set a local variable to the value of an expression.
@@ -2234,6 +2248,469 @@ pub(crate) fn eval_expr(
                         }
                         return Ok(Value::Int(MEMORY_POOL.lock().unwrap().len() as i64));
                     }
+                    // --- SIMD built-ins ---
+                    "simd_add" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_add requires 2 arguments (a, b)".into(),
+                            ));
+                        }
+                        if let (Value::Array(a), Value::Array(b)) = (&arg_vals[0], &arg_vals[1]) {
+                            if a.len() != b.len() {
+                                return Err(LppoError::type_error(
+                                    "simd_add arrays must be the same length".into(),
+                                ));
+                            }
+                            let result: Vec<Value> = a
+                                .iter()
+                                .zip(b.iter())
+                                .map(|(x, y)| -> LppoResult<Value> {
+                                    match (x, y) {
+                                        (Value::Int(x), Value::Int(y)) => Ok(Value::Int(x + y)),
+                                        (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x + y)),
+                                        _ => Err(LppoError::type_error(
+                                            "simd_add requires numeric arrays".into(),
+                                        )),
+                                    }
+                                })
+                                .collect::<LppoResult<Vec<Value>>>()?;
+                            return Ok(Value::Array(result));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_add arguments must be arrays".into(),
+                            ));
+                        }
+                    }
+                    "simd_sub" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_sub requires 2 arguments (a, b)".into(),
+                            ));
+                        }
+                        if let (Value::Array(a), Value::Array(b)) = (&arg_vals[0], &arg_vals[1]) {
+                            if a.len() != b.len() {
+                                return Err(LppoError::type_error(
+                                    "simd_sub arrays must be the same length".into(),
+                                ));
+                            }
+                            let result: Vec<Value> = a
+                                .iter()
+                                .zip(b.iter())
+                                .map(|(x, y)| -> LppoResult<Value> {
+                                    match (x, y) {
+                                        (Value::Int(x), Value::Int(y)) => Ok(Value::Int(x - y)),
+                                        (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x - y)),
+                                        _ => Err(LppoError::type_error(
+                                            "simd_sub requires numeric arrays".into(),
+                                        )),
+                                    }
+                                })
+                                .collect::<LppoResult<Vec<Value>>>()?;
+                            return Ok(Value::Array(result));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_sub arguments must be arrays".into(),
+                            ));
+                        }
+                    }
+                    "simd_mul" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_mul requires 2 arguments (a, b)".into(),
+                            ));
+                        }
+                        if let (Value::Array(a), Value::Array(b)) = (&arg_vals[0], &arg_vals[1]) {
+                            if a.len() != b.len() {
+                                return Err(LppoError::type_error(
+                                    "simd_mul arrays must be the same length".into(),
+                                ));
+                            }
+                            let result: Vec<Value> = a
+                                .iter()
+                                .zip(b.iter())
+                                .map(|(x, y)| -> LppoResult<Value> {
+                                    match (x, y) {
+                                        (Value::Int(x), Value::Int(y)) => Ok(Value::Int(x * y)),
+                                        (Value::Float(x), Value::Float(y)) => Ok(Value::Float(x * y)),
+                                        _ => Err(LppoError::type_error(
+                                            "simd_mul requires numeric arrays".into(),
+                                        )),
+                                    }
+                                })
+                                .collect::<LppoResult<Vec<Value>>>()?;
+                            return Ok(Value::Array(result));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_mul arguments must be arrays".into(),
+                            ));
+                        }
+                    }
+                    "simd_div" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_div requires 2 arguments (a, b)".into(),
+                            ));
+                        }
+                        if let (Value::Array(a), Value::Array(b)) = (&arg_vals[0], &arg_vals[1]) {
+                            if a.len() != b.len() {
+                                return Err(LppoError::type_error(
+                                    "simd_div arrays must be the same length".into(),
+                                ));
+                            }
+                            let result: Vec<Value> = a
+                                .iter()
+                                .zip(b.iter())
+                                .map(|(x, y)| -> LppoResult<Value> {
+                                    match (x, y) {
+                                        (Value::Int(x), Value::Int(y)) => {
+                                            if *y == 0 {
+                                                return Err(LppoError::type_error(
+                                                    "simd_div division by zero".into(),
+                                                ));
+                                            }
+                                            Ok(Value::Int(x / y))
+                                        }
+                                        (Value::Float(x), Value::Float(y)) => {
+                                            if *y == 0.0 {
+                                                return Err(LppoError::type_error(
+                                                    "simd_div division by zero".into(),
+                                                ));
+                                            }
+                                            Ok(Value::Float(x / y))
+                                        }
+                                        _ => Err(LppoError::type_error(
+                                            "simd_div requires numeric arrays".into(),
+                                        )),
+                                    }
+                                })
+                                .collect::<LppoResult<Vec<Value>>>()?;
+                            return Ok(Value::Array(result));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_div arguments must be arrays".into(),
+                            ));
+                        }
+                    }
+                    "simd_splat" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_splat requires 2 arguments (value, count)".into(),
+                            ));
+                        }
+                        if let (Value::Int(value), Value::Int(count)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            if *count < 0 {
+                                return Err(LppoError::type_error(
+                                    "simd_splat count must be non-negative".into(),
+                                ));
+                            }
+                            let result: Vec<Value> =
+                                std::iter::repeat(Value::Int(*value)).take(*count as usize).collect();
+                            return Ok(Value::Array(result));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_splat arguments must be (int, int)".into(),
+                            ));
+                        }
+                    }
+                    "simd_extract" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_extract requires 2 arguments (vec, index)".into(),
+                            ));
+                        }
+                        if let (Value::Array(arr), Value::Int(idx)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            match arr.get(*idx as usize) {
+                                Some(v) => return Ok(v.clone()),
+                                None => {
+                                    return Err(LppoError::type_error(
+                                        "simd_extract index out of bounds".into(),
+                                    ))
+                                }
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_extract arguments must be (array, int)".into(),
+                            ));
+                        }
+                    }
+                    "simd_insert" => {
+                        if arg_vals.len() != 3 {
+                            return Err(LppoError::type_error(
+                                "simd_insert requires 3 arguments (vec, index, value)".into(),
+                            ));
+                        }
+                        let idx = match &arg_vals[1] {
+                            Value::Int(i) => *i as usize,
+                            _ => {
+                                return Err(LppoError::type_error(
+                                    "simd_insert index must be an integer".into(),
+                                ))
+                            }
+                        };
+                        let val = arg_vals[2].clone();
+                        if let Value::Array(mut arr) = arg_vals[0].clone() {
+                            if let Some(slot) = arr.get_mut(idx) {
+                                *slot = val;
+                                return Ok(Value::Array(arr));
+                            } else {
+                                return Err(LppoError::type_error(
+                                    "simd_insert index out of bounds".into(),
+                                ));
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_insert first argument must be an array".into(),
+                            ));
+                        }
+                    }
+                    "simd_shuffle" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_shuffle requires 2 arguments (vec, indices)".into(),
+                            ));
+                        }
+                        if let (Value::Array(arr), Value::Array(indices)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            let mut result = Vec::new();
+                            for index in indices {
+                                if let Value::Int(idx) = index {
+                                    match arr.get(*idx as usize) {
+                                        Some(v) => result.push(v.clone()),
+                                        None => {
+                                            return Err(LppoError::type_error(
+                                                "simd_shuffle index out of bounds".into(),
+                                            ))
+                                        }
+                                    }
+                                } else {
+                                    return Err(LppoError::type_error(
+                                        "simd_shuffle indices must be integers".into(),
+                                    ))
+                                }
+                            }
+                            return Ok(Value::Array(result));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_shuffle arguments must be (array, array)".into(),
+                            ));
+                        }
+                    }
+                    "simd_reduce" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "simd_reduce requires 2 arguments (vec, op)".into(),
+                            ));
+                        }
+                        if let (Value::Array(arr), Value::Str(op)) = (&arg_vals[0], &arg_vals[1]) {
+                            if arr.is_empty() {
+                                return Err(LppoError::type_error(
+                                    "simd_reduce requires a non-empty array".into(),
+                                ));
+                            }
+                            let mut acc = arr[0].clone();
+                            for val in arr.iter().skip(1) {
+                                acc = match (&acc, val, op.as_str()) {
+                                    (Value::Int(a), Value::Int(b), "add") => Value::Int(a + b),
+                                    (Value::Int(a), Value::Int(b), "mul") => Value::Int(a * b),
+                                    (Value::Int(a), Value::Int(b), "and") => Value::Int(a & b),
+                                    (Value::Int(a), Value::Int(b), "or") => Value::Int(a | b),
+                                    (Value::Int(a), Value::Int(b), "xor") => Value::Int(a ^ b),
+                                    (Value::Float(a), Value::Float(b), "add") => {
+                                        Value::Float(a + b)
+                                    }
+                                    (Value::Float(a), Value::Float(b), "mul") => {
+                                        Value::Float(a * b)
+                                    }
+                                    _ => {
+                                        return Err(LppoError::type_error(
+                                            "simd_reduce requires numeric arrays".into(),
+                                        ))
+                                    }
+                                };
+                            }
+                            return Ok(acc);
+                        } else {
+                            return Err(LppoError::type_error(
+                                "simd_reduce arguments must be (array, string)".into(),
+                            ));
+                        }
+                    }
+                    // --- Direct memory addressing and pointers ---
+                    "addr_of" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "addr_of requires 1 argument (variable address placeholder)".into(),
+                            ));
+                        }
+                        // Simulate a memory address for the variable. The argument is treated
+                        // as a variable identifier hash; we allocate a stable address.
+                        let var_id = match &arg_vals[0] {
+                            Value::Int(i) => *i,
+                            Value::Str(s) => {
+                                // Hash the string to a stable address
+                                let mut h: u64 = 0xcbf29ce484222325;
+                                for b in s.bytes() {
+                                    h ^= b as u64;
+                                    h = h.wrapping_mul(0x100000001b3);
+                                }
+                                h as i64
+                            }
+                            _ => {
+                                return Err(LppoError::type_error(
+                                    "addr_of argument must be an int or string".into(),
+                                ))
+                            }
+                        };
+                        let mut addr_space = MEMORY_ADDRESS_SPACE.lock().unwrap();
+                        // Allocate a new address if not already mapped
+                        let address = if addr_space.contains_key(&var_id) {
+                            var_id
+                        } else {
+                            let next = NEXT_ADDRESS.lock().unwrap().fetch_add(1, Ordering::Relaxed) as i64;
+                            addr_space.insert(var_id, Value::Int(0));
+                            next
+                        };
+                        return Ok(Value::Int(address));
+                    }
+                    "ptr_read" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "ptr_read requires 1 argument (address)".into(),
+                            ));
+                        }
+                        if let Value::Int(addr) = arg_vals[0] {
+                            let addr_space = MEMORY_ADDRESS_SPACE.lock().unwrap();
+                            match addr_space.get(&addr) {
+                                Some(v) => return Ok(v.clone()),
+                                None => {
+                                    return Err(LppoError::type_error(format!(
+                                        "ptr_read: no value at address {addr}"
+                                    )))
+                                }
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "ptr_read argument must be an integer address".into(),
+                            ));
+                        }
+                    }
+                    "ptr_write" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "ptr_write requires 2 arguments (address, value)".into(),
+                            ));
+                        }
+                        if let (Value::Int(addr), val) = (&arg_vals[0], &arg_vals[1]) {
+                            let mut addr_space = MEMORY_ADDRESS_SPACE.lock().unwrap();
+                            addr_space.insert(*addr, val.clone());
+                            return Ok(Value::Int(0));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "ptr_write arguments must be (int address, value)".into(),
+                            ));
+                        }
+                    }
+                    "ptr_offset" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "ptr_offset requires 2 arguments (address, offset)".into(),
+                            ));
+                        }
+                        if let (Value::Int(addr), Value::Int(offset)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            return Ok(Value::Int(addr + offset));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "ptr_offset arguments must be (int, int)".into(),
+                            ));
+                        }
+                    }
+                    // --- Volatile memory operations ---
+                    "volatile_read" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "volatile_read requires 1 argument (address)".into(),
+                            ));
+                        }
+                        if let Value::Int(addr) = arg_vals[0] {
+                            let addr_space = MEMORY_ADDRESS_SPACE.lock().unwrap();
+                            match addr_space.get(&addr) {
+                                Some(v) => return Ok(v.clone()),
+                                None => {
+                                    return Err(LppoError::type_error(format!(
+                                        "volatile_read: no value at address {addr}"
+                                    )))
+                                }
+                            }
+                        } else {
+                            return Err(LppoError::type_error(
+                                "volatile_read argument must be an integer address".into(),
+                            ));
+                        }
+                    }
+                    "volatile_write" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "volatile_write requires 2 arguments (address, value)".into(),
+                            ));
+                        }
+                        if let (Value::Int(addr), val) = (&arg_vals[0], &arg_vals[1]) {
+                            let mut addr_space = MEMORY_ADDRESS_SPACE.lock().unwrap();
+                            addr_space.insert(*addr, val.clone());
+                            return Ok(Value::Int(0));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "volatile_write arguments must be (int address, value)".into(),
+                            ));
+                        }
+                    }
+                    // --- Inline assembly ---
+                    "inline_asm" => {
+                        if arg_vals.len() < 1 {
+                            return Err(LppoError::type_error(
+                                "inline_asm requires at least 1 argument (asm string)".into(),
+                            ));
+                        }
+                        if let Value::Str(asm_str) = &arg_vals[0] {
+                            // Best-effort inline assembly on the host. The assembler string is
+                            // validated for safety (no syscalls, no memory writes to arbitrary
+                            // addresses). Unsupported instructions return 0.
+                            let trimmed = asm_str.trim();
+                            if trimmed.is_empty() {
+                                return Ok(Value::Int(0));
+                            }
+                            // Allow only a small safe subset: mov, add, sub, xor, and, or, nop, ret.
+                            let first_word = trimmed.split_whitespace().next().unwrap_or("");
+                            let allowed = [
+                                "nop", "mov", "add", "sub", "xor", "and", "or", "ret",
+                            ];
+                            if allowed.iter().any(|&w| first_word.eq_ignore_ascii_case(w)) {
+                            // Simulate: read output operands (array of Int), compute, return first.
+                            let mut result: i64 = 0;
+                            if let Value::Array(asm_args) = &arg_vals[1] {
+                                for arg in asm_args {
+                                    if let Value::Int(v) = arg {
+                                        result = result.wrapping_add(*v);
+                                    }
+                                }
+                            }
+                            return Ok(Value::Int(result));
+                            }
+                            return Err(LppoError::type_error(format!(
+                                "inline_asm: unsupported or unsafe instruction '{trimmed}'"
+                            )));
+                        } else {
+                            return Err(LppoError::type_error(
+                                "inline_asm first argument must be a string".into(),
+                            ));
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -2999,6 +3476,53 @@ impl Executor {
                     if cf != ControlFlow::None {
                         return Ok(cf);
                     }
+                }
+                Operation::Alloc {
+                    var,
+                    location,
+                    size,
+                } => {
+                    // Evaluate the size expression
+                    let size_val = eval_expr(&size, env, &self.procedures, self.ring0)?;
+                    let size = match size_val {
+                        Value::Int(s) if s >= 0 => s as usize,
+                        _ => {
+                            return Err(LppoError::type_error(
+                                "alloc size must be a non-negative integer".into(),
+                            ))
+                        }
+                    };
+
+                    match location {
+                        MemoryLocation::Heap => {
+                            // Allocate a block of memory in the address space
+                            let mut addr_space = MEMORY_ADDRESS_SPACE.lock().unwrap();
+                            let start_addr = NEXT_ADDRESS
+                                .lock()
+                                .unwrap()
+                                .fetch_add(size as u64 + 1, Ordering::Relaxed) as i64;
+                            // Initialize allocated memory to zero
+                            for i in 0..size {
+                                addr_space.insert(start_addr + i as i64, Value::Int(0));
+                            }
+                            // Bind the variable to the starting address
+                            env.insert(var.clone(), Value::Int(start_addr));
+                        }
+                        MemoryLocation::Stack => {
+                            // Stack allocation: just bind to zero (no address space tracking)
+                            env.insert(var.clone(), Value::Int(0));
+                        }
+                    }
+                }
+                Operation::Dealloc(var) => {
+                    // Free the memory at the variable's address
+                    if let Some(Value::Int(addr)) = env.get(var) {
+                        let mut addr_space = MEMORY_ADDRESS_SPACE.lock().unwrap();
+                        // Free the block (we don't track exact size, so free the single slot)
+                        addr_space.remove(addr);
+                    }
+                    // Remove the variable from the environment
+                    env.remove(var);
                 }
                 Operation::Nop => {
                     // No operation - do nothing

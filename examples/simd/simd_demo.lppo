@@ -1,0 +1,55 @@
+pub proc main() -> Void {
+    out "=== SIMD Operations ===";
+
+    out "";
+    out "--- splat (broadcast a value into a vector) ---";
+    let own a: Arr<Int64> = simd_splat(7, 4);
+    out "simd_splat(7, 4):", a;
+
+    out "";
+    out "--- element-wise add ---";
+    let own b: Arr<Int64> = simd_splat(3, 4);
+    let own c: Arr<Int64> = simd_add(a, b);
+    out "simd_add([7,7,7,7], [3,3,3,3]):", c;
+
+    out "";
+    out "--- element-wise sub ---";
+    let own d: Arr<Int64> = simd_sub(c, b);
+    out "simd_sub([10,10,10,10], [3,3,3,3]):", d;
+
+    out "";
+    out "--- element-wise mul ---";
+    let own e: Arr<Int64> = simd_mul(a, b);
+    out "simd_mul([7,7,7,7], [3,3,3,3]):", e;
+
+    out "";
+    out "--- element-wise div ---";
+    let own f: Arr<Int64> = simd_div(e, b);
+    out "simd_div([21,21,21,21], [3,3,3,3]):", f;
+
+    out "";
+    out "--- extract (read one lane) ---";
+    let own g: Int64 = simd_extract(c, 2);
+    out "simd_extract([10,10,10,10], 2):", g;
+
+    out "";
+    out "--- insert (write one lane) ---";
+    let own h: Arr<Int64> = simd_insert(c, 0, 99);
+    out "simd_insert([10,10,10,10], 0, 99):", h;
+
+    out "";
+    out "--- shuffle (reorder lanes) ---";
+    let own i: Arr<Int64> = simd_shuffle(h, [3, 2, 1, 0]);
+    out "simd_shuffle([99,10,10,10], [3,2,1,0]):", i;
+
+    out "";
+    out "--- reduce (collapse to a scalar) ---";
+    let own j: Int64 = simd_reduce(a, "add");
+    out "simd_reduce([7,7,7,7], \"add\"):", j;
+
+    let own k: Int64 = simd_reduce(a, "mul");
+    out "simd_reduce([7,7,7,7], \"mul\"):", k;
+
+    out "";
+    out "=== SIMD demo complete. ===";
+}

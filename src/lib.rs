@@ -273,7 +273,9 @@ fn collect_call_targets(ops: &[Operation], out: &mut Vec<String>) {
             | Operation::Continue
             | Operation::Return(_)
             | Operation::Nop
-            | Operation::Pause { .. } => {}
+            | Operation::Pause { .. }
+            | Operation::Alloc { .. }
+            | Operation::Dealloc(_) => {}
         }
     }
 }

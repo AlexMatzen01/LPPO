@@ -1,9 +1,9 @@
 /// Type checking for LPPO programs
 /// Validates types across expressions, statements, and procedure calls
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::{
-    BinaryOp, EnumDef, Expr, Procedure, Program, QualifiedName, Statement, StructDef, StructField,
+    BinaryOp, EnumDef, Expr, Procedure, Program, QualifiedName, Statement, StructDef,
     TypeAnnotation, UnaryOp,
 };
 use crate::error::{LppoError, LppoResult};
@@ -12,15 +12,29 @@ use crate::pkg::native::NativeRegistry;
 
 use crate::ast::OwnershipKind;
 
-/// Ownership state for tracking moves and borrows
+/// Ownership state for tracking moves, borrows, and drops
 #[derive(Debug, Clone, PartialEq)]
 enum OwnershipState {
     Owned,
     Moved,
-    #[allow(dead_code)] // TODO: Implement borrow tracking
     Borrowed {
         mutable: bool,
     },
+    Dropped,
+}
+
+/// Kind of borrow (shared/immutable or exclusive/mutable)
+#[derive(Debug, Clone, PartialEq)]
+enum BorrowKind {
+    Imm,
+    Mut,
+}
+
+/// Information about an active borrow
+#[derive(Debug, Clone)]
+struct BorrowInfo {
+    kind: BorrowKind,
+    scope_level: u32,
 }
 
 /// Type context for tracking variable and procedure types
@@ -30,6 +44,8 @@ pub struct TypeContext {
     variables: HashMap<String, TypeAnnotation>,
     /// Ownership state of variables
     ownership: HashMap<String, (OwnershipKind, OwnershipState)>,
+    /// Active borrows: variable -> list of borrows
+    borrows: HashMap<String, Vec<BorrowInfo>>,
     /// Procedure signatures: name -> (param_types, return_type)
     procedures: HashMap<String, (Vec<TypeAnnotation>, TypeAnnotation)>,
     /// Struct definitions
@@ -38,6 +54,14 @@ pub struct TypeContext {
     enums: HashMap<String, EnumDef>,
     /// Parent scope for nested contexts
     parent: Option<Box<TypeContext>>,
+    /// Current scope nesting level (for borrow lifetime tracking)
+    scope_level: u32,
+    /// Variables allocated on the heap (need explicit deallocation)
+    heap_allocated: HashSet<String>,
+    /// Whether we are inside an unsafe block (bypasses borrow checker)
+    in_unsafe: bool,
+    /// Variables declared at each scope level, for cleanup on scope exit
+    scope_vars: HashMap<u32, Vec<String>>,
 }
 
 impl TypeContext {
@@ -45,10 +69,15 @@ impl TypeContext {
         TypeContext {
             variables: HashMap::new(),
             ownership: HashMap::new(),
+            borrows: HashMap::new(),
             procedures: HashMap::new(),
             structs: HashMap::new(),
             enums: HashMap::new(),
             parent: None,
+            scope_level: 0,
+            heap_allocated: HashSet::new(),
+            in_unsafe: false,
+            scope_vars: HashMap::new(),
         }
     }
 
@@ -57,11 +86,56 @@ impl TypeContext {
         TypeContext {
             variables: HashMap::new(),
             ownership: HashMap::new(),
+            borrows: HashMap::new(),
             procedures: self.procedures.clone(),
             structs: self.structs.clone(),
             enums: self.enums.clone(),
             parent: Some(Box::new(self.clone())),
+            scope_level: self.scope_level + 1,
+            heap_allocated: self.heap_allocated.clone(),
+            in_unsafe: self.in_unsafe,
+            scope_vars: HashMap::new(),
         }
+    }
+
+    /// Enter a new scope level (increment scope counter)
+    pub fn enter_scope(&mut self) {
+        self.scope_level += 1;
+    }
+
+    /// Exit the current scope: end all borrows at this level and drop heap-allocated vars
+    pub fn exit_scope(&mut self) {
+        // End all borrows at the current scope level
+        for borrows_list in self.borrows.values_mut() {
+            borrows_list.retain(|b| b.scope_level < self.scope_level);
+        }
+        self.borrows.retain(|_, v| !v.is_empty());
+
+        // Drop variables declared at this scope level
+        if let Some(vars) = self.scope_vars.remove(&self.scope_level) {
+            for var in &vars {
+                let _ = self.mark_dropped(var);
+                self.heap_allocated.remove(var);
+                self.variables.remove(var);
+                self.ownership.remove(var);
+            }
+        }
+
+        self.scope_level -= 1;
+    }
+
+    /// Mark a variable as heap-allocated (needs explicit deallocation at drop)
+    pub fn mark_heap_allocated(&mut self, name: String) {
+        self.heap_allocated.insert(name);
+    }
+
+    /// Check if a variable is heap-allocated
+    pub fn is_heap_allocated(&self, name: &str) -> bool {
+        self.heap_allocated.contains(name)
+            || self
+                .parent
+                .as_ref()
+                .map_or(false, |p| p.is_heap_allocated(name))
     }
 
     /// Add a variable to current scope with ownership tracking
@@ -78,7 +152,11 @@ impl TypeContext {
     ) {
         self.variables.insert(name.clone(), typ);
         self.ownership
-            .insert(name, (ownership_kind, OwnershipState::Owned));
+            .insert(name.clone(), (ownership_kind, OwnershipState::Owned));
+        self.scope_vars
+            .entry(self.scope_level)
+            .or_default()
+            .push(name);
     }
 
     /// Look up a variable type
@@ -91,7 +169,7 @@ impl TypeContext {
     /// Check if a variable has been moved
     pub fn is_moved(&self, name: &str) -> bool {
         if let Some((_, state)) = self.ownership.get(name) {
-            matches!(state, OwnershipState::Moved)
+            matches!(state, OwnershipState::Moved | OwnershipState::Dropped)
         } else {
             self.parent.as_ref().map_or(false, |p| p.is_moved(name))
         }
@@ -100,7 +178,7 @@ impl TypeContext {
     /// Mark a variable as moved
     pub fn mark_moved(&mut self, name: &str) -> LppoResult<()> {
         if let Some((kind, state)) = self.ownership.get_mut(name) {
-            if matches!(state, OwnershipState::Moved) {
+            if matches!(state, OwnershipState::Moved | OwnershipState::Dropped) {
                 return Err(LppoError::MoveAfterMove {
                     variable: name.to_string(),
                     location: None,
@@ -124,6 +202,20 @@ impl TypeContext {
         }
     }
 
+    /// Mark a variable as dropped (freed at end of scope)
+    pub fn mark_dropped(&mut self, name: &str) -> LppoResult<()> {
+        if let Some((_, state)) = self.ownership.get_mut(name) {
+            *state = OwnershipState::Dropped;
+            Ok(())
+        } else {
+            Err(LppoError::UnknownVariable {
+                name: name.to_string(),
+                location: None,
+                suggestion: None,
+            })
+        }
+    }
+
     /// Check ownership state when accessing a variable
     pub fn check_variable_access(&self, name: &str) -> LppoResult<()> {
         if self.is_moved(name) {
@@ -133,6 +225,112 @@ impl TypeContext {
             });
         }
         Ok(())
+    }
+
+    /// Check if a variable can be read (not mutably borrowed, not moved)
+    pub fn can_read(&self, name: &str) -> LppoResult<()> {
+        if self.in_unsafe {
+            return Ok(());
+        }
+        self.check_variable_access(name)?;
+        if let Some(borrows) = self.borrows.get(name) {
+            if borrows.iter().any(|b| matches!(b.kind, BorrowKind::Mut)) {
+                return Err(LppoError::BorrowError {
+                    message: format!(
+                        "cannot read '{}' while it is mutably borrowed",
+                        name
+                    ),
+                    location: None,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Check if a variable can be written (not borrowed at all, not moved)
+    pub fn can_write(&self, name: &str) -> LppoResult<()> {
+        if self.in_unsafe {
+            return Ok(());
+        }
+        self.check_variable_access(name)?;
+        if let Some(borrows) = self.borrows.get(name) {
+            if !borrows.is_empty() {
+                return Err(LppoError::BorrowError {
+                    message: format!(
+                        "cannot assign to '{}' while it is borrowed",
+                        name
+                    ),
+                    location: None,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Start a borrow of a variable. Enforces Rust's aliasing rules:
+    /// - At any time, either ONE mutable borrow OR any number of immutable borrows, not both.
+    pub fn borrow_variable(&mut self, name: &str, kind: BorrowKind) -> LppoResult<()> {
+        if self.in_unsafe {
+            return Ok(());
+        }
+        self.check_variable_access(name)?;
+
+        let borrows = self.borrows.entry(name.to_string()).or_default();
+
+        match kind {
+            BorrowKind::Mut => {
+                // Can't mutably borrow if any borrows exist (imm or mut)
+                if !borrows.is_empty() {
+                    return Err(LppoError::BorrowError {
+                        message: format!(
+                            "cannot borrow '{}' mutably as it is already borrowed",
+                            name
+                        ),
+                        location: None,
+                    });
+                }
+                borrows.push(BorrowInfo {
+                    kind: BorrowKind::Mut,
+                    scope_level: self.scope_level,
+                });
+            }
+            BorrowKind::Imm => {
+                // Can't immutably borrow if a mutable borrow exists
+                if borrows.iter().any(|b| matches!(b.kind, BorrowKind::Mut)) {
+                    return Err(LppoError::BorrowError {
+                        message: format!(
+                            "cannot borrow '{}' immutably as it is mutably borrowed",
+                            name
+                        ),
+                        location: None,
+                    });
+                }
+                borrows.push(BorrowInfo {
+                    kind: BorrowKind::Imm,
+                    scope_level: self.scope_level,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// End a borrow of a variable (when a reference goes out of scope)
+    pub fn end_borrow(&mut self, name: &str) -> LppoResult<()> {
+        if self.in_unsafe {
+            return Ok(());
+        }
+        if let Some(borrows) = self.borrows.get_mut(name) {
+            borrows.pop();
+            if borrows.is_empty() {
+                self.borrows.remove(name);
+            }
+        }
+        Ok(())
+    }
+
+    /// Set unsafe mode on or off
+    pub fn set_unsafe(&mut self, unsafe_mode: bool) {
+        self.in_unsafe = unsafe_mode;
     }
 
     /// Add a procedure signature
@@ -482,6 +680,91 @@ pub fn typecheck_program_with_context(program: &Program, context: &PackageContex
     );
     ctx.add_procedure("pool_used".to_string(), vec![], TypeAnnotation::Int64);
 
+    // SIMD built-ins (operate on arrays of integers).
+    let int_arr = TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64));
+    ctx.add_procedure(
+        "simd_add".to_string(),
+        vec![int_arr.clone(), int_arr.clone()],
+        int_arr.clone(),
+    );
+    ctx.add_procedure(
+        "simd_sub".to_string(),
+        vec![int_arr.clone(), int_arr.clone()],
+        int_arr.clone(),
+    );
+    ctx.add_procedure(
+        "simd_mul".to_string(),
+        vec![int_arr.clone(), int_arr.clone()],
+        int_arr.clone(),
+    );
+    ctx.add_procedure(
+        "simd_div".to_string(),
+        vec![int_arr.clone(), int_arr.clone()],
+        int_arr.clone(),
+    );
+    ctx.add_procedure(
+        "simd_splat".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        int_arr.clone(),
+    );
+    ctx.add_procedure(
+        "simd_extract".to_string(),
+        vec![int_arr.clone(), TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "simd_insert".to_string(),
+        vec![int_arr.clone(), TypeAnnotation::Int64, TypeAnnotation::Int64],
+        int_arr.clone(),
+    );
+    ctx.add_procedure(
+        "simd_shuffle".to_string(),
+        vec![int_arr.clone(), int_arr.clone()],
+        int_arr.clone(),
+    );
+    ctx.add_procedure(
+        "simd_reduce".to_string(),
+        vec![int_arr.clone(), TypeAnnotation::Str],
+        TypeAnnotation::Int64,
+    );
+
+    // Direct memory addressing and pointers.
+    ctx.add_procedure("addr_of".to_string(), vec![TypeAnnotation::Str], TypeAnnotation::Int64);
+    ctx.add_procedure(
+        "ptr_read".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "ptr_write".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Void,
+    );
+    ctx.add_procedure(
+        "ptr_offset".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+
+    // Volatile memory operations.
+    ctx.add_procedure(
+        "volatile_read".to_string(),
+        vec![TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "volatile_write".to_string(),
+        vec![TypeAnnotation::Int64, TypeAnnotation::Int64],
+        TypeAnnotation::Void,
+    );
+
+    // Inline assembly.
+    ctx.add_procedure(
+        "inline_asm".to_string(),
+        vec![TypeAnnotation::Str, int_arr.clone()],
+        TypeAnnotation::Int64,
+    );
+
     // ANSI colors
     ctx.add_procedure(
         "color".to_string(),
@@ -792,15 +1075,17 @@ fn typecheck_statement(
         }
 
         Statement::Assignment { target, value } => {
+            ctx.can_write(target)?;
             let var_type = ctx
                 .get_variable(target)
+                .cloned()
                 .ok_or_else(|| LppoError::UnknownVariable {
                     name: target.clone(),
                     location: None,
                     suggestion: Some("declare the variable before assigning to it".to_string()),
                 })?;
             let value_type = typecheck_expr(value, ctx)?;
-            if !types_compatible(var_type, &value_type) {
+            if !types_compatible(&var_type, &value_type) {
                 return Err(LppoError::TypeError {
                     message: format!(
                         "cannot assign {:?} to variable '{}' of type {:?}",
@@ -841,11 +1126,13 @@ fn typecheck_statement(
                 });
             }
 
-            // Type check branches in child scopes
+            // Type check branches in child scopes with proper borrow tracking
             let mut branch_ctx = ctx.child();
+            branch_ctx.enter_scope();
             for stmt in then_branch {
                 typecheck_statement(stmt, &mut branch_ctx)?;
             }
+            branch_ctx.exit_scope();
 
             for (elif_cond, elif_stmts) in elifs {
                 let elif_cond_type = typecheck_expr(elif_cond, ctx)?;
@@ -859,16 +1146,20 @@ fn typecheck_statement(
                     });
                 }
                 let mut elif_ctx = ctx.child();
+                elif_ctx.enter_scope();
                 for stmt in elif_stmts {
                     typecheck_statement(stmt, &mut elif_ctx)?;
                 }
+                elif_ctx.exit_scope();
             }
 
             if let Some(else_stmts) = else_branch {
                 let mut else_ctx = ctx.child();
+                else_ctx.enter_scope();
                 for stmt in else_stmts {
                     typecheck_statement(stmt, &mut else_ctx)?;
                 }
+                else_ctx.exit_scope();
             }
 
             Ok(None)
@@ -887,9 +1178,11 @@ fn typecheck_statement(
             }
 
             let mut loop_ctx = ctx.child();
+            loop_ctx.enter_scope();
             for stmt in body {
                 typecheck_statement(stmt, &mut loop_ctx)?;
             }
+            loop_ctx.exit_scope();
             Ok(None)
         }
 
@@ -931,10 +1224,12 @@ fn typecheck_statement(
             }
 
             let mut loop_ctx = ctx.child();
-            loop_ctx.add_variable(var.clone(), typ.clone());
+            loop_ctx.enter_scope();
+            loop_ctx.add_variable_with_ownership(var.clone(), typ.clone(), OwnershipKind::Own);
             for stmt in body {
                 typecheck_statement(stmt, &mut loop_ctx)?;
             }
+            loop_ctx.exit_scope();
             Ok(None)
         }
 
@@ -1007,26 +1302,32 @@ fn typecheck_statement(
         }
 
         Statement::Loop { body } => {
-            let mut loop_ctx = ctx.child();
+            // Enter a new scope for the loop body
+            ctx.enter_scope();
             for stmt in body {
-                typecheck_statement(stmt, &mut loop_ctx)?;
+                typecheck_statement(stmt, &mut *ctx)?;
             }
+            ctx.exit_scope();
             Ok(None)
         }
 
         Statement::Scope { body, .. } => {
-            let mut scope_ctx = ctx.child();
+            // Enter a new scope for the block body
+            ctx.enter_scope();
             for stmt in body {
-                typecheck_statement(stmt, &mut scope_ctx)?;
+                typecheck_statement(stmt, &mut *ctx)?;
             }
+            ctx.exit_scope();
             Ok(None)
         }
 
         Statement::Unsafe { body } => {
-            let mut unsafe_ctx = ctx.child();
+            // Inside unsafe blocks, borrow checker is bypassed
+            ctx.set_unsafe(true);
             for stmt in body {
-                typecheck_statement(stmt, &mut unsafe_ctx)?;
+                typecheck_statement(stmt, &mut *ctx)?;
             }
+            ctx.set_unsafe(false);
             Ok(None)
         }
 
@@ -1084,7 +1385,8 @@ fn typecheck_statement(
         }
 
         Statement::Move { source, target } => {
-            // Mark source as moved and create new variable with ownership
+            // Can't move a borrowed variable
+            ctx.can_read(source)?;
             ctx.mark_moved(source)?;
             let src_type = ctx
                 .get_variable(source)
@@ -1099,7 +1401,7 @@ fn typecheck_statement(
         }
 
         Statement::Copy { source, target } => {
-            // Copy doesn't move ownership
+            ctx.can_read(source)?;
             let src_type = ctx
                 .get_variable(source)
                 .ok_or_else(|| LppoError::UnknownVariable {
@@ -1112,10 +1414,29 @@ fn typecheck_statement(
             Ok(None)
         }
 
+        Statement::Alloc {
+            var,
+            typ,
+            location,
+            size,
+        } => {
+            typecheck_expr(size, ctx)?;
+            // Heap-allocated variables need explicit deallocation
+            if matches!(location, crate::ast::MemoryLocation::Heap) {
+                ctx.mark_heap_allocated(var.clone());
+            }
+            ctx.add_variable_with_ownership(var.clone(), typ.clone(), OwnershipKind::Own);
+            Ok(None)
+        }
+
+        Statement::Dealloc(var) => {
+            ctx.can_write(var)?;
+            ctx.mark_dropped(var)?;
+            Ok(None)
+        }
+
         // For now, treat these as no-ops in type checking
-        Statement::Alloc { .. }
-        | Statement::Dealloc(_)
-        | Statement::Match { .. }
+        Statement::Match { .. }
         | Statement::StructInit { .. }
         | Statement::Pause { .. }
         | Statement::Spawn { .. } => Ok(None),
@@ -1123,7 +1444,7 @@ fn typecheck_statement(
 }
 
 /// Type check an expression and return its type
-fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> {
+fn typecheck_expr(expr: &Expr, ctx: &mut TypeContext) -> LppoResult<TypeAnnotation> {
     match expr {
         Expr::Int(_) => Ok(TypeAnnotation::Int64),
         Expr::Bool(_) => Ok(TypeAnnotation::Bool),
@@ -1131,8 +1452,8 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
         Expr::Float(_) => Ok(TypeAnnotation::Custom("F64".to_string())),
 
         Expr::Var(name) => {
-            // Check ownership state before access
-            ctx.check_variable_access(name)?;
+            // Check ownership state before access (read access = can_read)
+            ctx.can_read(name)?;
             ctx.get_variable(name)
                 .cloned()
                 .ok_or_else(|| LppoError::UnknownVariable {
@@ -1140,6 +1461,48 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                     location: None,
                     suggestion: Some("declare the variable before using it".to_string()),
                 })
+        }
+
+        Expr::Ref {
+            target,
+            is_mut,
+            lifetime,
+        } => {
+            // Create a borrow of the target variable
+            match target.as_ref() {
+                Expr::Var(name) => {
+                    let kind = if *is_mut {
+                        BorrowKind::Mut
+                    } else {
+                        BorrowKind::Imm
+                    };
+                    ctx.borrow_variable(name, kind)?;
+                    let target_type = ctx
+                        .get_variable(name)
+                        .cloned()
+                        .ok_or_else(|| LppoError::UnknownVariable {
+                            name: name.clone(),
+                            location: None,
+                            suggestion: None,
+                        })?;
+                    Ok(TypeAnnotation::Ref(Box::new(target_type), lifetime.clone()))
+                }
+                _ => Err(LppoError::type_error(
+                    "can only take a reference to a variable".to_string(),
+                )),
+            }
+        }
+
+        Expr::Deref(operand) => {
+            // Dereference: the operand must evaluate to a Ref type
+            let operand_type = typecheck_expr(operand, ctx)?;
+            match operand_type {
+                TypeAnnotation::Ref(inner, _) => Ok(*inner),
+                _ => Err(LppoError::type_error(format!(
+                    "cannot dereference type {:?}, expected a reference",
+                    operand_type
+                ))),
+            }
         }
 
         Expr::Array(elements) => {
@@ -1351,8 +1714,11 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                 .structs
                 .get(name)
                 .ok_or_else(|| LppoError::type_error(format!("unknown struct '{}'", name)))?;
-            let field_types: std::collections::HashMap<&String, &StructField> =
-                struct_def.fields.iter().map(|f| (&f.name, f)).collect();
+            let field_types: std::collections::HashMap<String, TypeAnnotation> = struct_def
+                .fields
+                .iter()
+                .map(|f| (f.name.clone(), f.typ.clone()))
+                .collect();
             for (field_name, expr) in fields.iter() {
                 let field_def = field_types.get(field_name).ok_or_else(|| {
                     LppoError::type_error(format!(
@@ -1361,13 +1727,13 @@ fn typecheck_expr(expr: &Expr, ctx: &TypeContext) -> LppoResult<TypeAnnotation> 
                     ))
                 })?;
                 let expr_type = typecheck_expr(expr, ctx)?;
-                if !types_compatible(&field_def.typ, &expr_type) {
+                if !types_compatible(field_def, &expr_type) {
                     return Err(LppoError::TypeError {
                         message: format!(
                             "field '{}' of struct '{}' expects {:?} but got {:?}",
-                            field_name, name, field_def.typ, expr_type
+                            field_name, name, field_def, expr_type
                         ),
-                        expected: Some(format!("{:?}", field_def.typ)),
+                        expected: Some(format!("{:?}", field_def)),
                         found: Some(format!("{:?}", expr_type)),
                         location: None,
                         suggestion: None,
@@ -1491,6 +1857,9 @@ fn types_compatible(expected: &TypeAnnotation, actual: &TypeAnnotation) -> bool 
             TypeAnnotation::Map(ek, ev),
             TypeAnnotation::Map(ak, av),
         ) => types_compatible(ek, ak) && types_compatible(ev, av),
+        (TypeAnnotation::Ref(e_inner, _), TypeAnnotation::Ref(a_inner, _)) => {
+            types_compatible(e_inner, a_inner)
+        }
         _ => false,
     }
 }
@@ -1535,29 +1904,29 @@ mod tests {
 
         // Test integer literal
         assert_eq!(
-            typecheck_expr(&Expr::Int(42), &ctx).unwrap(),
+            typecheck_expr(&Expr::Int(42), &mut ctx).unwrap(),
             TypeAnnotation::Int64
         );
 
         // Test boolean literal
         assert_eq!(
-            typecheck_expr(&Expr::Bool(true), &ctx).unwrap(),
+            typecheck_expr(&Expr::Bool(true), &mut ctx).unwrap(),
             TypeAnnotation::Bool
         );
 
         // Test variable lookup
         assert_eq!(
-            typecheck_expr(&Expr::Var("x".to_string()), &ctx).unwrap(),
+            typecheck_expr(&Expr::Var("x".to_string()), &mut ctx).unwrap(),
             TypeAnnotation::Int64
         );
 
         // Test unknown variable
-        assert!(typecheck_expr(&Expr::Var("y".to_string()), &ctx).is_err());
+        assert!(typecheck_expr(&Expr::Var("y".to_string()), &mut ctx).is_err());
     }
 
     #[test]
     fn test_binary_op_type_checking() {
-        let ctx = TypeContext::new();
+        let mut ctx = TypeContext::new();
 
         // Test arithmetic: 1 + 2
         let expr = Expr::BinaryOp {
@@ -1565,7 +1934,7 @@ mod tests {
             op: BinaryOp::Add,
             right: Box::new(Expr::Int(2)),
         };
-        assert_eq!(typecheck_expr(&expr, &ctx).unwrap(), TypeAnnotation::Int64);
+        assert_eq!(typecheck_expr(&expr, &mut ctx).unwrap(), TypeAnnotation::Int64);
 
         // Test comparison: 1 < 2
         let expr = Expr::BinaryOp {
@@ -1573,7 +1942,7 @@ mod tests {
             op: BinaryOp::Lt,
             right: Box::new(Expr::Int(2)),
         };
-        assert_eq!(typecheck_expr(&expr, &ctx).unwrap(), TypeAnnotation::Bool);
+        assert_eq!(typecheck_expr(&expr, &mut ctx).unwrap(), TypeAnnotation::Bool);
 
         // Test logical: true and false
         let expr = Expr::BinaryOp {
@@ -1581,21 +1950,21 @@ mod tests {
             op: BinaryOp::And,
             right: Box::new(Expr::Bool(false)),
         };
-        assert_eq!(typecheck_expr(&expr, &ctx).unwrap(), TypeAnnotation::Bool);
+        assert_eq!(typecheck_expr(&expr, &mut ctx).unwrap(), TypeAnnotation::Bool);
     }
 
     #[test]
     fn test_array_type_checking() {
-        let ctx = TypeContext::new();
+        let mut ctx = TypeContext::new();
 
         // Test homogeneous array
         let expr = Expr::Array(vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)]);
-        let result = typecheck_expr(&expr, &ctx).unwrap();
+        let result = typecheck_expr(&expr, &mut ctx).unwrap();
         assert!(matches!(result, TypeAnnotation::Arr(_)));
 
         // Test heterogeneous array (should fail)
         let expr = Expr::Array(vec![Expr::Int(1), Expr::Bool(true)]);
-        assert!(typecheck_expr(&expr, &ctx).is_err());
+        assert!(typecheck_expr(&expr, &mut ctx).is_err());
     }
 
     #[test]

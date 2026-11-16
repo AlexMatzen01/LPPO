@@ -1,0 +1,28 @@
+pub proc main() -> Void {
+    out "=== Direct Memory Addressing and Pointers ===";
+
+    out "";
+    out "--- addr_of (get a simulated address for a variable) ---";
+    let own addr: Int64 = addr_of("counter");
+    out "addr_of(\"counter\"):", addr;
+
+    out "";
+    out "--- ptr_write then ptr_read ---";
+    ptr_write(addr, 42);
+    let own val: Int64 = ptr_read(addr);
+    out "ptr_read after ptr_write(addr, 42):", val;
+
+    out "";
+    out "--- ptr_offset (pointer arithmetic) ---";
+    let own off: Int64 = ptr_offset(addr, 8);
+    out "ptr_offset(addr, 8):", off;
+
+    out "";
+    out "--- write through offset address ---";
+    ptr_write(off, 100);
+    let own val2: Int64 = ptr_read(off);
+    out "ptr_read at offset address:", val2;
+
+    out "";
+    out "=== Pointer demo complete. ===";
+}
