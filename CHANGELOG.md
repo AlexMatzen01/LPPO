@@ -6,6 +6,10 @@
 
 Release v0.1.9-alpha.2
 
+## 0.1.9-alpha.2 - 2026-11-16 (alpha)
+
+Release v0.1.9-alpha.2
+
 ## 0.1.9-alpha.1 - 2026-11-16 (alpha)
 
 Release v0.1.9-alpha.1
