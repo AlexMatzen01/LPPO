@@ -16,10 +16,10 @@ pub proc main() -> Void {
             break;
         }
 
-        if is_plural {
-            out counter, "seconds";
-        } else {
-            out counter, "second";  
-        }
-    }
+    if is_plural {
+        out counter, "seconds";
+    } else {
+    out counter, "second";
+}
+}
 }
