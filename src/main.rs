@@ -192,9 +192,11 @@ fn print_help() {
     println!("    --version, -V  Print version information");
     println!();
     println!("COMMANDS:");
-    println!("    compile <out> <source.lppo>   Compile source to a bundled executable");
-    println!("    compile-out <out> <source.lppo>  Alias for compile (alias)");
-    println!("    compile-bare-metal <out> <source.lppo>  Compile to a bare-metal x86_64 executable");
+    println!("    build <source.lppo> [-o <out>] [-O <0-3>] [--emit-c] [--emit-object]");
+    println!("                                  Transpile source to a native executable via C");
+    println!("    --compile <out> <source.lppo>   Compile source to a bundled executable");
+    println!("    --compile-out <out> <source.lppo>  Alias for compile (alias)");
+    println!("    --compile-bare-metal <out> <source.lppo>  Compile to a bare-metal x86_64 executable");
     println!("    project <subcommand>          Project management (init, build, run, debug, format, git, pkg)");
     println!("    pkg <subcommand>              Package management");
     println!("    update                        Update lppo from GitHub");

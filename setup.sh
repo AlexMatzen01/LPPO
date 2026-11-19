@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "Building lppo..."
 cargo build --release --manifest-path "$SCRIPT_DIR/Cargo.toml"
+cargo build -p lppo-rt
 
 INSTALL_DIR="$HOME/.LPPO"
 BIN_DIR="$INSTALL_DIR/bin"
