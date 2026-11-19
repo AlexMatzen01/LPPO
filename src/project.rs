@@ -53,6 +53,13 @@ pub struct BuildSection {
     pub linker: Option<String>,
     #[serde(default)]
     pub link_args: Vec<String>,
+    /// Build a native executable through the C transpiler (default).
+    /// Set to `false` to embed the interpreter bundle instead.
+    #[serde(default)]
+    pub native: Option<bool>,
+    /// Optimization level (0-3) for the C transpiler.
+    #[serde(default)]
+    pub opt_level: Option<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -88,6 +95,15 @@ pub struct BuildOptions {
     pub linker: Option<String>,
     /// Additional arguments forwarded to the linker (repeatable).
     pub link_args: Vec<String>,
+    /// Force the bundled-interpreter build instead of the native C backend.
+    pub bundle: bool,
+    /// Force the native C backend, overriding a `[build] native = false` manifest.
+    pub force_native: bool,
+    /// Write the generated C source to this path instead of an executable.
+    pub emit_c: Option<String>,
+    /// Optimization level for the C transpiler (0-3). Takes precedence over
+    /// the manifest setting.
+    pub opt_level: Option<u8>,
 }
 
 /// An LPPO project rooted at a directory containing `lppo.toml`.
@@ -341,18 +357,18 @@ pub fn cmd_init(name: &str, path: Option<&Path>) -> LppoResult<()> {
 
 /// `lppo project build [--release] [--entry <file>] [--output <path>]`
 /// [--strip] [--obfuscate] [--linker <path>] [--link-arg <arg>]...
-/// Compile all `.lppo` files in the project into a single bundled executable.
+/// [--bundle] [--emit-c <path>] [-O <0-3>]
+///
+/// Compiles the project into a native executable via the C transpiler.
+/// Pass `--bundle` to embed the interpreter bundle instead (legacy behavior).
 pub fn cmd_build(options: BuildOptions, entry: Option<&str>, output: Option<&str>) -> LppoResult<()> {
-    let project = match Project::discover(
-        &std::env::current_dir()
-            .map_err(|e| LppoError::io_error(format!("failed to get current dir: {}", e)))?,
-    )? {
+    let cwd = std::env::current_dir()
+        .map_err(|e| LppoError::io_error(format!("failed to get current dir: {}", e)))?;
+    let project = match Project::discover(&cwd)? {
         Some(p) => p,
-        None => {
-            return Err(LppoError::io_error(
-                "no lppo.toml found in current or parent directories".into(),
-            ))
-        }
+        // No manifest: treat the current directory as an implicit project so
+        // `lppo project build` works in plain source folders.
+        None => implicit_project(&cwd)?,
     };
 
     let entry_path = entry
@@ -373,20 +389,10 @@ pub fn cmd_build(options: BuildOptions, entry: Option<&str>, output: Option<&str
     // Package context for resolving installed-package imports and shader refs.
     let context = PackageContext::discover(&root)?;
 
-    // Manifest options act as defaults; CLI options override them.
-    let compile_options = lppo::CompileOptions {
-        strip: options.strip,
-        obfuscate: options.obfuscate,
-    };
-
-    let proc_bytes =
-        lppo::compile_to_bytes_with_options(&source, &root, compile_options)?;
-
     let out_path = match output {
         Some(o) => PathBuf::from(o),
         None => project.output_path(),
     };
-
     if let Some(parent) = out_path.parent() {
         fs::create_dir_all(parent).map_err(|e| {
             LppoError::io_error(format!(
@@ -397,23 +403,136 @@ pub fn cmd_build(options: BuildOptions, entry: Option<&str>, output: Option<&str
         })?;
     }
 
-    write_bundled_executable(&out_path, &proc_bytes)?;
+    // Manifest options act as defaults; CLI options override them.
+    let native = (options.force_native || project.manifest.build.native.unwrap_or(true))
+        && !options.bundle;
 
-    let proc_part = format!("{} proc bytes", proc_bytes.len());
+    if !native {
+        let compile_options = lppo::CompileOptions {
+            strip: options.strip,
+            obfuscate: options.obfuscate,
+        };
+        let proc_bytes =
+            lppo::compile_to_bytes_with_options(&source, &root, compile_options)?;
+        write_bundled_executable(&out_path, &proc_bytes)?;
+
+        let mode = if options.release { "release" } else { "debug" };
+        println!(
+            "Built {} bundle: {} ({} proc bytes){}{}",
+            mode,
+            out_path.display(),
+            proc_bytes.len(),
+            if options.strip { "; stripped declaration-only procedures" } else { "" },
+            if options.obfuscate { "; obfuscated payload" } else { "" }
+        );
+        if options.linker.is_some() || !options.link_args.is_empty() {
+            println!("  note: linker options apply to native builds; bundled executables copy the interpreter binary instead of linking.");
+        }
+        return Ok(());
+    }
+
+    // Native path: lower the resolved program to C and invoke the system compiler.
+    let opt_level = options
+        .opt_level
+        .or(project.manifest.build.opt_level)
+        .unwrap_or(if options.release { 2 } else { 0 });
+    let opt = lppo::codegen_c::OptimizationLevel::from_u8(opt_level)
+        .map_err(LppoError::type_error)?;
+
+    let procedures = lppo::compile_to_procedures(&source, &root)?;
+    let config = lppo::codegen_c::TargetConfig {
+        opt_level: opt,
+        ..Default::default()
+    };
+
+    if let Some(c_path) = options.emit_c.as_deref() {
+        let c_src = lppo::codegen_c::compile_to_c_source(&procedures)
+            .map_err(LppoError::type_error)?;
+        let c_path = Path::new(c_path);
+        if let Some(parent) = c_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                LppoError::io_error(format!(
+                    "failed to create output dir {}: {}",
+                    parent.display(),
+                    e
+                ))
+            })?;
+        }
+        fs::write(c_path, c_src).map_err(|e| {
+            LppoError::io_error(format!("failed to write {}: {}", c_path.display(), e))
+        })?;
+        println!("Wrote C source: {}", c_path.display());
+        return Ok(());
+    }
+
+    lppo::codegen_c::compile_to_executable(&procedures, &config, &out_path)
+        .map_err(LppoError::type_error)?;
 
     let mode = if options.release { "release" } else { "debug" };
     println!(
-        "Built {} bundle: {} ({}){}{}",
+        "Built {} native executable: {} ({} procedures, -O{})",
         mode,
         out_path.display(),
-        proc_part,
-        if options.strip { "; stripped declaration-only procedures" } else { "" },
-        if options.obfuscate { "; obfuscated payload" } else { "" }
+        procedures.len(),
+        opt_level
     );
     if options.linker.is_some() || !options.link_args.is_empty() {
-        println!("  note: linker options apply to native/bare-metal builds; bundled executables copy the interpreter binary instead of linking.");
+        println!("  note: --linker/--link-arg are not yet forwarded to the C backend.");
     }
     Ok(())
+}
+
+/// Build a minimal in-memory project for a directory without `lppo.toml`.
+fn implicit_project(root: &Path) -> LppoResult<Project> {
+    let name = root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("app")
+        .to_string();
+
+    let is_main = |p: &Path| p.is_file();
+    let entry = if is_main(&root.join("src/main.lppo")) {
+        "src/main.lppo".to_string()
+    } else if is_main(&root.join("main.lppo")) {
+        "main.lppo".to_string()
+    } else {
+        let mut candidates: Vec<PathBuf> = fs::read_dir(root)
+            .map_err(|e| LppoError::io_error(format!("failed to read {}: {}", root.display(), e)))?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().map(|x| x == "lppo").unwrap_or(false))
+            .collect();
+        candidates.sort();
+        match candidates.first() {
+            Some(p) => p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("main.lppo")
+                .to_string(),
+            None => {
+                return Err(LppoError::io_error(format!(
+                    "no lppo.toml found and no main.lppo/src/main.lppo in {}",
+                    root.display()
+                )))
+            }
+        }
+    };
+
+    Ok(Project {
+        root: root.to_path_buf(),
+        manifest: Manifest {
+            project: ProjectSection {
+                name,
+                version: default_version(),
+                edition: default_edition(),
+            },
+            build: BuildSection {
+                entry,
+                output: default_output(),
+                ..Default::default()
+            },
+            dependencies: None,
+        },
+    })
 }
 
 /// `lppo project format [--check] [files...]`

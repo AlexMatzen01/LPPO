@@ -667,6 +667,85 @@ pub fn typecheck_program_with_context(program: &Program, context: &PackageContex
         TypeAnnotation::Arr(Box::new(TypeAnnotation::Str)),
     );
 
+    ctx.add_procedure(
+        "map_values".to_string(),
+        vec![TypeAnnotation::Map(
+            Box::new(TypeAnnotation::Str),
+            Box::new(TypeAnnotation::Int64),
+        )],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+    );
+    // Sets (insertion-ordered, scalar elements).
+    ctx.add_procedure(
+        "set_new".to_string(),
+        vec![],
+        TypeAnnotation::Set(Box::new(TypeAnnotation::Int64)),
+    );
+    ctx.add_procedure(
+        "set_insert".to_string(),
+        vec![
+            TypeAnnotation::Set(Box::new(TypeAnnotation::Int64)),
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Set(Box::new(TypeAnnotation::Int64)),
+    );
+    ctx.add_procedure(
+        "set_contains".to_string(),
+        vec![
+            TypeAnnotation::Set(Box::new(TypeAnnotation::Int64)),
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Bool,
+    );
+    ctx.add_procedure(
+        "set_remove".to_string(),
+        vec![
+            TypeAnnotation::Set(Box::new(TypeAnnotation::Int64)),
+            TypeAnnotation::Int64,
+        ],
+        TypeAnnotation::Set(Box::new(TypeAnnotation::Int64)),
+    );
+    ctx.add_procedure(
+        "set_len".to_string(),
+        vec![TypeAnnotation::Set(Box::new(TypeAnnotation::Int64))],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "set_to_array".to_string(),
+        vec![TypeAnnotation::Set(Box::new(TypeAnnotation::Int64))],
+        TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
+    );
+    // Tuple / enum / struct accessors.
+    ctx.add_procedure("tuple_new".to_string(), vec![], TypeAnnotation::Tuple(vec![]));
+    ctx.add_procedure(
+        "tuple_get".to_string(),
+        vec![TypeAnnotation::Tuple(vec![]), TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "enum_tag".to_string(),
+        vec![TypeAnnotation::Custom("Enum".to_string())],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "enum_variant".to_string(),
+        vec![TypeAnnotation::Custom("Enum".to_string())],
+        TypeAnnotation::Str,
+    );
+    ctx.add_procedure(
+        "enum_get".to_string(),
+        vec![TypeAnnotation::Custom("Enum".to_string()), TypeAnnotation::Int64],
+        TypeAnnotation::Int64,
+    );
+    ctx.add_procedure(
+        "struct_field".to_string(),
+        vec![
+            TypeAnnotation::Custom("Struct".to_string()),
+            TypeAnnotation::Str,
+        ],
+        TypeAnnotation::Int64,
+    );
+
     // Memory pool built-ins.
     ctx.add_procedure(
         "pool_alloc".to_string(),
@@ -1056,7 +1135,12 @@ fn typecheck_statement(
             ..
         } => {
             let expr_type = typecheck_expr(expr, ctx)?;
-            if !types_compatible(typ, &expr_type) {
+            let float_literal_narrowing = matches!(expr, Expr::Float(_))
+                && matches!(typ.normalized(), TypeAnnotation::Float32);
+            if !is_polymorphic_collection_call(expr)
+                && !float_literal_narrowing
+                && !types_compatible(typ, &expr_type)
+            {
                 return Err(LppoError::TypeError {
                     message: format!(
                         "variable '{}' declared as {:?} but assigned {:?}",
@@ -1449,7 +1533,7 @@ fn typecheck_expr(expr: &Expr, ctx: &mut TypeContext) -> LppoResult<TypeAnnotati
         Expr::Int(_) => Ok(TypeAnnotation::Int64),
         Expr::Bool(_) => Ok(TypeAnnotation::Bool),
         Expr::Str(_) => Ok(TypeAnnotation::Str),
-        Expr::Float(_) => Ok(TypeAnnotation::Custom("F64".to_string())),
+        Expr::Float(_) => Ok(TypeAnnotation::Float64),
 
         Expr::Var(name) => {
             // Check ownership state before access (read access = can_read)
@@ -1533,6 +1617,18 @@ fn typecheck_expr(expr: &Expr, ctx: &mut TypeContext) -> LppoResult<TypeAnnotati
         }
 
         Expr::Index { target, index } => {
+            if let TypeAnnotation::Tuple(items) = typecheck_expr(target, ctx)?.normalized() {
+                if let Expr::Int(i) = index.as_ref() {
+                    let idx = if *i < 0 { items.len() as i64 + *i } else { *i };
+                    if idx >= 0 && (idx as usize) < items.len() {
+                        return Ok(items[idx as usize].clone());
+                    }
+                }
+                return Ok(items.first().cloned().unwrap_or(TypeAnnotation::Void));
+            }
+            if let TypeAnnotation::Str = typecheck_expr(target, ctx)?.normalized() {
+                return Ok(TypeAnnotation::Char);
+            }
             let target_type = typecheck_expr(target, ctx)?;
             let index_type = typecheck_expr(index, ctx)?;
 
@@ -1812,6 +1908,86 @@ fn typecheck_expr(expr: &Expr, ctx: &mut TypeContext) -> LppoResult<TypeAnnotati
             Ok(TypeAnnotation::Void)
         }
 
+        Expr::Closure {
+            params,
+            return_type,
+            ..
+        } => Ok(TypeAnnotation::Fn {
+            params: params.iter().map(|p| p.typ.clone()).collect(),
+            ret: Box::new(return_type.clone().unwrap_or(TypeAnnotation::Void)),
+        }),
+
+        Expr::Char(_) => Ok(TypeAnnotation::Char),
+        Expr::Byte(_) => Ok(TypeAnnotation::Byte),
+
+        Expr::Tuple(items) => {
+            let mut types = Vec::with_capacity(items.len());
+            for item in items {
+                types.push(typecheck_expr(item, ctx)?);
+            }
+            Ok(TypeAnnotation::Tuple(types))
+        }
+
+        Expr::EnumVariant {
+            enum_name,
+            variant,
+            args,
+        } => {
+            let mut arg_types = Vec::with_capacity(args.len());
+            for arg in args {
+                arg_types.push(typecheck_expr(arg, ctx)?);
+            }
+            // Option / Result are built in and always available.
+            match enum_name.as_str() {
+                "Option" => {
+                    if variant == "Some" {
+                        let inner = arg_types
+                            .first()
+                            .cloned()
+                            .unwrap_or(TypeAnnotation::Void);
+                        Ok(TypeAnnotation::Option(Box::new(inner)))
+                    } else {
+                        Ok(TypeAnnotation::Option(Box::new(TypeAnnotation::Void)))
+                    }
+                }
+                "Result" => {
+                    // `Ok(v)` carries no error type and `Err(e)` no success type;
+                    // they are compatible with any Result<T, E>.
+                    let ok = arg_types.first().cloned().unwrap_or(TypeAnnotation::Void);
+                    let err = arg_types.get(1).cloned().unwrap_or(TypeAnnotation::Void);
+                    Ok(TypeAnnotation::Result(Box::new(ok), Box::new(err)))
+                }
+                _ => {
+                    if let Some(def) = ctx.enums.get(enum_name) {
+                        for (i, field_type) in def
+                            .variants
+                            .iter()
+                            .find(|v| v.name == *variant)
+                            .map(|v| v.fields.clone())
+                            .unwrap_or_default()
+                            .iter()
+                            .enumerate()
+                        {
+                            if let Some(found) = arg_types.get(i) {
+                                if !types_compatible(field_type, found) {
+                                    return Err(LppoError::type_error(format!(
+                                        "variant '{}::{}' field {} expects {} but got {}",
+                                        enum_name,
+                                        variant,
+                                        i,
+                                        field_type.display_name(),
+                                        found.display_name()
+                                    )));
+                                }
+                            }
+                        }
+                        return Ok(TypeAnnotation::Custom(enum_name.clone()));
+                    }
+                    Ok(TypeAnnotation::Custom(format!("{}::{}", enum_name, variant)))
+                }
+            }
+        }
+
         Expr::Async { .. } => Ok(TypeAnnotation::Custom("Future".to_string())),
 
         Expr::Spawn { .. } => Ok(TypeAnnotation::Custom("JoinHandle".to_string())),
@@ -1825,16 +2001,65 @@ fn typecheck_expr(expr: &Expr, ctx: &mut TypeContext) -> LppoResult<TypeAnnotati
     }
 }
 
+/// Calls whose declared return type cannot express their element type
+/// (the runtime is dynamically typed), so `Let` skips the compatibility check.
+fn is_polymorphic_collection_call(expr: &Expr) -> bool {
+    let name = match expr {
+        Expr::Call { func, .. } => match func.as_ref() {
+            Expr::Var(n) => n.as_str(),
+            _ => return false,
+        },
+        _ => return false,
+    };
+    matches!(
+        name,
+        "vec_new"
+            | "vec_push"
+            | "vec_set"
+            | "map_new"
+            | "map_insert"
+            | "map_remove"
+            | "map_keys"
+            | "map_values"
+            | "set_new"
+            | "set_insert"
+            | "set_remove"
+            | "set_to_array"
+            | "set_items"
+            | "tuple_new"
+            | "json_parse"
+            | "either"
+    )
+}
+
 /// Check if two types are compatible
 fn types_compatible(expected: &TypeAnnotation, actual: &TypeAnnotation) -> bool {
-    match (expected, actual) {
-        (TypeAnnotation::Int64, TypeAnnotation::Int64) => true,
-        (TypeAnnotation::Bool, TypeAnnotation::Bool) => true,
-        (TypeAnnotation::Str, TypeAnnotation::Str) => true,
-        (TypeAnnotation::Void, TypeAnnotation::Void) => true,
-        (TypeAnnotation::Arr(e), TypeAnnotation::Arr(a)) => types_compatible(e, a),
-        (TypeAnnotation::Custom(e), TypeAnnotation::Custom(a)) => e == a,
-        (TypeAnnotation::Generic(e_name, e_params), TypeAnnotation::Generic(a_name, a_params)) => {
+    use TypeAnnotation::*;
+    let expected = expected.normalized();
+    let actual = actual.normalized();
+
+    let numeric_rank = |t: &TypeAnnotation| -> std::option::Option<u8> {
+        match t {
+            Int64 => Some(0),
+            Byte => Some(1),
+            Float32 => Some(2),
+            Float64 | Float => Some(3),
+            _ => None,
+        }
+    };
+
+    match (&expected, &actual) {
+        (Int64, Int64) => true,
+        (Bool, Bool) => true,
+        (Char, Char) => true,
+        (Str, Str) => true,
+        (Void, Void) => true,
+        (Arr(e), Arr(a)) => types_compatible(e, a),
+        // The runtime is dynamically typed, so element types of built-in
+        // collections are advisory only.
+        (Set(_), Set(_)) => true,
+        (Custom(e), Custom(a)) => e == a,
+        (Generic(e_name, e_params), Generic(a_name, a_params)) => {
             e_name == a_name
                 && e_params.len() == a_params.len()
                 && e_params
@@ -1842,25 +2067,41 @@ fn types_compatible(expected: &TypeAnnotation, actual: &TypeAnnotation) -> bool 
                     .zip(a_params.iter())
                     .all(|(e, a)| types_compatible(e, a))
         }
-        (TypeAnnotation::Option(e), TypeAnnotation::Option(a)) => types_compatible(e, a),
-        (TypeAnnotation::Result(e_ok, e_err), TypeAnnotation::Result(a_ok, a_err)) => {
+        // `None` has no payload, so it fits any Option<T>.
+        (Option(_), Option(a)) if matches!(**a, Void) => true,
+        (Option(e), Option(a)) => types_compatible(e, a),
+        (Result(_, _), Result(a_ok, a_err))
+            if matches!(**a_ok, Void) || matches!(**a_err, Void) =>
+        {
+            true
+        }
+        (Result(e_ok, e_err), Result(a_ok, a_err)) => {
             types_compatible(e_ok, a_ok) && types_compatible(e_err, a_err)
         }
-        (TypeAnnotation::Tuple(e_types), TypeAnnotation::Tuple(a_types)) => {
+        (Tuple(e_types), Tuple(a_types)) => {
             e_types.len() == a_types.len()
                 && e_types
                     .iter()
                     .zip(a_types.iter())
                     .all(|(e, a)| types_compatible(e, a))
         }
-        (
-            TypeAnnotation::Map(ek, ev),
-            TypeAnnotation::Map(ak, av),
-        ) => types_compatible(ek, ak) && types_compatible(ev, av),
-        (TypeAnnotation::Ref(e_inner, _), TypeAnnotation::Ref(a_inner, _)) => {
-            types_compatible(e_inner, a_inner)
+        (Map(..), Map(..)) => true,
+        (Fn { params: ep, ret: er }, Fn { params: ap, ret: ar }) => {
+            ep.len() == ap.len()
+                && ep
+                    .iter()
+                    .zip(ap.iter())
+                    .all(|(e, a)| types_compatible(e, a))
+                && types_compatible(er, ar)
         }
-        _ => false,
+        (Ref(e_inner, _), Ref(a_inner, _)) => types_compatible(e_inner, a_inner),
+        (Own(e_inner), a) | (a, Own(e_inner)) => types_compatible(e_inner, a),
+        (Mut(e_inner), a) | (a, Mut(e_inner)) => types_compatible(e_inner, a),
+        // Numeric widening: expected wider than actual, or same width.
+        _ => match (numeric_rank(&expected), numeric_rank(&actual)) {
+            (Some(e), Some(a)) => e >= a,
+            _ => false,
+        },
     }
 }
 

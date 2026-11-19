@@ -54,3 +54,7 @@ codex-logs/
 *.sqlite-wal
 *.sqlite-shm
 agent-memory.db
+
+
+target/
+

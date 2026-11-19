@@ -973,6 +973,60 @@ impl<'a> Lexer<'a> {
                 let string = self.read_string()?;
                 Token::StringLiteral(string)
             }
+            b'b' if self.peek() == Some(b'\'') => {
+                self.bump(); // opening quote
+                let byte = match self.bump() {
+                    Some(b'\\') => match self.bump().unwrap_or(b'?') {
+                        b'n' => b'\n',
+                        b't' => b'\t',
+                        b'r' => b'\r',
+                        b'0' => 0,
+                        b'\\' => b'\\',
+                        b'\'' => b'\'',
+                        other => other,
+                    },
+                    Some(c) => c,
+                    None => {
+                        return Err(LppoError::unterminated_string_at(
+                            self.current_token_location(),
+                        ))
+                    }
+                };
+                if self.peek() == Some(b'\'') {
+                    self.bump();
+                }
+                Token::ByteLiteral(byte)
+            }
+            b'\'' => {
+                // Character literal: 'x' or '\n'
+                let mut value = 0u32;
+                match self.bump() {
+                    Some(b'\\') => {
+                        let esc = self.bump().unwrap_or(b'?');
+                        value = match esc {
+                            b'n' => b'\n' as u32,
+                            b't' => b'\t' as u32,
+                            b'r' => b'\r' as u32,
+                            b'0' => 0,
+                            b'\\' => b'\\' as u32,
+                            b'\'' => b'\'' as u32,
+                            b'"' => b'"' as u32,
+                            other => other as u32,
+                        };
+                    }
+                    Some(c) => value = c as u32,
+                    None => {
+                        return Err(LppoError::unterminated_string_at(
+                            self.current_token_location(),
+                        ))
+                    }
+                }
+                // Consume the closing quote.
+                if self.peek() == Some(b'\'') {
+                    self.bump();
+                }
+                Token::CharLiteral(char::from_u32(value).unwrap_or('?'))
+            }
             b'0'..=b'9' => {
                 // read number (integer or float)
                 let mut num_str = String::new();
@@ -1613,11 +1667,13 @@ impl<'a> Lexer<'a> {
 
                     // V5.2: Container Types
                     "Vec" => Token::TypeVec,
-                    "Array" => Token::TypeArray,
-                    "Slice" => Token::TypeSlice,
+                    "Array" => Token::TypeArr,
+                    "Slice" => Token::TypeArr,
                     "HashMap" => Token::TypeHashMap,
                     "Map" => Token::TypeHashMap,
                     "HashSet" => Token::TypeHashSet,
+                    "Set" => Token::TypeHashSet,
+                    "Fn" => Token::TypeFn,
                     "BTreeMap" => Token::TypeBTreeMap,
                     "BTreeSet" => Token::TypeBTreeSet,
                     "LinkedList" => Token::TypeLinkedList,

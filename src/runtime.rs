@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::io::Write;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -278,6 +279,10 @@ enum ControlFlow {
 pub struct ProcedureBody {
     pub params: Vec<String>,
     pub operations: Vec<Operation>,
+    /// Return type of the procedure (None = Void). Needed by the LLVM AOT
+    /// backend to emit the correct function signature. The interpreter
+    /// ignores this field (return values are carried by ControlFlow).
+    pub return_type: Option<crate::ast::TypeAnnotation>,
 }
 
 /// Represents a single executable operation.
@@ -356,10 +361,24 @@ pub enum Operation {
 pub enum Value {
     Int(i64),
     Float(f64),
+    Float32(f32),
     Bool(bool),
+    Char(char),
+    Byte(u8),
     Str(String),
     Array(Vec<Value>),
-    Object(Vec<(String, Value)>),
+    Tuple(Vec<Value>),
+    Map(Vec<(Value, Value)>),
+    Set(Vec<Value>),
+    Struct {
+        name: String,
+        fields: Vec<(String, Value)>,
+    },
+    Enum {
+        name: String,
+        variant: String,
+        fields: Vec<Value>,
+    },
     Closure {
         params: Vec<String>,
         body: Expr,
@@ -375,7 +394,7 @@ fn pattern_matches(
     pattern: &crate::ast::Pattern,
     value: &Value,
     env: &mut HashMap<String, Value>,
-    procedures: &HashMap<String, ProcedureBody>,
+    procedures: &Arc<HashMap<String, ProcedureBody>>,
 ) -> LppoResult<bool> {
     use crate::ast::Pattern;
 
@@ -392,66 +411,70 @@ fn pattern_matches(
             Ok(true)
         }
         Pattern::EnumVariant {
-            variant, fields, ..
+            enum_name,
+            variant,
+            fields,
         } => {
-            // For now, handle Some and None patterns for Option
-            match variant.as_str() {
-                "Some" => {
-                    // Check if value is not the special "None" value
-                    // For simplicity, we'll treat any non-null value as Some
-                    if fields.len() == 1 {
-                        // Bind the inner value
-                        pattern_matches(&fields[0], value, env, procedures)
-                    } else {
-                        Ok(true)
+            match value {
+                Value::Enum {
+                    name: vname,
+                    variant: vvariant,
+                    fields: vfields,
+                } => {
+                    if vvariant != variant {
+                        return Ok(false);
                     }
-                }
-                "None" => {
-                    // Check if value is the special "None" value
-                    // For now, we'll use Int(0) as None
-                    Ok(matches!(value, Value::Int(0)))
-                }
-                "Ok" => {
-                    // Similar to Some
-                    if fields.len() == 1 {
-                        pattern_matches(&fields[0], value, env, procedures)
-                    } else {
-                        Ok(true)
+                    if !enum_name.is_empty() && vname != enum_name {
+                        return Ok(false);
                     }
+                    if fields.len() != vfields.len() {
+                        return Ok(false);
+                    }
+                    for (pat, val) in fields.iter().zip(vfields.iter()) {
+                        if !pattern_matches(pat, val, env, procedures)? {
+                            return Ok(false);
+                        }
+                    }
+                    Ok(true)
                 }
-                "Err" => {
-                    // For now, treat negative numbers as errors
-                    Ok(matches!(value, Value::Int(n) if *n < 0))
-                }
+                // `None` is represented as an empty-payload Option variant.
+                _ if variant == "None" => Ok(values_equal(value, &Value::Enum {
+                    name: "Option".to_string(),
+                    variant: "None".to_string(),
+                    fields: Vec::new(),
+                })),
                 _ => Ok(false),
             }
         }
         Pattern::Tuple(patterns) => {
-            // Match tuple patterns against array values
-            if let Value::Array(arr) = value {
-                if patterns.len() != arr.len() {
-                    return Ok(false);
-                }
-
-                for (pat, val) in patterns.iter().zip(arr.iter()) {
-                    if !pattern_matches(pat, val, env, procedures)? {
+            match value {
+                Value::Tuple(items) | Value::Array(items) => {
+                    if patterns.len() != items.len() {
                         return Ok(false);
                     }
+                    for (pat, val) in patterns.iter().zip(items.iter()) {
+                        if !pattern_matches(pat, val, env, procedures)? {
+                            return Ok(false);
+                        }
+                    }
+                    Ok(true)
                 }
-                Ok(true)
-            } else {
-                Ok(false)
+                _ => Ok(false),
             }
         }
-        Pattern::Struct { name: _, fields } => {
-            // For now, treat structs as arrays where each field matches by position
-            // A full implementation would need actual struct values
-            if let Value::Array(arr) = value {
-                if fields.len() != arr.len() {
+        Pattern::Struct { name, fields } => {
+            if let Value::Struct {
+                name: vname,
+                fields: vfields,
+            } = value
+            {
+                if !name.is_empty() && vname != name {
                     return Ok(false);
                 }
-
-                for ((_, pat), val) in fields.iter().zip(arr.iter()) {
+                for (field, pat) in fields.iter() {
+                    let Some((_, val)) = vfields.iter().find(|(k, _)| k == field) else {
+                        return Ok(false);
+                    };
                     if !pattern_matches(pat, val, env, procedures)? {
                         return Ok(false);
                     }
@@ -480,11 +503,49 @@ fn pattern_matches(
 fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Int(a), Value::Int(b)) => a == b,
+        (Value::Byte(a), Value::Byte(b)) => a == b,
+        (Value::Int(a), Value::Byte(b)) | (Value::Byte(b), Value::Int(a)) => *a == *b as i64,
         (Value::Float(a), Value::Float(b)) => a == b,
+        (Value::Float32(a), Value::Float32(b)) => a == b,
+        (Value::Float(a), Value::Float32(b)) | (Value::Float32(b), Value::Float(a)) => {
+            *a == *b as f64
+        }
         (Value::Bool(a), Value::Bool(b)) => a == b,
+        (Value::Char(a), Value::Char(b)) => a == b,
         (Value::Str(a), Value::Str(b)) => a == b,
-        (Value::Array(a), Value::Array(b)) => a == b,
-        (Value::Object(a), Value::Object(b)) => a == b,
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| values_equal(x, y))
+        }
+        (Value::Tuple(a), Value::Tuple(b)) => {
+            a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| values_equal(x, y))
+        }
+        (Value::Map(a), Value::Map(b)) => {
+            a.len() == b.len()
+                && a.iter().all(|(k, v)| {
+                    b.iter()
+                        .any(|(bk, bv)| values_equal(k, bk) && values_equal(v, bv))
+                })
+        }
+        (Value::Set(a), Value::Set(b)) => {
+            a.len() == b.len() && a.iter().all(|x| b.iter().any(|y| values_equal(x, y)))
+        }
+        (Value::Struct { name: n1, fields: f1 }, Value::Struct { name: n2, fields: f2 }) => {
+            n1 == n2
+                && f1.len() == f2.len()
+                && f1.iter().all(|(k, v)| {
+                    f2.iter()
+                        .any(|(fk, fv)| fk == k && values_equal(v, fv))
+                })
+        }
+        (
+            Value::Enum { name: n1, variant: v1, fields: f1 },
+            Value::Enum { name: n2, variant: v2, fields: f2 },
+        ) => {
+            n1 == n2
+                && v1 == v2
+                && f1.len() == f2.len()
+                && f1.iter().zip(f2.iter()).all(|(x, y)| values_equal(x, y))
+        }
         (Value::Future { id: a }, Value::Future { id: b }) => a == b,
         (Value::JoinHandle { id: a }, Value::JoinHandle { id: b }) => a == b,
         _ => false,
@@ -494,11 +555,39 @@ fn values_equal(a: &Value, b: &Value) -> bool {
 pub(crate) fn eval_expr(
     expr: &Expr,
     env: &mut HashMap<String, Value>,
-    procedures: &HashMap<String, ProcedureBody>,
+    procedures: &Arc<HashMap<String, ProcedureBody>>,
     ring0: bool,
 ) -> LppoResult<Value> {
     match expr {
         Expr::Int(i) => Ok(Value::Int(*i)),
+        Expr::Return(value) => match value {
+            Some(v) => eval_expr(v, env, procedures, ring0),
+            None => Ok(Value::Int(0)),
+        },
+        Expr::Char(c) => Ok(Value::Char(*c)),
+        Expr::Byte(b) => Ok(Value::Byte(*b)),
+        Expr::Tuple(items) => {
+            let mut vals = Vec::with_capacity(items.len());
+            for item in items {
+                vals.push(eval_expr(item, env, procedures, ring0)?);
+            }
+            Ok(Value::Tuple(vals))
+        }
+        Expr::EnumVariant {
+            enum_name,
+            variant,
+            args,
+        } => {
+            let mut vals = Vec::with_capacity(args.len());
+            for arg in args {
+                vals.push(eval_expr(arg, env, procedures, ring0)?);
+            }
+            Ok(Value::Enum {
+                name: enum_name.clone(),
+                variant: variant.clone(),
+                fields: vals,
+            })
+        }
         Expr::Float(f) => {
             let parsed = f
                 .parse::<f64>()
@@ -600,7 +689,7 @@ pub(crate) fn eval_expr(
             }
         }
         Expr::Array(elements) => {
-            let mut values = Vec::new();
+            let mut values = Vec::with_capacity(elements.len());
             for elem in elements {
                 values.push(eval_expr(elem, env, procedures, ring0)?);
             }
@@ -610,6 +699,14 @@ pub(crate) fn eval_expr(
             let target_val = eval_expr(target, env, procedures, ring0)?;
             let index_val = eval_expr(index, env, procedures, ring0)?;
             match (target_val, index_val) {
+                (Value::Tuple(items), Value::Int(idx)) => {
+                    let len = items.len() as i64;
+                    let i = if idx < 0 { len + idx } else { idx };
+                    if i < 0 || i >= len {
+                        return Err(LppoError::type_error("tuple index out of bounds".into()));
+                    }
+                    Ok(items[i as usize].clone())
+                }
                 (Value::Array(arr), Value::Int(idx)) => {
                     let i = if idx < 0 {
                         (arr.len() as i64 + idx) as usize
@@ -667,7 +764,7 @@ pub(crate) fn eval_expr(
                     }
                     let closure_val = eval_expr(&args[0], env, procedures, ring0)?;
 
-                    let mut result = Vec::new();
+                    let mut result = Vec::with_capacity(arr.len());
                     for item in arr {
                         match closure_val.clone() {
                             Value::Closure {
@@ -702,7 +799,7 @@ pub(crate) fn eval_expr(
                     }
                     let closure_val = eval_expr(&args[0], env, procedures, ring0)?;
 
-                    let mut result = Vec::new();
+                    let mut result = Vec::with_capacity(arr.len());
                     for item in arr {
                         match closure_val.clone() {
                             Value::Closure {
@@ -762,21 +859,22 @@ pub(crate) fn eval_expr(
                 _ => Err(LppoError::type_error(format!("unknown method: {}", method))),
             }
         }
-        Expr::StructInit { name: _, fields } => {
-            let mut values = Vec::new();
+        Expr::StructInit { name, fields } => {
+            let mut values = Vec::with_capacity(fields.len());
             for (field_name, expr) in fields {
                 let val = eval_expr(expr, env, procedures, ring0)?;
                 values.push((field_name.clone(), val));
             }
-            Ok(Value::Object(values))
+            Ok(Value::Struct {
+                name: name.clone(),
+                fields: values,
+            })
         }
         Expr::FieldAccess { target, field } => {
             let target_val = eval_expr(target, env, procedures, ring0)?;
-            if let Value::Object(fields) = &target_val {
-                for (name, value) in fields {
-                    if name == field {
-                        return Ok(value.clone());
-                    }
+            if let Value::Struct { fields, .. } = &target_val {
+                if let Some((_, value)) = fields.iter().find(|(k, _)| k == field) {
+                    return Ok(value.clone());
                 }
                 return Err(LppoError::type_error(format!(
                     "object has no field '{}'",
@@ -860,7 +958,7 @@ pub(crate) fn eval_expr(
         }
         Expr::Call { func, args } => {
             // Evaluate arguments
-            let mut arg_vals = Vec::new();
+            let mut arg_vals = Vec::with_capacity(args.len());
             for arg in args {
                 arg_vals.push(eval_expr(arg, env, procedures, ring0)?);
             }
@@ -2097,12 +2195,12 @@ pub(crate) fn eval_expr(
                             ));
                         }
                     }
-                    // Collections: HashMap (backed by Object)
+                    // Collections: insertion-ordered Map with scalar keys
                     "map_new" => {
                         if arg_vals.len() != 0 {
                             return Err(LppoError::type_error("map_new takes no arguments".into()));
                         }
-                        return Ok(Value::Object(Vec::new()));
+                        return Ok(Value::Map(Vec::new()));
                     }
                     "map_insert" => {
                         if arg_vals.len() != 3 {
@@ -2110,20 +2208,21 @@ pub(crate) fn eval_expr(
                                 "map_insert requires 3 arguments (map, key, value)".into(),
                             ));
                         }
-                        if let (Value::Object(fields), Value::Str(key)) = (&arg_vals[0], &arg_vals[1])
-                        {
-                            let mut fields = fields.clone();
-                            if let Some(entry) = fields.iter_mut().find(|(k, _)| k == key) {
-                                entry.1 = arg_vals[2].clone();
+                        if let Value::Map(entries) = &arg_vals[0] {
+                            let mut entries = entries.clone();
+                            if let Some(slot) = entries
+                                .iter_mut()
+                                .find(|(k, _)| values_equal(k, &arg_vals[1]))
+                            {
+                                slot.1 = arg_vals[2].clone();
                             } else {
-                                fields.push((key.clone(), arg_vals[2].clone()));
+                                entries.push((arg_vals[1].clone(), arg_vals[2].clone()));
                             }
-                            return Ok(Value::Object(fields));
-                        } else {
-                            return Err(LppoError::type_error(
-                                "map_insert arguments must be (map, string, value)".into(),
-                            ));
+                            return Ok(Value::Map(entries));
                         }
+                        return Err(LppoError::type_error(
+                            "map_insert first argument must be a map".into(),
+                        ));
                     }
                     "map_get" => {
                         if arg_vals.len() != 2 {
@@ -2131,21 +2230,18 @@ pub(crate) fn eval_expr(
                                 "map_get requires 2 arguments (map, key)".into(),
                             ));
                         }
-                        if let (Value::Object(fields), Value::Str(key)) = (&arg_vals[0], &arg_vals[1])
-                        {
-                            match fields.iter().find(|(k, _)| k == key) {
-                                Some((_, v)) => return Ok(v.clone()),
-                                None => {
-                                    return Err(LppoError::type_error(
-                                        "map_get key not found".into(),
-                                    ))
-                                }
+                        if let Value::Map(entries) = &arg_vals[0] {
+                            if let Some((_, v)) = entries
+                                .iter()
+                                .find(|(k, _)| values_equal(k, &arg_vals[1]))
+                            {
+                                return Ok(v.clone());
                             }
-                        } else {
-                            return Err(LppoError::type_error(
-                                "map_get arguments must be (map, string)".into(),
-                            ));
+                            return Err(LppoError::type_error("map_get key not found".into()));
                         }
+                        return Err(LppoError::type_error(
+                            "map_get first argument must be a map".into(),
+                        ));
                     }
                     "map_remove" => {
                         if arg_vals.len() != 2 {
@@ -2153,22 +2249,20 @@ pub(crate) fn eval_expr(
                                 "map_remove requires 2 arguments (map, key)".into(),
                             ));
                         }
-                        if let (Value::Object(fields), Value::Str(key)) = (&arg_vals[0], &arg_vals[1])
-                        {
-                            let mut fields = fields.clone();
-                            if let Some(pos) = fields.iter().position(|(k, _)| k == key) {
-                                fields.remove(pos);
-                                return Ok(Value::Object(fields));
-                            } else {
-                                return Err(LppoError::type_error(
-                                    "map_remove key not found".into(),
-                                ));
+                        if let Value::Map(entries) = &arg_vals[0] {
+                            let mut entries = entries.clone();
+                            if let Some(pos) = entries
+                                .iter()
+                                .position(|(k, _)| values_equal(k, &arg_vals[1]))
+                            {
+                                entries.remove(pos);
+                                return Ok(Value::Map(entries));
                             }
-                        } else {
-                            return Err(LppoError::type_error(
-                                "map_remove first argument must be a map".into(),
-                            ));
+                            return Err(LppoError::type_error("map_remove key not found".into()));
                         }
+                        return Err(LppoError::type_error(
+                            "map_remove first argument must be a map".into(),
+                        ));
                     }
                     "map_len" => {
                         if arg_vals.len() != 1 {
@@ -2176,13 +2270,10 @@ pub(crate) fn eval_expr(
                                 "map_len requires 1 argument (map)".into(),
                             ));
                         }
-                        if let Value::Object(fields) = &arg_vals[0] {
-                            return Ok(Value::Int(fields.len() as i64));
-                        } else {
-                            return Err(LppoError::type_error(
-                                "map_len argument must be a map".into(),
-                            ));
+                        if let Value::Map(entries) = &arg_vals[0] {
+                            return Ok(Value::Int(entries.len() as i64));
                         }
+                        return Err(LppoError::type_error("map_len argument must be a map".into()));
                     }
                     "map_keys" => {
                         if arg_vals.len() != 1 {
@@ -2190,17 +2281,169 @@ pub(crate) fn eval_expr(
                                 "map_keys requires 1 argument (map)".into(),
                             ));
                         }
-                        if let Value::Object(fields) = &arg_vals[0] {
-                            let keys: Vec<Value> = fields
-                                .iter()
-                                .map(|(k, _)| Value::Str(k.clone()))
-                                .collect();
+                        if let Value::Map(entries) = &arg_vals[0] {
+                            let keys: Vec<Value> =
+                                entries.iter().map(|(k, _)| k.clone()).collect();
                             return Ok(Value::Array(keys));
-                        } else {
+                        }
+                        return Err(LppoError::type_error(
+                            "map_keys argument must be a map".into(),
+                        ));
+                    }
+                    "map_values" => {
+                        if arg_vals.len() != 1 {
                             return Err(LppoError::type_error(
-                                "map_keys argument must be a map".into(),
+                                "map_values requires 1 argument (map)".into(),
                             ));
                         }
+                        if let Value::Map(entries) = &arg_vals[0] {
+                            let vals: Vec<Value> =
+                                entries.iter().map(|(_, v)| v.clone()).collect();
+                            return Ok(Value::Array(vals));
+                        }
+                        return Err(LppoError::type_error(
+                            "map_values argument must be a map".into(),
+                        ));
+                    }
+                    // Collections: insertion-ordered Set
+                    "set_new" => {
+                        if arg_vals.len() != 0 {
+                            return Err(LppoError::type_error("set_new takes no arguments".into()));
+                        }
+                        return Ok(Value::Set(Vec::new()));
+                    }
+                    "set_insert" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "set_insert requires 2 arguments (set, value)".into(),
+                            ));
+                        }
+                        if let Value::Set(items) = &arg_vals[0] {
+                            let mut items = items.clone();
+                            if !items.iter().any(|x| values_equal(x, &arg_vals[1])) {
+                                items.push(arg_vals[1].clone());
+                            }
+                            return Ok(Value::Set(items));
+                        }
+                        return Err(LppoError::type_error(
+                            "set_insert first argument must be a set".into(),
+                        ));
+                    }
+                    "set_contains" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "set_contains requires 2 arguments (set, value)".into(),
+                            ));
+                        }
+                        if let Value::Set(items) = &arg_vals[0] {
+                            return Ok(Value::Bool(
+                                items.iter().any(|x| values_equal(x, &arg_vals[1])),
+                            ));
+                        }
+                        return Err(LppoError::type_error(
+                            "set_contains first argument must be a set".into(),
+                        ));
+                    }
+                    "set_remove" => {
+                        if arg_vals.len() != 2 {
+                            return Err(LppoError::type_error(
+                                "set_remove requires 2 arguments (set, value)".into(),
+                            ));
+                        }
+                        if let Value::Set(items) = &arg_vals[0] {
+                            let mut items = items.clone();
+                            items.retain(|x| !values_equal(x, &arg_vals[1]));
+                            return Ok(Value::Set(items));
+                        }
+                        return Err(LppoError::type_error(
+                            "set_remove first argument must be a set".into(),
+                        ));
+                    }
+                    "set_len" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "set_len requires 1 argument (set)".into(),
+                            ));
+                        }
+                        if let Value::Set(items) = &arg_vals[0] {
+                            return Ok(Value::Int(items.len() as i64));
+                        }
+                        return Err(LppoError::type_error("set_len argument must be a set".into()));
+                    }
+                    "set_to_array" | "set_items" => {
+                        if arg_vals.len() != 1 {
+                            return Err(LppoError::type_error(
+                                "set_to_array requires 1 argument (set)".into(),
+                            ));
+                        }
+                        if let Value::Set(items) = &arg_vals[0] {
+                            return Ok(Value::Array(items.clone()));
+                        }
+                        return Err(LppoError::type_error(
+                            "set_to_array argument must be a set".into(),
+                        ));
+                    }
+                    // Tuple / Enum / Struct accessors
+                    "tuple_new" => return Ok(Value::Tuple(arg_vals)),
+                    "tuple_get" => {
+                        if let (Value::Tuple(items), Value::Int(idx)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            let len = items.len() as i64;
+                            let i = if *idx < 0 { len + *idx } else { *idx };
+                            if i < 0 || i >= len {
+                                return Err(LppoError::type_error(
+                                    "tuple index out of bounds".into(),
+                                ));
+                            }
+                            return Ok(items[i as usize].clone());
+                        }
+                        return Err(LppoError::type_error(
+                            "tuple_get arguments must be (tuple, int)".into(),
+                        ));
+                    }
+                    "enum_tag" => {
+                        if let Value::Enum { variant, .. } = &arg_vals[0] {
+                            return Ok(Value::Str(variant.clone()));
+                        }
+                        return Ok(Value::Str(String::new()));
+                    }
+                    "enum_variant" => {
+                        if let Value::Enum { name, variant, .. } = &arg_vals[0] {
+                            return Ok(Value::Str(format!("{}::{}", name, variant)));
+                        }
+                        return Ok(Value::Str(String::new()));
+                    }
+                    "enum_get" => {
+                        if let (Value::Enum { fields, .. }, Value::Int(idx)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            if *idx >= 0 && (*idx as usize) < fields.len() {
+                                return Ok(fields[*idx as usize].clone());
+                            }
+                            return Err(LppoError::type_error(
+                                "enum field index out of bounds".into(),
+                            ));
+                        }
+                        return Err(LppoError::type_error(
+                            "enum_get arguments must be (enum, int)".into(),
+                        ));
+                    }
+                    "struct_field" => {
+                        if let (Value::Struct { fields, .. }, Value::Str(name)) =
+                            (&arg_vals[0], &arg_vals[1])
+                        {
+                            if let Some((_, v)) = fields.iter().find(|(k, _)| k == name) {
+                                return Ok(v.clone());
+                            }
+                            return Err(LppoError::type_error(format!(
+                                "struct has no field '{}'",
+                                name
+                            )));
+                        }
+                        return Err(LppoError::type_error(
+                            "struct_field arguments must be (struct, string)".into(),
+                        ));
                     }
                     // Memory pool
                     "pool_alloc" => {
@@ -2476,7 +2719,7 @@ pub(crate) fn eval_expr(
                         if let (Value::Array(arr), Value::Array(indices)) =
                             (&arg_vals[0], &arg_vals[1])
                         {
-                            let mut result = Vec::new();
+                            let mut result = Vec::with_capacity(arr.len());
                             for index in indices {
                                 if let Value::Int(idx) = index {
                                     match arr.get(*idx as usize) {
@@ -2771,7 +3014,7 @@ pub(crate) fn eval_expr(
                             }
 
                             // Execute the full procedure body and capture the return value.
-                            let exec = Executor::new(procedures.clone(), ring0);
+                            let exec = Executor::new(Arc::clone(procedures), ring0);
                             let ret = exec.execute_procedure_with_env(proc_body, &mut proc_env)?;
                             return Ok(ret.unwrap_or(Value::Int(0)));
                         } else {
@@ -2828,7 +3071,21 @@ pub(crate) fn eval_expr(
                     }
 
                     // Execute the arm body
-                    return eval_expr(&arm.body, env, procedures, ring0);
+                    return match &arm.body {
+                        crate::ast::MatchArmBody::Expr(e) => {
+                            eval_expr(e, env, procedures, ring0)
+                        }
+                        crate::ast::MatchArmBody::Emit(exprs) => {
+                            let mut rendered = Vec::with_capacity(exprs.len());
+                            for e in exprs {
+                                rendered.push(value_to_string(&eval_expr(
+                                    e, env, procedures, ring0,
+                                )?));
+                            }
+                            println!("{}", rendered.join(" "));
+                            Ok(Value::Int(0))
+                        }
+                    };
                 }
             }
 
@@ -2905,20 +3162,20 @@ pub(crate) fn eval_expr(
 /// Executes compiled LPPO procedures.
 #[derive(Debug, Clone)]
 pub struct Executor {
-    procedures: HashMap<String, ProcedureBody>,
+    procedures: Arc<HashMap<String, ProcedureBody>>,
     ring0: bool,
     context: crate::pkg::library::PackageContext,
 }
 
 impl Executor {
     /// Create a new executor from compiled procedures (global package context).
-    pub fn new(procedures: HashMap<String, ProcedureBody>, ring0: bool) -> Self {
+    pub fn new(procedures: Arc<HashMap<String, ProcedureBody>>, ring0: bool) -> Self {
         Self { procedures, ring0, context: crate::pkg::library::PackageContext::Global }
     }
 
     /// Create a new executor with the given package context.
     pub fn with_context(
-        procedures: HashMap<String, ProcedureBody>,
+        procedures: Arc<HashMap<String, ProcedureBody>>,
         ring0: bool,
         context: crate::pkg::library::PackageContext,
     ) -> Self {
@@ -2973,7 +3230,7 @@ impl Executor {
             match op {
                 Operation::Emit(exprs) => {
                     // evaluate all expressions and join them with spaces
-                    let mut parts = Vec::new();
+                    let mut parts = Vec::with_capacity(exprs.len());
                     for e in exprs {
                         let v = eval_expr(e, env, &self.procedures, self.ring0)?;
                         parts.push(value_to_string(&v));
@@ -3338,7 +3595,7 @@ impl Executor {
                 }
                 Operation::Call(name, args) => {
                     // Evaluate argument expressions in current env
-                    let mut arg_vals = Vec::new();
+                    let mut arg_vals = Vec::with_capacity(args.len());
                     for a in args {
                         arg_vals.push(eval_expr(a, env, &self.procedures, self.ring0)?);
                     }
@@ -3561,7 +3818,7 @@ fn execute_ops_standalone(
     procedures: &HashMap<String, ProcedureBody>,
     ring0: bool,
 ) -> LppoResult<ControlFlow> {
-    let dummy = Executor::new(procedures.clone(), ring0);
+    let dummy = Executor::new(Arc::new(procedures.clone()), ring0);
     dummy.execute_ops(ops, env)
 }
 
@@ -3574,13 +3831,32 @@ fn value_to_json(v: &Value) -> serde_json::Value {
         ),
         Value::Bool(b) => serde_json::Value::Bool(*b),
         Value::Str(s) => serde_json::Value::String(s.clone()),
+        Value::Float32(f) => serde_json::Value::Number(
+            serde_json::Number::from_f64(*f as f64).unwrap_or(serde_json::Number::from(0)),
+        ),
+        Value::Char(c) => serde_json::Value::String(c.to_string()),
+        Value::Byte(b) => serde_json::Value::Number(serde_json::Number::from(*b)),
         Value::Array(arr) => serde_json::Value::Array(arr.iter().map(value_to_json).collect()),
-        Value::Object(fields) => {
+        Value::Tuple(items) => {
+            serde_json::Value::Array(items.iter().map(value_to_json).collect())
+        }
+        Value::Set(items) => serde_json::Value::Array(items.iter().map(value_to_json).collect()),
+        Value::Map(entries) => {
+            let mut map = serde_json::Map::new();
+            for (k, val) in entries {
+                map.insert(value_to_string(k), value_to_json(val));
+            }
+            serde_json::Value::Object(map)
+        }
+        Value::Struct { fields, .. } => {
             let mut map = serde_json::Map::new();
             for (k, val) in fields {
                 map.insert(k.clone(), value_to_json(val));
             }
             serde_json::Value::Object(map)
+        }
+        Value::Enum { fields, .. } => {
+            serde_json::Value::Array(fields.iter().map(value_to_json).collect())
         }
         Value::Closure { .. } => serde_json::Value::String("<closure>".to_string()),
         Value::Future { id } => serde_json::Value::String(format!("<future {id}>")),
@@ -3605,11 +3881,14 @@ fn json_to_value(jv: &serde_json::Value) -> Value {
         serde_json::Value::String(s) => Value::Str(s.clone()),
         serde_json::Value::Array(arr) => Value::Array(arr.iter().map(json_to_value).collect()),
         serde_json::Value::Object(map) => {
-            let mut fields = Vec::new();
+            let mut fields = Vec::with_capacity(map.len());
             for (k, val) in map {
                 fields.push((k.clone(), json_to_value(val)));
             }
-            Value::Object(fields)
+            Value::Struct {
+                name: "Object".to_string(),
+                fields,
+            }
         }
     }
 }
@@ -3750,22 +4029,50 @@ fn terminal_size() -> (i64, i64) {
 }
 
 // Helper to convert Value to string
-fn value_to_string(v: &Value) -> String {
+pub fn value_to_string(v: &Value) -> String {
     match v {
         Value::Int(i) => i.to_string(),
+        Value::Byte(b) => b.to_string(),
         Value::Float(f) => f.to_string(),
+        Value::Float32(f) => f.to_string(),
+        Value::Char(c) => format!("'{}'", c),
         Value::Str(s) => s.clone(),
         Value::Bool(b) => b.to_string(),
         Value::Array(arr) => {
             let items: Vec<String> = arr.iter().map(value_to_string).collect();
             format!("[{}]", items.join(", "))
         }
-        Value::Object(fields) => {
-            let items: Vec<String> = fields
+        Value::Tuple(items) => {
+            let rendered: Vec<String> = items.iter().map(value_to_string).collect();
+            format!("({})", rendered.join(", "))
+        }
+        Value::Map(entries) => {
+            let items: Vec<String> = entries
                 .iter()
-                .map(|(k, v)| format!("\"{}\": {}", k, value_to_string(v)))
+                .map(|(k, v)| format!("{}: {}", value_to_string(k), value_to_string(v)))
                 .collect();
             format!("{{{}}}", items.join(", "))
+        }
+        Value::Set(items) => {
+            let rendered: Vec<String> = items.iter().map(value_to_string).collect();
+            format!("{{{}}}", rendered.join(", "))
+        }
+        Value::Struct { name, fields } => {
+            let rendered: Vec<String> = fields
+                .iter()
+                .map(|(k, v)| format!("{}: {}", k, value_to_string(v)))
+                .collect();
+            format!("{} {{ {} }}", name, rendered.join(", "))
+        }
+        Value::Enum {
+            variant, fields, ..
+        } => {
+            if fields.is_empty() {
+                variant.clone()
+            } else {
+                let rendered: Vec<String> = fields.iter().map(value_to_string).collect();
+                format!("{}({})", variant, rendered.join(", "))
+            }
         }
         Value::Closure { params, .. } => {
             format!("<closure with {} params>", params.len())
@@ -3780,10 +4087,17 @@ fn is_truthy(v: &Value) -> bool {
     match v {
         Value::Bool(b) => *b,
         Value::Int(i) => *i != 0,
+        Value::Byte(b) => *b != 0,
         Value::Float(f) => *f != 0.0,
+        Value::Float32(f) => *f != 0.0,
+        Value::Char(c) => *c != '\0',
         Value::Str(s) => !s.is_empty(),
         Value::Array(arr) => !arr.is_empty(),
-        Value::Object(fields) => !fields.is_empty(),
+        Value::Tuple(items) => !items.is_empty(),
+        Value::Map(entries) => !entries.is_empty(),
+        Value::Set(items) => !items.is_empty(),
+        Value::Struct { .. } => true,
+        Value::Enum { variant, .. } => variant != "None" && variant != "Err",
         Value::Closure { .. } => true, // Closures are always truthy
         Value::Future { .. } => true,
         Value::JoinHandle { .. } => true,
@@ -3837,7 +4151,7 @@ pub fn executor_from_bytes(bytes: &[u8]) -> LppoResult<Executor> {
     };
     let map: HashMap<String, ProcedureBody> =
         serde_json::from_slice(&bytes).map_err(|e| LppoError::type_error(e.to_string()))?;
-    Ok(Executor::new(map, false))
+    Ok(Executor::new(Arc::new(map), false))
 }
 
 /// Deserialize procedures from a bundle payload produced by
@@ -3856,7 +4170,7 @@ pub fn executor_from_bundle_bytes(bytes: &[u8]) -> LppoResult<Executor> {
 
     let procedures: HashMap<String, ProcedureBody> =
         serde_json::from_slice(proc_json).map_err(|e| LppoError::type_error(e.to_string()))?;
-    Ok(Executor::new(procedures, false))
+    Ok(Executor::new(Arc::new(procedures), false))
 }
 
 #[cfg(test)]
@@ -3866,7 +4180,7 @@ mod tests {
 
     #[test]
     fn reports_missing_procedure() {
-        let exec = Executor::new(HashMap::new(), false);
+        let exec = Executor::new(Arc::new(HashMap::new()), false);
         let err = exec.run("main").expect_err("missing main");
         assert!(matches!(err, LppoError::UnknownProcedure { name, .. } if name == "main"));
     }
@@ -3874,7 +4188,7 @@ mod tests {
     #[test]
     fn test_range_expression() {
         let mut env = HashMap::new();
-        let procedures = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         // Test exclusive range 1..5
         let range_expr = Expr::Range {
@@ -3916,7 +4230,7 @@ mod tests {
     #[test]
     fn test_closure_creation() {
         let mut env = HashMap::new();
-        let procedures = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         // Create a closure: |x: Int64| -> Int64 { return x * 2; }
         let closure_expr = Expr::Closure {
@@ -3946,7 +4260,7 @@ mod tests {
     #[test]
     fn test_closure_call() {
         let mut env = HashMap::new();
-        let procedures = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         // Create a closure
         let closure = Value::Closure {
@@ -3975,7 +4289,7 @@ mod tests {
     #[test]
     fn test_tuple_pattern_matching() {
         let mut env = HashMap::new();
-        let procedures = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         // Test matching [1, 2] against tuple pattern
         let value = Value::Array(vec![Value::Int(1), Value::Int(2)]);
@@ -3996,7 +4310,7 @@ mod tests {
     #[test]
     fn test_or_pattern_matching() {
         let mut env = HashMap::new();
-        let procedures = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         // Test matching with or pattern: 1 | 2 | 3
         let value = Value::Int(2);

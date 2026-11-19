@@ -13,6 +13,7 @@ mkdir -p "$BIN_DIR"
 
 cp "$SCRIPT_DIR/repositories.json" "$INSTALL_DIR/repositories.json"
 cp "$SCRIPT_DIR/target/release/lppo" "$BIN_DIR/lppo"
+cp "$SCRIPT_DIR/target/debug/liblppo_rt.a" "$BIN_DIR/liblppo_rt.a"
 
 chmod +x "$BIN_DIR/lppo"
 

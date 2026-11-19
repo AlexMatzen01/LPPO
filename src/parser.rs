@@ -657,6 +657,96 @@ impl<'a> Parser<'a> {
                 self.expect(Token::Greater)?;
                 Ok(TypeAnnotation::Result(Box::new(ok), Box::new(err)))
             }
+            Token::TypeF32 => {
+                self.advance()?;
+                Ok(TypeAnnotation::Float32)
+            }
+            Token::TypeF64 => {
+                self.advance()?;
+                Ok(TypeAnnotation::Float64)
+            }
+            Token::TypeChar => {
+                self.advance()?;
+                Ok(TypeAnnotation::Char)
+            }
+            Token::TypeByte => {
+                self.advance()?;
+                Ok(TypeAnnotation::Byte)
+            }
+            Token::TypeVec | Token::TypeArray => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Arr(Box::new(inner)))
+            }
+            Token::TypeHashSet => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let inner = self.parse_type()?;
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Set(Box::new(inner)))
+            }
+            Token::TypeTuple => {
+                self.advance()?;
+                self.expect(Token::Less)?;
+                let mut items = Vec::new();
+                loop {
+                    items.push(self.parse_type()?);
+                    if self.lookahead == Token::Comma {
+                        self.advance()?;
+                    } else {
+                        break;
+                    }
+                }
+                self.expect(Token::Greater)?;
+                Ok(TypeAnnotation::Tuple(items))
+            }
+            Token::TypeFn => {
+                self.advance()?;
+                self.expect(Token::LParen)?;
+                let mut params = Vec::new();
+                if self.lookahead != Token::RParen {
+                    loop {
+                        params.push(self.parse_type()?);
+                        if self.lookahead == Token::Comma {
+                            self.advance()?;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                self.expect(Token::RParen)?;
+                let ret = if self.lookahead == Token::Arrow {
+                    self.advance()?;
+                    self.parse_type()?
+                } else {
+                    TypeAnnotation::Void
+                };
+                Ok(TypeAnnotation::Fn {
+                    params,
+                    ret: Box::new(ret),
+                })
+            }
+            Token::LParen => {
+                self.advance()?;
+                let mut items = vec![self.parse_type()?];
+                let mut is_tuple = false;
+                while self.lookahead == Token::Comma {
+                    is_tuple = true;
+                    self.advance()?;
+                    if self.lookahead == Token::RParen {
+                        break;
+                    }
+                    items.push(self.parse_type()?);
+                }
+                self.expect(Token::RParen)?;
+                if is_tuple {
+                    Ok(TypeAnnotation::Tuple(items))
+                } else {
+                    Ok(items.remove(0))
+                }
+            }
             Token::Ref => {
                 self.advance()?;
                 let lifetime = if let Token::Lifetime(lt) = &self.lookahead {
@@ -809,15 +899,20 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // Create a placeholder expression that represents the out
-            // For now, we'll use the first expression or Int(0)
-            if exprs.is_empty() {
-                Expr::Int(0)
+            crate::ast::MatchArmBody::Emit(exprs)
+        } else if self.lookahead == Token::Return {
+            self.advance()?;
+            let value = if matches!(
+                self.lookahead,
+                Token::Semicolon | Token::Comma | Token::RBrace | Token::Eof
+            ) {
+                None
             } else {
-                exprs.into_iter().next().unwrap()
-            }
+                Some(Box::new(self.parse_expression()?))
+            };
+            crate::ast::MatchArmBody::Expr(Expr::Return(value))
         } else {
-            self.parse_expression()?
+            crate::ast::MatchArmBody::Expr(self.parse_expression()?)
         };
 
         Ok(MatchArm {
@@ -839,9 +934,17 @@ impl<'a> Parser<'a> {
                 self.advance()?;
                 Ok(Pattern::Literal(Expr::Int(n)))
             }
-            Token::StringLiteral(s) => {
+            Token::StringLiteral(text) => {
                 self.advance()?;
-                Ok(Pattern::Literal(Expr::Str(s)))
+                Ok(Pattern::Literal(Expr::Str(text)))
+            }
+            Token::CharLiteral(c) => {
+                self.advance()?;
+                Ok(Pattern::Literal(Expr::Char(c)))
+            }
+            Token::ByteLiteral(b) => {
+                self.advance()?;
+                Ok(Pattern::Literal(Expr::Byte(b)))
             }
             Token::Identifier(name) if name == "true" => {
                 self.advance()?;
@@ -851,64 +954,37 @@ impl<'a> Parser<'a> {
                 self.advance()?;
                 Ok(Pattern::Literal(Expr::Bool(false)))
             }
-            Token::Identifier(name) => {
-                // Could be a variable binding or enum variant
+            Token::Identifier(_) => {
+                let name = match self.lookahead.clone() {
+                    Token::Identifier(n) => n,
+                    _ => unreachable!(),
+                };
                 self.advance()?;
-
-                // Check if it's an enum variant (followed by optional fields)
-                if self.lookahead == Token::LParen {
-                    // Enum variant with fields: Some(x)
-                    self.advance()?;
-                    let mut fields = Vec::new();
-                    if self.lookahead != Token::RParen {
-                        loop {
-                            fields.push(self.parse_pattern()?);
-                            if self.lookahead == Token::Comma {
-                                self.advance()?;
-                            } else {
-                                break;
-                            }
+                self.finish_pattern_name(name, String::new())
+            }
+            Token::LParen => {
+                self.advance()?;
+                let first = self.parse_pattern()?;
+                if self.lookahead == Token::Comma {
+                    let mut items = vec![first];
+                    while self.lookahead == Token::Comma {
+                        self.advance()?;
+                        if self.lookahead == Token::RParen {
+                            break;
                         }
+                        items.push(self.parse_pattern()?);
                     }
                     self.expect(Token::RParen)?;
-                    Ok(Pattern::EnumVariant {
-                        enum_name: String::new(), // Inferred from context
-                        variant: name,
-                        fields,
-                    })
+                    Ok(Pattern::Tuple(items))
                 } else {
-                    // Simple variable binding
-                    Ok(Pattern::Variable(name))
+                    self.expect(Token::RParen)?;
+                    Ok(first)
                 }
             }
             tok if self.token_as_identifier(&tok).is_some() => {
-                // Handle type tokens as identifiers (e.g., Some, None, Ok, Err)
                 let name = self.token_as_identifier(&tok).unwrap();
                 self.advance()?;
-
-                if self.lookahead == Token::LParen {
-                    // Enum variant with fields
-                    self.advance()?;
-                    let mut fields = Vec::new();
-                    if self.lookahead != Token::RParen {
-                        loop {
-                            fields.push(self.parse_pattern()?);
-                            if self.lookahead == Token::Comma {
-                                self.advance()?;
-                            } else {
-                                break;
-                            }
-                        }
-                    }
-                    self.expect(Token::RParen)?;
-                    Ok(Pattern::EnumVariant {
-                        enum_name: String::new(),
-                        variant: name,
-                        fields,
-                    })
-                } else {
-                    Ok(Pattern::Variable(name))
-                }
+                self.finish_pattern_name(name, String::new())
             }
             _ => Err(LppoError::unexpected_token_at(
                 "pattern",
@@ -918,13 +994,120 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Complete a pattern that started with `name`, handling qualified
+    /// variants (`Shape::Circle(x)`), struct patterns (`Point { x, y }`),
+    /// tuple variants (`Some(x)`), bare `None`, and plain bindings.
+    fn finish_pattern_name(
+        &mut self,
+        name: String,
+        _unused: String,
+    ) -> LppoResult<crate::ast::Pattern> {
+        use crate::ast::Pattern;
+
+        // Qualified enum variant: Enum::Variant or Enum::Variant(fields)
+        if self.lookahead == Token::DoubleColon {
+            self.advance()?;
+            let variant = match self.token_as_identifier(&self.lookahead.clone()) {
+                Some(v) => {
+                    self.advance()?;
+                    v
+                }
+                None => {
+                    return Err(LppoError::unexpected_token_at(
+                        "enum variant",
+                        &format!("{:?}", self.lookahead),
+                        self.position.clone(),
+                    ))
+                }
+            };
+            let fields = if self.lookahead == Token::LParen {
+                self.parse_pattern_fields()?
+            } else {
+                Vec::new()
+            };
+            return Ok(Pattern::EnumVariant {
+                enum_name: name,
+                variant,
+                fields,
+            });
+        }
+
+        // Struct pattern: Point { x, y }
+        if self.lookahead == Token::LBrace {
+            self.advance()?;
+            let mut fields = Vec::new();
+            while self.lookahead != Token::RBrace && self.lookahead != Token::Eof {
+                let field = match self.token_as_identifier(&self.lookahead.clone()) {
+                    Some(f) => {
+                        self.advance()?;
+                        f
+                    }
+                    None => {
+                        return Err(LppoError::unexpected_token_at(
+                            "field name",
+                            &format!("{:?}", self.lookahead),
+                            self.position.clone(),
+                        ))
+                    }
+                };
+                let pat = if self.lookahead == Token::Colon {
+                    self.advance()?;
+                    self.parse_pattern()?
+                } else {
+                    Pattern::Variable(field.clone())
+                };
+                fields.push((field, pat));
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                }
+            }
+            self.expect(Token::RBrace)?;
+            return Ok(Pattern::Struct { name, fields });
+        }
+
+        // Tuple-style variant or call-like pattern: Some(x)
+        if self.lookahead == Token::LParen {
+            let fields = self.parse_pattern_fields()?;
+            return Ok(Pattern::EnumVariant {
+                enum_name: String::new(),
+                variant: name,
+                fields,
+            });
+        }
+
+        // Bare `None` is the Option::None variant; everything else binds.
+        if name == "None" {
+            return Ok(Pattern::EnumVariant {
+                enum_name: "Option".to_string(),
+                variant: "None".to_string(),
+                fields: Vec::new(),
+            });
+        }
+
+        Ok(Pattern::Variable(name))
+    }
+
+    fn parse_pattern_fields(&mut self) -> LppoResult<Vec<crate::ast::Pattern>> {
+        self.expect(Token::LParen)?;
+        let mut fields = Vec::new();
+        if self.lookahead != Token::RParen {
+            loop {
+                fields.push(self.parse_pattern()?);
+                if self.lookahead == Token::Comma {
+                    self.advance()?;
+                } else {
+                    break;
+                }
+            }
+        }
+        self.expect(Token::RParen)?;
+        Ok(fields)
+    }
+
     fn parse_statement(&mut self) -> LppoResult<Statement> {
         match self.lookahead.clone() {
             Token::Let => self.parse_let(),
-            Token::Out => {
-                eprintln!("DEBUG parse_statement: matching Out");
-                self.parse_emit()
-            }
+            Token::Out => self.parse_emit(),
             Token::Input => self.parse_input(),
             Token::Call => self.parse_call(),
             Token::If => self.parse_if(),
@@ -1343,6 +1526,7 @@ impl<'a> Parser<'a> {
         match typ {
             TypeAnnotation::Int64 => "Int64".to_string(),
             TypeAnnotation::Bool => "Bool".to_string(),
+            TypeAnnotation::Float => "Float".to_string(),
             TypeAnnotation::Str => "Str".to_string(),
             TypeAnnotation::Arr(inner) => format!("Arr<{}>", self.type_to_string(inner)),
             TypeAnnotation::Void => "Void".to_string(),
@@ -1379,6 +1563,20 @@ impl<'a> Parser<'a> {
                 "Map<{}, {}>",
                 self.type_to_string(k),
                 self.type_to_string(v)
+            ),
+            TypeAnnotation::Set(inner) => format!("Set<{}>", self.type_to_string(inner)),
+            TypeAnnotation::Float32 => "Float32".to_string(),
+            TypeAnnotation::Float64 => "Float64".to_string(),
+            TypeAnnotation::Char => "Char".to_string(),
+            TypeAnnotation::Byte => "Byte".to_string(),
+            TypeAnnotation::Fn { params, ret } => format!(
+                "Fn({}) -> {}",
+                params
+                    .iter()
+                    .map(|p| self.type_to_string(p))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                self.type_to_string(ret)
             ),
         }
     }
@@ -2299,10 +2497,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                     self.expect(Token::RParen)?;
-                    node = Expr::Call {
-                        func: Box::new(node),
-                        args,
-                    };
+                    node = Self::make_call_or_variant(node, args);
                 }
                 Token::Question => {
                     // Error propagation operator: expr?
@@ -2317,6 +2512,55 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
+    /// A single-segment qualified name whose segment is capitalised names an
+    /// enum variant (`Color::Red`); module paths are lowercase (`math::add`).
+    fn qualified_to_expr(path: Vec<String>, name: String) -> Expr {
+        if path.len() == 1 && path[0].chars().next().map(|c| c.is_uppercase()).unwrap_or(false) {
+            return Expr::EnumVariant {
+                enum_name: path[0].clone(),
+                variant: name,
+                args: Vec::new(),
+            };
+        }
+        Expr::QualifiedVar(QualifiedName { path, name })
+    }
+
+    /// `Some(x)` / `Ok(x)` / `Err(x)` / `Some` become enum variant values;
+    /// everything else stays a normal call.
+    fn make_call_or_variant(func: Expr, args: Vec<Expr>) -> Expr {
+        let variant = match &func {
+            Expr::Var(name) => match name.as_str() {
+                "Some" => Some(("Option", "Some")),
+                "None" => Some(("Option", "None")),
+                "Ok" => Some(("Result", "Ok")),
+                "Err" => Some(("Result", "Err")),
+                _ => None,
+            },
+            // `Color::Red(1, 2)` produced above as a bare variant.
+            Expr::EnumVariant {
+                enum_name, variant, ..
+            } => {
+                return Expr::EnumVariant {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                    args,
+                }
+            }
+            _ => None,
+        };
+        match variant {
+            Some((enum_name, name)) => Expr::EnumVariant {
+                enum_name: enum_name.to_string(),
+                variant: name.to_string(),
+                args,
+            },
+            None => Expr::Call {
+                func: Box::new(func),
+                args,
+            },
+        }
+    }
+
     fn parse_primary(&mut self) -> LppoResult<Expr> {
         match self.lookahead.clone() {
             Token::Number(n) => {
@@ -2326,6 +2570,14 @@ impl<'a> Parser<'a> {
             Token::FloatLiteral(f) => {
                 self.advance()?;
                 Ok(Expr::Float(f))
+            }
+            Token::CharLiteral(c) => {
+                self.advance()?;
+                Ok(Expr::Char(c))
+            }
+            Token::ByteLiteral(b) => {
+                self.advance()?;
+                Ok(Expr::Byte(b))
             }
             Token::StringLiteral(s) => {
                 self.advance()?;
@@ -2392,8 +2644,14 @@ impl<'a> Parser<'a> {
                     if path.is_empty() {
                         Ok(Expr::Var(name))
                     } else {
-                        Ok(Expr::QualifiedVar(QualifiedName { path, name }))
+                        Ok(Self::qualified_to_expr(path, name))
                     }
+                } else if saved_name == "None" {
+                    Ok(Expr::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        args: Vec::new(),
+                    })
                 } else {
                     // Simple identifier
                     Ok(Expr::Var(saved_name))
@@ -2401,9 +2659,25 @@ impl<'a> Parser<'a> {
             }
             Token::LParen => {
                 self.advance()?;
-                let e = self.parse_expression()?;
-                self.expect(Token::RParen)?;
-                Ok(e)
+                let first = self.parse_expression()?;
+                if self.lookahead == Token::Comma {
+                    let mut items = vec![first];
+                    let mut trailing = false;
+                    while self.lookahead == Token::Comma {
+                        self.advance()?;
+                        if self.lookahead == Token::RParen {
+                            trailing = true;
+                            break;
+                        }
+                        items.push(self.parse_expression()?);
+                    }
+                    self.expect(Token::RParen)?;
+                    let _ = trailing;
+                    Ok(Expr::Tuple(items))
+                } else {
+                    self.expect(Token::RParen)?;
+                    Ok(first)
+                }
             }
             Token::LBracket => {
                 self.advance()?;
@@ -2450,8 +2724,14 @@ impl<'a> Parser<'a> {
                     if path.is_empty() {
                         Ok(Expr::Var(name))
                     } else {
-                        Ok(Expr::QualifiedVar(QualifiedName { path, name }))
+                        Ok(Self::qualified_to_expr(path, name))
                     }
+                } else if saved_name == "None" {
+                    Ok(Expr::EnumVariant {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        args: Vec::new(),
+                    })
                 } else {
                     // Simple identifier
                     Ok(Expr::Var(saved_name))

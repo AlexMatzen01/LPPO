@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.1.10-alpha.2 - 2026-11-19 (alpha)
+
+Release v0.1.10-alpha.2 Add C transpiler
+
 ## 0.1.10-alpha.1 - 2026-11-19 (alpha)
 
 Release v0.1.10-alpha.1

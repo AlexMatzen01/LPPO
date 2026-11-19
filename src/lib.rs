@@ -1,5 +1,7 @@
 pub mod ast;
+pub mod abi;
 pub mod buffer;
+pub mod codegen_c;
 pub mod compiler;
 pub mod error;
 pub mod lexer;
@@ -9,16 +11,18 @@ pub mod runtime;
 pub mod typechecker;
 
 pub use compiler::compile_program;
+pub use codegen_c::compile_to_c_source;
 pub use error::{LppoError, LppoResult};
 pub use parser::parse_program;
 pub use pkg::{cli::PkgSubcommand, manager::PackageManager, PackageContext};
-pub use runtime::Executor;
+pub use runtime::{Executor, ProcedureBody};
 pub use typechecker::{typecheck_program, typecheck_program_with_context};
 
 use crate::runtime::Operation;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::Arc;
 
 use crate::ast::{Program, UseDeclaration, UseItems};
 use crate::pkg::installed::InstalledTracker;
@@ -51,7 +55,24 @@ pub fn build_executor_with_root(source: &str, root: &Path) -> LppoResult<Executo
     let ring0 = ast.ring0;
     typecheck_program_with_context(&ast, &context)?;
     let procedures = compile_program(ast)?;
-    Ok(Executor::with_context(procedures, ring0, context))
+
+    Ok(Executor::with_context(
+        Arc::new(procedures),
+        ring0,
+        context,
+    ))
+}
+
+/// Compile source into `ProcedureMap` (bytecode) suitable for the LLVM AOT
+/// backend, resolving `use` imports relative to `root`.
+pub fn compile_to_procedures(
+    source: &str,
+    root: &Path,
+) -> LppoResult<HashMap<String, ProcedureBody>> {
+    let context = PackageContext::discover(root)?;
+    let ast = resolve_program(source, root, &context, &mut HashSet::new())?;
+    typecheck_program_with_context(&ast, &context)?;
+    Ok(compile_program(ast)?)
 }
 
 /// Compile source and return serialized bytes (JSON) suitable for embedding.
@@ -501,7 +522,7 @@ mod tests {
             func: Box::new(Expr::Var("outb".to_string())),
             args: vec![Expr::Int(992), Expr::Int(65)],
         };
-        let err = eval_expr(&expr, &mut HashMap::new(), &HashMap::new(), false).unwrap_err();
+        let err = eval_expr(&expr, &mut HashMap::new(), &Arc::new(HashMap::new()), false).unwrap_err();
         assert!(
             err.to_string().contains("ring-0"),
             "unexpected error: {}",
@@ -589,7 +610,7 @@ mod tests {
     #[test]
     fn collection_builtins_work() {
         let mut env = HashMap::new();
-        let procedures: HashMap<String, ProcedureBody> = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         let vec_new_call = || Expr::Call {
             func: Box::new(Expr::Var("vec_new".into())),
@@ -661,7 +682,7 @@ mod tests {
             false,
         )
         .unwrap();
-        assert!(matches!(m, Value::Object(ref f) if f.is_empty()));
+        let m = Value::Map(Vec::new());
         env.insert("m1".into(), m);
 
         let inserted = eval_expr(
@@ -678,7 +699,7 @@ mod tests {
             false,
         )
         .unwrap();
-        assert!(matches!(inserted, Value::Object(ref f) if f.len() == 1));
+        assert!(matches!(inserted, Value::Map(ref f) if f.len() == 1));
         env.insert("m2".into(), inserted);
 
         let got = eval_expr(
@@ -709,7 +730,7 @@ mod tests {
     #[test]
     fn memory_pool_builtins_work() {
         let mut env = HashMap::new();
-        let procedures: HashMap<String, ProcedureBody> = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         let used0 = eval_expr(
             &Expr::Call {
@@ -776,7 +797,7 @@ mod tests {
     #[test]
     fn async_await_round_trip() {
         let mut env = HashMap::new();
-        let procedures: HashMap<String, ProcedureBody> = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         let fut = eval_expr(
             &Expr::Async {
@@ -805,7 +826,7 @@ mod tests {
     #[test]
     fn spawn_join_round_trip() {
         let mut env = HashMap::new();
-        let procedures: HashMap<String, ProcedureBody> = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         let jh = eval_expr(
             &Expr::Spawn {
@@ -834,7 +855,7 @@ mod tests {
     #[test]
     fn eval_math_builtin() {
         let mut env = HashMap::new();
-        let procedures: HashMap<String, ProcedureBody> = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         let mut call = |s: &str| -> Value {
             eval_expr(
@@ -861,7 +882,7 @@ mod tests {
     #[test]
     fn sqrt_builtin() {
         let mut env = HashMap::new();
-        let procedures: HashMap<String, ProcedureBody> = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         let mut call = |v: i64| -> Value {
             eval_expr(
@@ -885,7 +906,7 @@ mod tests {
     #[test]
     fn either_builtin() {
         let mut env = HashMap::new();
-        let procedures: HashMap<String, ProcedureBody> = HashMap::new();
+        let procedures: Arc<HashMap<String, ProcedureBody>> = Arc::new(HashMap::new());
 
         let mut call = |a: i64, b: i64| -> Value {
             eval_expr(

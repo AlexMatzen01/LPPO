@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::ast::{Expr, MemoryLocation, Procedure, Program, QualifiedName, Statement};
+use crate::ast::{
+    BinaryOp, Expr, MatchArm, MatchArmBody, MemoryLocation, Pattern, Procedure, Program,
+    QualifiedName, Statement,
+};
 use crate::error::{LppoError, LppoResult};
 use crate::runtime::{Operation, ProcedureBody};
 
@@ -50,6 +53,7 @@ fn compile_procedure(procedure: Procedure) -> ProcedureBody {
     ProcedureBody {
         params: param_names,
         operations: final_ops,
+        return_type: Some(procedure.return_type),
     }
 }
 
@@ -66,12 +70,15 @@ fn qualified_name_to_string(qn: &QualifiedName) -> String {
 struct CompileCtx {
     /// Stack of heap-allocated variable names per scope level
     heap_stack: Vec<HashSet<String>>,
+    /// Counter for temporaries introduced by `match` lowering.
+    match_counter: usize,
 }
 
 impl CompileCtx {
     fn new() -> Self {
         CompileCtx {
             heap_stack: vec![HashSet::new()],
+            match_counter: 0,
         }
     }
 
@@ -245,11 +252,7 @@ fn compile_statement(
             }
             Operation::Unsafe { ops }
         }
-        Statement::Match { expr: _, arms: _ } => {
-            // Match expressions will be compiled to a series of if-else chains
-            // For now, just placeholder - will implement pattern matching later
-            Operation::Nop
-        }
+        Statement::Match { expr, arms } => compile_match(expr, arms, ctx),
         Statement::StructInit {
             name: _,
             typ: _,
@@ -257,6 +260,9 @@ fn compile_statement(
         } => {
             // Struct initialization - placeholder for now
             Operation::Nop
+        }
+        Statement::ExprStatement(Expr::MatchExpr { expr, arms }) => {
+            compile_match(*expr, arms, ctx)
         }
         Statement::ExprStatement(expr) => {
             // Expression statement - evaluate expression for side effects
@@ -420,4 +426,173 @@ mod tests {
             Operation::Dealloc(var) if var.as_str() == "x"
         )));
     }
+}
+
+// ---------------------------------------------------------------------------
+// match lowering
+// ---------------------------------------------------------------------------
+
+fn builtin_call(name: &str, args: Vec<Expr>) -> Expr {
+    Expr::Call {
+        func: Box::new(Expr::Var(name.to_string())),
+        args,
+    }
+}
+
+fn and_expr(left: Option<Expr>, right: Option<Expr>) -> Option<Expr> {
+    match (left, right) {
+        (Some(a), Some(b)) => Some(Expr::BinaryOp {
+            left: Box::new(a),
+            op: BinaryOp::And,
+            right: Box::new(b),
+        }),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
+}
+
+/// Compile `match expr { arms }` into a temp binding plus an if/elif chain.
+fn compile_match(expr: Expr, arms: Vec<MatchArm>, ctx: &mut CompileCtx) -> Operation {
+    ctx.match_counter += 1;
+    let tmp = format!("__match{}", ctx.match_counter);
+
+    let mut prologue = vec![Operation::Let(tmp.clone(), expr)];
+    let mut branches: Vec<(Expr, Vec<Operation>)> = Vec::new();
+    let mut fallback: Option<Vec<Operation>> = None;
+
+    for arm in arms {
+        let (cond, mut bindings) = pattern_test(&arm.pattern, &Expr::Var(tmp.clone()), ctx);
+        let cond = match arm.guard {
+            Some(guard) => and_expr(cond, Some(guard)),
+            None => cond,
+        };
+
+        match arm.body {
+            MatchArmBody::Emit(exprs) => bindings.push(Operation::Emit(exprs)),
+            MatchArmBody::Expr(Expr::Return(value)) => {
+                bindings.push(Operation::Return(value.map(|v| *v)))
+            }
+            MatchArmBody::Expr(e) => bindings.push(Operation::ExprStatement(e)),
+        }
+
+        match cond {
+            Some(c) => branches.push((c, bindings)),
+            None => {
+                if fallback.is_none() {
+                    fallback = Some(bindings);
+                }
+            }
+        }
+    }
+
+    let inner = if branches.is_empty() {
+        Operation::Scope {
+            ops: fallback.unwrap_or_default(),
+        }
+    } else {
+        let (first_cond, first_ops) = branches.remove(0);
+        Operation::If {
+            cond: first_cond,
+            then_ops: first_ops,
+            elifs: branches,
+            else_ops: fallback,
+        }
+    };
+
+    prologue.push(inner);
+    Operation::Scope { ops: prologue }
+}
+
+/// Produce the condition and bindings for one pattern against `scrutinee`.
+fn pattern_test(
+    pattern: &Pattern,
+    scrutinee: &Expr,
+    ctx: &mut CompileCtx,
+) -> (Option<Expr>, Vec<Operation>) {
+    match pattern {
+        Pattern::Wildcard => (None, Vec::new()),
+        Pattern::Variable(name) => (None, vec![Operation::Let(name.clone(), scrutinee.clone())]),
+        Pattern::Literal(lit) => (
+            Some(Expr::BinaryOp {
+                left: Box::new(scrutinee.clone()),
+                op: BinaryOp::Eq,
+                right: Box::new(lit.clone()),
+            }),
+            Vec::new(),
+        ),
+        Pattern::EnumVariant {
+            variant, fields, ..
+        } => {
+            let cond = Expr::BinaryOp {
+                left: Box::new(builtin_call(
+                    "enum_tag",
+                    vec![scrutinee.clone()],
+                )),
+                op: BinaryOp::Eq,
+                right: Box::new(Expr::Str(variant.clone())),
+            };
+            let (extra, mut ops) = sub_patterns(fields, scrutinee, "enum_get", ctx);
+            (and_expr(Some(cond), extra), ops.drain(..).collect())
+        }
+        Pattern::Tuple(fields) => {
+            let (cond, mut ops) = sub_patterns(fields, scrutinee, "tuple_get", ctx);
+            (cond, ops.drain(..).collect())
+        }
+        Pattern::Struct { fields, .. } => {
+            let mut cond: Option<Expr> = None;
+            let mut ops = Vec::new();
+            for (field, pat) in fields {
+                let accessor = builtin_call(
+                    "struct_field",
+                    vec![scrutinee.clone(), Expr::Str(field.clone())],
+                );
+                let (c, mut b) = pattern_test(pat, &accessor, ctx);
+                cond = and_expr(cond, c);
+                ops.append(&mut b);
+            }
+            (cond, ops)
+        }
+        Pattern::Or(alts) => {
+            let mut cond: Option<Expr> = None;
+            let mut bindings: Vec<Operation> = Vec::new();
+            for (i, alt) in alts.iter().enumerate() {
+                let (c, mut b) = pattern_test(alt, scrutinee, ctx);
+                if i == 0 {
+                    bindings = b;
+                }
+                cond = match (cond, c) {
+                    (Some(a), Some(b)) => Some(Expr::BinaryOp {
+                        left: Box::new(a),
+                        op: BinaryOp::Or,
+                        right: Box::new(b),
+                    }),
+                    (Some(a), None) => Some(a),
+                    (None, c) => c,
+                };
+            }
+            (cond, bindings)
+        }
+    }
+}
+
+/// Destructure a tuple-like value (tuple/enum payload) into sub-patterns.
+fn sub_patterns(
+    fields: &[Pattern],
+    scrutinee: &Expr,
+    accessor: &str,
+    ctx: &mut CompileCtx,
+) -> (Option<Expr>, Vec<Operation>) {
+    let mut cond: Option<Expr> = None;
+    let mut ops = Vec::new();
+    for (i, pat) in fields.iter().enumerate() {
+        let accessor_expr = builtin_call(
+            accessor,
+            vec![scrutinee.clone(), Expr::Int(i as i64)],
+        );
+        let (c, mut b) = pattern_test(pat, &accessor_expr, ctx);
+        cond = and_expr(cond, c);
+        ops.append(&mut b);
+    }
+    (cond, ops)
 }

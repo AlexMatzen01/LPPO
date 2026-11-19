@@ -111,6 +111,11 @@ pub struct ImplBlock {
 pub enum TypeAnnotation {
     Int64,
     Bool,
+    Float,
+    Float32,
+    Float64,
+    Char,
+    Byte,
     Str,
     Arr(Box<TypeAnnotation>), // Array of specific type
     Void,
@@ -123,6 +128,118 @@ pub enum TypeAnnotation {
     Option(Box<TypeAnnotation>),              // Option type
     Result(Box<TypeAnnotation>, Box<TypeAnnotation>), // Result type
     Map(Box<TypeAnnotation>, Box<TypeAnnotation>),    // Map<K, V> hash map
+    Set(Box<TypeAnnotation>),                 // Set<T>
+    Fn {
+        params: Vec<TypeAnnotation>,
+        ret: Box<TypeAnnotation>,
+    }, // Function type: Fn(Int64, Str) -> Bool
+}
+
+impl TypeAnnotation {
+    /// Resolve keyword aliases (`F64`, `Vec<T>`, `HashSet<T>`, ...) into canonical types.
+    pub fn normalized(&self) -> TypeAnnotation {
+        use TypeAnnotation::*;
+        match self {
+            Custom(name) => match name.as_str() {
+                "I64" | "Int64" | "Int" => Int64,
+                "BOOL8" | "Bool" => Bool,
+                "STRPTR" | "Str" | "String" => Str,
+                "F64" | "Float64" | "Float" | "Double" => Float64,
+                "F32" | "Float32" => Float32,
+                "Char" => Char,
+                "Byte" | "U8" | "UInt8" => Byte,
+                "Vec" | "Array" | "Arr" | "Slice" => Arr(Box::new(Int64)),
+                "HashMap" | "Map" | "BTreeMap" => Map(Box::new(Str), Box::new(Int64)),
+                "HashSet" | "Set" | "BTreeSet" => Set(Box::new(Int64)),
+                "Tuple" => Tuple(Vec::new()),
+                other => Custom(other.to_string()),
+            },
+            Generic(name, params) => match (name.as_str(), params.len()) {
+                ("Vec" | "Array" | "Arr" | "Slice", 1) => Arr(Box::new(params[0].normalized())),
+                ("HashSet" | "Set" | "BTreeSet", 1) => Set(Box::new(params[0].normalized())),
+                ("HashMap" | "Map" | "BTreeMap", 2) => Map(
+                    Box::new(params[0].normalized()),
+                    Box::new(params[1].normalized()),
+                ),
+                ("Option", 1) => Option(Box::new(params[0].normalized())),
+                ("Result", 2) => Result(
+                    Box::new(params[0].normalized()),
+                    Box::new(params[1].normalized()),
+                ),
+                _ => Generic(
+                    name.clone(),
+                    params.iter().map(|p| p.normalized()).collect(),
+                ),
+            },
+            Arr(t) => Arr(Box::new(t.normalized())),
+            Set(t) => Set(Box::new(t.normalized())),
+            Map(k, v) => Map(Box::new(k.normalized()), Box::new(v.normalized())),
+            Option(t) => Option(Box::new(t.normalized())),
+            Result(ok, err) => Result(Box::new(ok.normalized()), Box::new(err.normalized())),
+            Tuple(items) => Tuple(items.iter().map(|t| t.normalized()).collect()),
+            Ref(t, lifetime) => Ref(Box::new(t.normalized()), lifetime.clone()),
+            Mut(t) => Mut(Box::new(t.normalized())),
+            Own(t) => Own(Box::new(t.normalized())),
+            Fn { params, ret } => Fn {
+                params: params.iter().map(|t| t.normalized()).collect(),
+                ret: Box::new(ret.normalized()),
+            },
+            other => other.clone(),
+        }
+    }
+
+    /// Human-readable spelling used in diagnostics and printed output.
+    pub fn display_name(&self) -> String {
+        match self.normalized() {
+            TypeAnnotation::Int64 => "Int64".into(),
+            TypeAnnotation::Bool => "Bool".into(),
+            TypeAnnotation::Float | TypeAnnotation::Float64 => "Float64".into(),
+            TypeAnnotation::Float32 => "Float32".into(),
+            TypeAnnotation::Char => "Char".into(),
+            TypeAnnotation::Byte => "Byte".into(),
+            TypeAnnotation::Str => "Str".into(),
+            TypeAnnotation::Void => "Void".into(),
+            TypeAnnotation::Arr(t) => format!("Arr<{}>", t.display_name()),
+            TypeAnnotation::Set(t) => format!("Set<{}>", t.display_name()),
+            TypeAnnotation::Map(k, v) => {
+                format!("Map<{}, {}>", k.display_name(), v.display_name())
+            }
+            TypeAnnotation::Option(t) => format!("Option<{}>", t.display_name()),
+            TypeAnnotation::Result(ok, err) => {
+                format!("Result<{}, {}>", ok.display_name(), err.display_name())
+            }
+            TypeAnnotation::Tuple(items) => format!(
+                "({})",
+                items
+                    .iter()
+                    .map(|t| t.display_name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            TypeAnnotation::Fn { params, ret } => format!(
+                "Fn({}) -> {}",
+                params
+                    .iter()
+                    .map(|t| t.display_name())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                ret.display_name()
+            ),
+            TypeAnnotation::Ref(t, _) => format!("Ref<{}>", t.display_name()),
+            TypeAnnotation::Mut(t) => format!("Mut<{}>", t.display_name()),
+            TypeAnnotation::Own(t) => format!("Own<{}>", t.display_name()),
+            TypeAnnotation::Custom(n) => n,
+            TypeAnnotation::Generic(n, params) => format!(
+                "{}<{}>",
+                n,
+                params
+                    .iter()
+                    .map(|t| t.display_name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
 }
 
 /// Parameter with explicit type and ownership annotations
@@ -280,7 +397,14 @@ pub enum OwnershipKind {
 pub struct MatchArm {
     pub pattern: Pattern,
     pub guard: Option<Expr>,
-    pub body: Expr, // Expression for match expressions, statements for match statements
+    pub body: MatchArmBody,
+}
+
+/// Body of a `match` arm: either an expression value or an `out ...` emit.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum MatchArmBody {
+    Expr(Expr),
+    Emit(Vec<Expr>),
 }
 
 /// Pattern for matching
@@ -409,6 +533,20 @@ pub enum Expr {
         handler_type: TypeAnnotation,
         handlers: Vec<(String, Box<Expr>)>, // (handler_name, handler_body)
     },
+    /// Character literal: 'a'
+    Char(char),
+    /// Byte literal: b'A'
+    Byte(u8),
+    /// Tuple literal: (a, b)
+    Tuple(Vec<Expr>),
+    /// Enum / Option / Result variant construction: Color::Red, Some(1), Ok(v)
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        args: Vec<Expr>,
+    },
+    /// Early return used in `match` arm bodies: `=> return expr`
+    Return(Option<Box<Expr>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

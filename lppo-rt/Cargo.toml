@@ -1,0 +1,11 @@
+[package]
+name = "lppo-rt"
+version = "5.3.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1.0"
+sha2 = "0.10"
+
+[lib]
+crate-type = ["staticlib", "rlib"]

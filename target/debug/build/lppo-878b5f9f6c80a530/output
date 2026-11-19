@@ -1,5 +1,0 @@
-cargo:rustc-env=LPPO_VERSION_MAJOR=0
-cargo:rustc-env=LPPO_VERSION_MINOR=1
-cargo:rustc-env=LPPO_VERSION_PATCH=8
-cargo:rustc-env=LPPO_VERSION_BUILD=3
-cargo:rustc-env=LPPO_VERSION_CHANNEL=alpha

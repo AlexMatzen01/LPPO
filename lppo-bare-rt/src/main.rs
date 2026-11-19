@@ -1,24 +1,31 @@
 #![no_std]
 #![no_main]
 
+use alloc::borrow::ToOwned;
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::alloc::{GlobalAlloc, Layout};
 use core::panic::PanicInfo;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 extern crate alloc;
-use alloc::borrow::ToOwned;
-use alloc::collections::BTreeMap;
-use alloc::format;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
-
 use serde_json::Value;
 
-const VGA_WIDTH: usize = 80;
-const VGA_HEIGHT: usize = 25;
-const VGA_MEMORY: *mut u16 = 0xB8000 as *mut u16;
+mod arch;
+mod drivers;
 
+use arch::gdt;
+use arch::idt;
+use arch::io;
+use arch::multiboot::{boot_memory_regions, MemRegion, MULTIBOOT_MEMORY_AVAILABLE};
+use arch::paging;
+use arch::pmm;
+use drivers::keyboard;
+use drivers::serial;
+use drivers::vga;
+
+const VGA_MEMORY: *mut u16 = 0xB8000 as *mut u16;
 const HEAP_START: usize = 0x200000;
 const HEAP_SIZE: usize = 256 * 1024;
 
@@ -50,166 +57,29 @@ static ALLOCATOR: BumpAllocator = BumpAllocator;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    vga_write_str("[panic] ");
+    vga::vga_write_str("[panic] ");
     if let Some(location) = info.location() {
-        vga_write_str(location.file());
-        vga_write_str(":");
-        vga_write_str(&i64_to_string(location.line() as i64));
-        vga_write_str(":");
-        vga_write_str(&i64_to_string(location.column() as i64));
-        vga_write_str(" ");
+        vga::vga_write_str(location.file());
+        vga::vga_write_str(":");
+        vga::vga_write_str(&vga::i64_to_string(location.line() as i64));
+        vga::vga_write_str(":");
+        vga::vga_write_str(&vga::i64_to_string(location.column() as i64));
+        vga::vga_write_str(" ");
     }
-    vga_write_str("\n");
+    vga::vga_write_str("\n");
+    serial::write_str("[panic] ");
+    if let Some(location) = info.location() {
+        serial::write_str(location.file());
+        serial::write_str(":");
+        serial::write_str(&vga::i64_to_string(location.line() as i64));
+        serial::write_str(":");
+        serial::write_str(&vga::i64_to_string(location.column() as i64));
+        serial::write_str(" ");
+    }
+    serial::write_str("\n");
     loop {
         unsafe {
             core::arch::asm!("hlt");
-        }
-    }
-}
-
-struct Cursor {
-    x: usize,
-    y: usize,
-}
-
-static mut CURSOR: Cursor = Cursor { x: 0, y: 0 };
-
-fn vga_put_char(ch: char) {
-    unsafe {
-        match ch {
-            '\n' => {
-                CURSOR.x = 0;
-                CURSOR.y += 1;
-            }
-            '\t' => {
-                for _ in 0..4 {
-                    vga_put_char(' ');
-                }
-            }
-            ch => {
-                let offset = (CURSOR.y * VGA_WIDTH + CURSOR.x) * 2;
-                let byte = ch as u8;
-                let color: u8 = 0x0F; // white on black
-                core::ptr::write_volatile(
-                    VGA_MEMORY.add(offset),
-                    (byte as u16) | ((color as u16) << 8),
-                );
-                CURSOR.x += 1;
-                if CURSOR.x >= VGA_WIDTH {
-                    CURSOR.x = 0;
-                    CURSOR.y += 1;
-                }
-            }
-        }
-        if CURSOR.y >= VGA_HEIGHT {
-            vga_scroll();
-            CURSOR.y = VGA_HEIGHT - 1;
-        }
-    }
-}
-
-fn vga_scroll() {
-    unsafe {
-        for row in 1..VGA_HEIGHT {
-            for col in 0..VGA_WIDTH {
-                let src = ((row * VGA_WIDTH + col) * 2) as isize;
-                let dst = (((row - 1) * VGA_WIDTH + col) * 2) as isize;
-                let val = core::ptr::read_volatile(VGA_MEMORY.offset(src));
-                core::ptr::write_volatile(VGA_MEMORY.offset(dst), val);
-            }
-        }
-        for col in 0..VGA_WIDTH {
-            let offset = (((VGA_HEIGHT - 1) * VGA_WIDTH + col) * 2) as isize;
-            core::ptr::write_volatile(
-                VGA_MEMORY.offset(offset),
-                (0x20 as u16) | ((0x0F as u16) << 8),
-            );
-        }
-    }
-}
-
-fn vga_write_str(s: &str) {
-    for ch in s.chars() {
-        vga_put_char(ch);
-    }
-}
-
-fn vga_clear() {
-    unsafe {
-        for i in 0..(VGA_WIDTH * VGA_HEIGHT) {
-            core::ptr::write_volatile(VGA_MEMORY.add(i), (0x20 as u16) | ((0x0F as u16) << 8));
-        }
-        CURSOR.x = 0;
-        CURSOR.y = 0;
-    }
-}
-
-fn i64_to_string(n: i64) -> String {
-    if n == i64::MIN {
-        return "-9223372036854775808".to_owned();
-    }
-    let mut s = String::new();
-    let neg = n < 0;
-    let mut m: u64 = if neg { (0i64 - n) as u64 } else { n as u64 };
-    if neg {
-        s.push('-');
-    }
-    if m == 0 {
-        s.push('0');
-    } else {
-        let mut buf = [0u8; 20];
-        let mut len = 0usize;
-        while m > 0 {
-            buf[len] = b'0' + (m % 10) as u8;
-            m /= 10;
-            len += 1;
-        }
-        while len > 0 {
-            len -= 1;
-            s.push(buf[len] as char);
-        }
-    }
-    s
-}
-
-fn vga_write_value(val: &LppoValue) {
-    match val {
-        LppoValue::Int(i) => vga_write_str(&i64_to_string(*i)),
-        LppoValue::Bool(b) => vga_write_str(if *b { "true" } else { "false" }),
-        LppoValue::Str(s) => vga_write_str(s),
-        LppoValue::Array(arr) => {
-            vga_write_str("[");
-            for (i, item) in arr.iter().enumerate() {
-                if i > 0 {
-                    vga_write_str(", ");
-                }
-                vga_write_value(item);
-            }
-            vga_write_str("]");
-        }
-    }
-}
-
-fn value_to_string(val: &LppoValue) -> String {
-    match val {
-        LppoValue::Int(i) => i64_to_string(*i),
-        LppoValue::Bool(b) => {
-            if *b {
-                "true".to_owned()
-            } else {
-                "false".to_owned()
-            }
-        }
-        LppoValue::Str(s) => s.clone(),
-        LppoValue::Array(arr) => {
-            let mut out = String::new();
-            for (i, item) in arr.iter().enumerate() {
-                if i > 0 {
-                    out.push(' ');
-                }
-                out.push_str(&value_to_string(item));
-            }
-            out
         }
     }
 }
@@ -247,11 +117,79 @@ fn truthy(val: &LppoValue) -> bool {
     }
 }
 
+fn vga_write_value(val: &LppoValue) {
+    match val {
+        LppoValue::Int(i) => vga::vga_write_str(&vga::i64_to_string(*i)),
+        LppoValue::Bool(b) => vga::vga_write_str(if *b { "true" } else { "false" }),
+        LppoValue::Str(s) => vga::vga_write_str(s),
+        LppoValue::Array(arr) => {
+            vga::vga_write_str("[");
+            for (i, item) in arr.iter().enumerate() {
+                if i > 0 {
+                    vga::vga_write_str(", ");
+                }
+                vga_write_value(item);
+            }
+            vga::vga_write_str("]");
+        }
+    }
+}
+
+fn serial_write_value(val: &LppoValue) {
+    match val {
+        LppoValue::Int(i) => serial::write_str(&vga::i64_to_string(*i)),
+        LppoValue::Bool(b) => serial::write_str(if *b { "true" } else { "false" }),
+        LppoValue::Str(s) => serial::write_str(s),
+        LppoValue::Array(arr) => {
+            serial::write_str("[");
+            for (i, item) in arr.iter().enumerate() {
+                if i > 0 {
+                    serial::write_str(", ");
+                }
+                serial_write_value(item);
+            }
+            serial::write_str("]");
+        }
+    }
+}
+
+fn value_to_string(val: &LppoValue) -> String {
+    match val {
+        LppoValue::Int(i) => vga::i64_to_string(*i),
+        LppoValue::Bool(b) => {
+            if *b {
+                "true".to_owned()
+            } else {
+                "false".to_owned()
+            }
+        }
+        LppoValue::Str(s) => s.clone(),
+        LppoValue::Array(arr) => {
+            let mut out = String::new();
+            for (i, item) in arr.iter().enumerate() {
+                if i > 0 {
+                    out.push(' ');
+                }
+                out.push_str(&value_to_string(item));
+            }
+            out
+        }
+    }
+}
+
+fn as_int(val: &LppoValue) -> LppoResult<i64> {
+    match val {
+        LppoValue::Int(i) => Ok(*i),
+        _ => Err("expected an integer argument".to_owned()),
+    }
+}
+
 fn eval_expr(
     expr: &Value,
     env: &mut BTreeMap<String, LppoValue>,
     procs: &BTreeMap<String, Procedure>,
 ) -> LppoResult<LppoValue> {
+    use alloc::collections::BTreeMap;
     let obj = expr
         .as_object()
         .ok_or("expected an expression object".to_owned())?;
@@ -327,225 +265,372 @@ fn eval_expr(
             }
             Ok(LppoValue::Array(items))
         }
+        "Index" => {
+            let idx_obj = payload
+                .as_object()
+                .ok_or("Index expects an object".to_owned())?;
+            let target = eval_expr(
+                idx_obj.get("target").ok_or("Index missing target".to_owned())?,
+                env,
+                procs,
+            )?;
+            let index = eval_expr(
+                idx_obj.get("index").ok_or("Index missing index".to_owned())?,
+                env,
+                procs,
+            )?;
+            let i = match &index {
+                LppoValue::Int(n) => *n as usize,
+                _ => return Err("Index index must be an integer".to_owned()),
+            };
+            match &target {
+                LppoValue::Array(arr) => arr
+                    .get(i)
+                    .cloned()
+                    .ok_or("Index out of bounds".to_owned()),
+                _ => Err("Index target must be an array".to_owned()),
+            }
+        }
         "Call" => {
             let call_obj = payload
                 .as_object()
                 .ok_or("Call expects an object".to_owned())?;
-            let func = call_obj
+            let func_expr = call_obj
                 .get("func")
-                .and_then(|f| f.as_str())
                 .ok_or("Call missing func".to_owned())?;
-            let args = call_obj
+            let args_exprs = call_obj
                 .get("args")
                 .and_then(|a| a.as_array())
                 .ok_or("Call missing args".to_owned())?;
-
-            match func {
-                "outb" => {
-                    if args.len() != 2 {
-                        return Err("outb requires 2 arguments (port, value)".to_owned());
-                    }
-                    let port = eval_expr(&args[0], env, procs)?;
-                    let val = eval_expr(&args[1], env, procs)?;
-                    match (port, val) {
-                        (LppoValue::Int(port), LppoValue::Int(val)) => unsafe {
-                            core::arch::asm!("outb %al, %dx",
-                                    in("al") (val as u8),
-                                    in("dx") (port as u16),
-                                    options(nostack, att_syntax));
-                        },
-                        _ => return Err("outb requires integer arguments".to_owned()),
-                    }
-                    Ok(LppoValue::Int(0))
-                }
-                "outw" => {
-                    if args.len() != 2 {
-                        return Err("outw requires 2 arguments (port, value)".to_owned());
-                    }
-                    let port = eval_expr(&args[0], env, procs)?;
-                    let val = eval_expr(&args[1], env, procs)?;
-                    match (port, val) {
-                        (LppoValue::Int(port), LppoValue::Int(val)) => unsafe {
-                            core::arch::asm!("outw %ax, %dx",
-                                    in("ax") (val as u16),
-                                    in("dx") (port as u16),
-                                    options(nostack, att_syntax));
-                        },
-                        _ => return Err("outw requires integer arguments".to_owned()),
-                    }
-                    Ok(LppoValue::Int(0))
-                }
-                "outl" => {
-                    if args.len() != 2 {
-                        return Err("outl requires 2 arguments (port, value)".to_owned());
-                    }
-                    let port = eval_expr(&args[0], env, procs)?;
-                    let val = eval_expr(&args[1], env, procs)?;
-                    match (port, val) {
-                        (LppoValue::Int(port), LppoValue::Int(val)) => unsafe {
-                            core::arch::asm!("outl %eax, %dx",
-                                    in("eax") (val as u32),
-                                    in("dx") (port as u16),
-                                    options(nostack, att_syntax));
-                        },
-                        _ => return Err("outl requires integer arguments".to_owned()),
-                    }
-                    Ok(LppoValue::Int(0))
-                }
-                "inb" => {
-                    if args.len() != 1 {
-                        return Err("inb requires 1 argument (port)".to_owned());
-                    }
-                    let port = eval_expr(&args[0], env, procs)?;
-                    let port = match port {
-                        LppoValue::Int(p) => p as u16,
-                        _ => return Err("inb requires integer port".to_owned()),
-                    };
-                    let val: u8;
-                    unsafe {
-                        core::arch::asm!("inb %dx, %al",
-                            out("al") val,
-                            in("dx") port,
-                            options(nostack, att_syntax));
-                    }
-                    Ok(LppoValue::Int(val as i64))
-                }
-                "inw" => {
-                    if args.len() != 1 {
-                        return Err("inw requires 1 argument (port)".to_owned());
-                    }
-                    let port = eval_expr(&args[0], env, procs)?;
-                    let port = match port {
-                        LppoValue::Int(p) => p as u16,
-                        _ => return Err("inw requires integer port".to_owned()),
-                    };
-                    let val: u16;
-                    unsafe {
-                        core::arch::asm!("inw %dx, %ax",
-                            out("ax") val,
-                            in("dx") port,
-                            options(nostack, att_syntax));
-                    }
-                    Ok(LppoValue::Int(val as i64))
-                }
-                "inl" => {
-                    if args.len() != 1 {
-                        return Err("inl requires 1 argument (port)".to_owned());
-                    }
-                    let port = eval_expr(&args[0], env, procs)?;
-                    let port = match port {
-                        LppoValue::Int(p) => p as u16,
-                        _ => return Err("inl requires integer port".to_owned()),
-                    };
-                    let val: u32;
-                    unsafe {
-                        core::arch::asm!("inl %dx, %eax",
-                            out("eax") val,
-                            in("dx") port,
-                            options(nostack, att_syntax));
-                    }
-                    Ok(LppoValue::Int(val as i64))
-                }
-                "rdmsr" => {
-                    if args.len() != 1 {
-                        return Err("rdmsr requires 1 argument (ecx)".to_owned());
-                    }
-                    let ecx = eval_expr(&args[0], env, procs)?;
-                    let ecx = match ecx {
-                        LppoValue::Int(c) => c as u32,
-                        _ => return Err("rdmsr requires integer ecx".to_owned()),
-                    };
-                    let eax: u32;
-                    let edx: u32;
-                    unsafe {
-                        core::arch::asm!("rdmsr",
-                            in("ecx") ecx,
-                            out("eax") eax,
-                            out("edx") edx,
-                            options(nostack));
-                    }
-                    Ok(LppoValue::Int(((edx as u64) << 32 | eax as u64) as i64))
-                }
-                "wrmsr" => {
-                    if args.len() != 2 {
-                        return Err("wrmsr requires 2 arguments (ecx, value)".to_owned());
-                    }
-                    let ecx = eval_expr(&args[0], env, procs)?;
-                    let val = eval_expr(&args[1], env, procs)?;
-                    match (ecx, val) {
-                        (LppoValue::Int(c), LppoValue::Int(v)) => unsafe {
-                            core::arch::asm!("wrmsr",
-                                    in("ecx") c,
-                                    in("eax") (v as u32),
-                                    in("edx") ((v >> 32) as u32),
-                                    options(nostack));
-                        },
-                        _ => return Err("wrmsr requires integer arguments".to_owned()),
-                    }
-                    Ok(LppoValue::Int(0))
-                }
-                "cpuid" => {
-                    if args.len() != 1 {
-                        return Err("cpuid requires 1 argument (eax)".to_owned());
-                    }
-                    let eax_in = eval_expr(&args[0], env, procs)?;
-                    let eax_in = match eax_in {
-                        LppoValue::Int(e) => e as u32,
-                        _ => return Err("cpuid requires integer eax".to_owned()),
-                    };
-                    let mut eax: u32 = eax_in;
-                    let mut cpuid_ebx: u32 = 0;
-                    let mut ecx: u32 = 0;
-                    let mut edx: u32 = 0;
-                    unsafe {
-                        core::arch::asm!(
-                            "cpuid",
-                            inout("eax") eax,
-                            out("ecx") ecx,
-                            out("edx") edx,
-                            options(nostack)
-                        );
-                        // rbx is reserved by LLVM, so read it via a hardcoded register name.
-                        core::arch::asm!("mov %ebx, %eax", out("eax") cpuid_ebx, options(nostack, att_syntax));
-                    }
-                    Ok(LppoValue::Array(vec![
-                        LppoValue::Int(eax as i64),
-                        LppoValue::Int(cpuid_ebx as i64),
-                        LppoValue::Int(ecx as i64),
-                        LppoValue::Int(edx as i64),
-                    ]))
-                }
-                "cli" => {
-                    if args.len() != 0 {
-                        return Err("cli takes no arguments".to_owned());
-                    }
-                    unsafe {
-                        core::arch::asm!("cli", options(nostack));
-                    }
-                    Ok(LppoValue::Int(0))
-                }
-                "sti" => {
-                    if args.len() != 0 {
-                        return Err("sti takes no arguments".to_owned());
-                    }
-                    unsafe {
-                        core::arch::asm!("sti", options(nostack));
-                    }
-                    Ok(LppoValue::Int(0))
-                }
-                "hlt" => {
-                    if args.len() != 0 {
-                        return Err("hlt takes no arguments".to_owned());
-                    }
-                    unsafe {
-                        core::arch::asm!("hlt", options(nostack));
-                    }
-                    Ok(LppoValue::Int(0))
-                }
-                _ => return Err(format!("unsupported call target: {}", func)),
-            }
+            let func_name = match func_expr {
+                Value::Object(o) => match o.iter().next() {
+                    Some((key, v)) if key == "Var" => v
+                        .as_str()
+                        .ok_or("Call func Var must be a string".to_owned())?,
+                    _ => return Err("Call func must be a Var expression".to_owned()),
+                },
+                _ => return Err("Call func must be a Var expression".to_owned()),
+            };
+            eval_call(func_name, args_exprs, env, procs)
         }
         _ => Err(format_unsupported_expr(tag)),
+    }
+}
+
+fn eval_call(
+    func: &str,
+    args: &[Value],
+    env: &mut BTreeMap<String, LppoValue>,
+    procs: &BTreeMap<String, Procedure>,
+) -> LppoResult<LppoValue> {
+    use alloc::collections::BTreeMap;
+    match func {
+        "outb" => {
+            if args.len() != 2 {
+                return Err("outb requires 2 arguments (port, value)".to_owned());
+            }
+            let port = as_int(&eval_expr(&args[0], env, procs)?)? as u16;
+            let val = as_int(&eval_expr(&args[1], env, procs)?)? as u8;
+            unsafe { io::outb(port, val); }
+            Ok(LppoValue::Int(0))
+        }
+        "outw" => {
+            if args.len() != 2 {
+                return Err("outw requires 2 arguments (port, value)".to_owned());
+            }
+            let port = as_int(&eval_expr(&args[0], env, procs)?)? as u16;
+            let val = as_int(&eval_expr(&args[1], env, procs)?)? as u16;
+            unsafe { io::outw(port, val); }
+            Ok(LppoValue::Int(0))
+        }
+        "outl" => {
+            if args.len() != 2 {
+                return Err("outl requires 2 arguments (port, value)".to_owned());
+            }
+            let port = as_int(&eval_expr(&args[0], env, procs)?)? as u16;
+            let val = as_int(&eval_expr(&args[1], env, procs)?)? as u32;
+            unsafe { io::outl(port, val); }
+            Ok(LppoValue::Int(0))
+        }
+        "inb" => {
+            if args.len() != 1 {
+                return Err("inb requires 1 argument (port)".to_owned());
+            }
+            let port = as_int(&eval_expr(&args[0], env, procs)?)? as u16;
+            let val = unsafe { io::inb(port) };
+            Ok(LppoValue::Int(val as i64))
+        }
+        "inw" => {
+            if args.len() != 1 {
+                return Err("inw requires 1 argument (port)".to_owned());
+            }
+            let port = as_int(&eval_expr(&args[0], env, procs)?)? as u16;
+            let val = unsafe { io::inw(port) };
+            Ok(LppoValue::Int(val as i64))
+        }
+        "inl" => {
+            if args.len() != 1 {
+                return Err("inl requires 1 argument (port)".to_owned());
+            }
+            let port = as_int(&eval_expr(&args[0], env, procs)?)? as u16;
+            let val = unsafe { io::inl(port) };
+            Ok(LppoValue::Int(val as i64))
+        }
+        "io_wait" => {
+            if args.len() != 0 {
+                return Err("io_wait takes no arguments".to_owned());
+            }
+            unsafe { io::io_wait(); }
+            Ok(LppoValue::Int(0))
+        }
+        "rdmsr" => {
+            if args.len() != 1 {
+                return Err("rdmsr requires 1 argument (ecx)".to_owned());
+            }
+            let ecx = as_int(&eval_expr(&args[0], env, procs)?)? as u32;
+            let eax: u32;
+            let edx: u32;
+            unsafe {
+                core::arch::asm!("rdmsr",
+                    in("ecx") ecx,
+                    out("eax") eax,
+                    out("edx") edx,
+                    options(nostack));
+            }
+            Ok(LppoValue::Int(((edx as u64) << 32 | eax as u64) as i64))
+        }
+        "wrmsr" => {
+            if args.len() != 2 {
+                return Err("wrmsr requires 2 arguments (ecx, value)".to_owned());
+            }
+            let ecx = as_int(&eval_expr(&args[0], env, procs)?)? as u32;
+            let val = as_int(&eval_expr(&args[1], env, procs)?)?;
+            unsafe {
+                core::arch::asm!("wrmsr",
+                        in("ecx") ecx,
+                        in("eax") (val as u32),
+                        in("edx") ((val >> 32) as u32),
+                        options(nostack));
+            }
+            Ok(LppoValue::Int(0))
+        }
+        "cpuid" => {
+            if args.len() != 1 {
+                return Err("cpuid requires 1 argument (eax)".to_owned());
+            }
+            let eax_in = as_int(&eval_expr(&args[0], env, procs)?)? as u32;
+            let mut eax: u32 = eax_in;
+            let mut cpuid_ebx: u32 = 0;
+            let mut ecx: u32 = 0;
+            let mut edx: u32 = 0;
+            unsafe {
+                core::arch::asm!(
+                    "cpuid",
+                    inout("eax") eax,
+                    out("ecx") ecx,
+                    out("edx") edx,
+                    options(nostack)
+                );
+                core::arch::asm!("mov %ebx, %eax", out("eax") cpuid_ebx, options(nostack, att_syntax));
+            }
+            let mut arr = Vec::new();
+            arr.push(LppoValue::Int(eax as i64));
+            arr.push(LppoValue::Int(cpuid_ebx as i64));
+            arr.push(LppoValue::Int(ecx as i64));
+            arr.push(LppoValue::Int(edx as i64));
+            Ok(LppoValue::Array(arr))
+        }
+        "cli" => {
+            if args.len() != 0 {
+                return Err("cli takes no arguments".to_owned());
+            }
+            unsafe { core::arch::asm!("cli", options(nostack)); }
+            Ok(LppoValue::Int(0))
+        }
+        "sti" => {
+            if args.len() != 0 {
+                return Err("sti takes no arguments".to_owned());
+            }
+            unsafe { core::arch::asm!("sti", options(nostack)); }
+            Ok(LppoValue::Int(0))
+        }
+        "hlt" => {
+            if args.len() != 0 {
+                return Err("hlt takes no arguments".to_owned());
+            }
+            unsafe { core::arch::asm!("hlt", options(nostack)); }
+            Ok(LppoValue::Int(0))
+        }
+        // ---- kernel built-ins ----
+        "lgdt" => {
+            if args.len() != 0 {
+                return Err("lgdt takes no arguments".to_owned());
+            }
+            gdt::init();
+            Ok(LppoValue::Int(0))
+        }
+        "lidt" => {
+            if args.len() != 0 {
+                return Err("lidt takes no arguments".to_owned());
+            }
+            idt::init();
+            Ok(LppoValue::Int(0))
+        }
+        "idt_set" => {
+            if args.len() != 2 {
+                return Err("idt_set requires 2 arguments (index, handler_addr)".to_owned());
+            }
+            let index = as_int(&eval_expr(&args[0], env, procs)?)? as u16;
+            let handler = as_int(&eval_expr(&args[1], env, procs)?)? as u64;
+            idt::idt_set(index, handler);
+            Ok(LppoValue::Int(0))
+        }
+        "pic_remap" => {
+            if args.len() != 0 {
+                return Err("pic_remap takes no arguments".to_owned());
+            }
+            idt::pic_remap();
+            Ok(LppoValue::Int(0))
+        }
+        "pic_eoi" => {
+            if args.len() != 1 {
+                return Err("pic_eoi requires 1 argument (irq)".to_owned());
+            }
+            let irq = as_int(&eval_expr(&args[0], env, procs)?)? as u8;
+            idt::pic_eoi(irq);
+            Ok(LppoValue::Int(0))
+        }
+        "alloc_frame" => {
+            if args.len() != 0 {
+                return Err("alloc_frame takes no arguments".to_owned());
+            }
+            match pmm::alloc_frame() {
+                Some(addr) => Ok(LppoValue::Int(addr as i64)),
+                None => Err("out of physical memory".to_owned()),
+            }
+        }
+        "free_frame" => {
+            if args.len() != 1 {
+                return Err("free_frame requires 1 argument (address)".to_owned());
+            }
+            let addr = as_int(&eval_expr(&args[0], env, procs)?)? as u64;
+            pmm::free_frame(addr);
+            Ok(LppoValue::Int(0))
+        }
+        "map_page" => {
+            if args.len() != 2 {
+                return Err("map_page requires 2 arguments (vaddr, paddr)".to_owned());
+            }
+            let vaddr = as_int(&eval_expr(&args[0], env, procs)?)? as u64;
+            let paddr = as_int(&eval_expr(&args[1], env, procs)?)? as u64;
+            paging::map_page(vaddr, paddr).map_err(|e| e.to_owned())?;
+            Ok(LppoValue::Int(0))
+        }
+        "enable_paging" => {
+            if args.len() != 0 {
+                return Err("enable_paging takes no arguments".to_owned());
+            }
+            paging::enable_paging();
+            Ok(LppoValue::Int(0))
+        }
+        "serial_init" => {
+            if args.len() != 0 {
+                return Err("serial_init takes no arguments".to_owned());
+            }
+            serial::init();
+            Ok(LppoValue::Int(0))
+        }
+        "serial_write" => {
+            if args.len() != 1 {
+                return Err("serial_write requires 1 argument (byte)".to_owned());
+            }
+            let byte = as_int(&eval_expr(&args[0], env, procs)?)? as u8;
+            serial::write_byte(byte);
+            Ok(LppoValue::Int(0))
+        }
+        "serial_write_str" => {
+            if args.len() != 1 {
+                return Err("serial_write_str requires 1 argument (string)".to_owned());
+            }
+            let val = eval_expr(&args[0], env, procs)?;
+            if let LppoValue::Str(s) = val {
+                serial::write_str(&s);
+            } else {
+                serial::write_str(&value_to_string(&val));
+            }
+            Ok(LppoValue::Int(0))
+        }
+        "serial_write_hex" => {
+            if args.len() != 1 {
+                return Err("serial_write_hex requires 1 argument (value)".to_owned());
+            }
+            let val = as_int(&eval_expr(&args[0], env, procs)?)? as u64;
+            serial::write_hex(val);
+            serial::write_str("\n");
+            Ok(LppoValue::Int(0))
+        }
+        "keyboard_init" => {
+            if args.len() != 0 {
+                return Err("keyboard_init takes no arguments".to_owned());
+            }
+            keyboard::init();
+            Ok(LppoValue::Int(0))
+        }
+        "keyboard_poll_scan" => {
+            if args.len() != 0 {
+                return Err("keyboard_poll_scan takes no arguments".to_owned());
+            }
+            match keyboard::poll_scan() {
+                Some(sc) => Ok(LppoValue::Int(sc as i64)),
+                None => Ok(LppoValue::Int(-1)),
+            }
+        }
+        "keyboard_wait_scan" => {
+            if args.len() != 0 {
+                return Err("keyboard_wait_scan takes no arguments".to_owned());
+            }
+            Ok(LppoValue::Int(keyboard::wait_scan() as i64))
+        }
+        "vga_clear" => {
+            if args.len() != 0 {
+                return Err("vga_clear takes no arguments".to_owned());
+            }
+            vga::vga_clear();
+            Ok(LppoValue::Int(0))
+        }
+        _ => {
+            // Fall back to a user-defined procedure call.
+            let name = func.to_owned();
+            let mut arg_vals = Vec::new();
+            for a in args {
+                arg_vals.push(eval_expr(a, env, procs)?);
+            }
+            let proc = procs.get(&name).ok_or_else(|| {
+                let mut s = String::new();
+                s.push_str("unknown procedure or built-in '");
+                s.push_str(&name);
+                s.push_str("'");
+                s
+            })?;
+            if proc.params.len() != arg_vals.len() {
+                let mut s = String::new();
+                s.push_str("argument count mismatch for '");
+                s.push_str(&name);
+                s.push_str("'");
+                return Err(s);
+            }
+            let mut call_env = BTreeMap::new();
+            for (p, v) in proc.params.iter().zip(arg_vals.into_iter()) {
+                call_env.insert(p.clone(), v);
+            }
+            match execute_ops(&proc.operations, &mut call_env, procs)? {
+                ControlFlow::Return(v) => Ok(v.unwrap_or(LppoValue::Int(0))),
+                ControlFlow::Break | ControlFlow::Continue => {
+                    Err("break/continue outside loop".to_owned())
+                }
+                ControlFlow::None => Ok(LppoValue::Int(0)),
+            }
+        }
     }
 }
 
@@ -634,6 +719,7 @@ fn execute_ops(
     env: &mut BTreeMap<String, LppoValue>,
     procs: &BTreeMap<String, Procedure>,
 ) -> LppoResult<ControlFlow> {
+    use alloc::collections::BTreeMap;
     let arr = ops
         .as_array()
         .ok_or("operations must be an array".to_owned())?;
@@ -656,8 +742,10 @@ fn execute_ops(
                 for e in arr {
                     parts.push(value_to_string(&eval_expr(e, env, procs)?));
                 }
-                vga_write_str(&parts.join(" "));
-                vga_write_str("\n");
+                vga::vga_write_str(&parts.join(" "));
+                vga::vga_write_str("\n");
+                serial::write_str(&parts.join(" "));
+                serial::write_str("\n");
             }
             "Let" => {
                 let pair = payload
@@ -704,39 +792,7 @@ fn execute_ops(
                 let args = pair[1]
                     .as_array()
                     .ok_or("Call args must be an array".to_owned())?;
-                let mut arg_vals = Vec::new();
-                for a in args {
-                    arg_vals.push(eval_expr(a, env, procs)?);
-                }
-                let proc = procs.get(name).ok_or_else(|| {
-                    let mut s = String::new();
-                    s.push_str("unknown procedure '");
-                    s.push_str(name);
-                    s.push_str("'");
-                    s
-                })?;
-                if proc.params.len() != arg_vals.len() {
-                    let mut s = String::new();
-                    s.push_str("argument count mismatch for '");
-                    s.push_str(name);
-                    s.push_str("'");
-                    return Err(s);
-                }
-                let mut call_env = BTreeMap::new();
-                for (p, v) in proc.params.iter().zip(arg_vals.into_iter()) {
-                    call_env.insert(p.clone(), v);
-                }
-                match execute_ops(&proc.operations, &mut call_env, procs)? {
-                    ControlFlow::Return(v) => return Ok(ControlFlow::Return(v)),
-                    ControlFlow::Break | ControlFlow::Continue => {
-                        let mut s = String::new();
-                        s.push_str("break/continue outside loop in '");
-                        s.push_str(name);
-                        s.push_str("'");
-                        return Err(s);
-                    }
-                    ControlFlow::None => {}
-                }
+                return eval_call(name, args, env, procs).map(|_| ControlFlow::None);
             }
             "If" => {
                 let cond_obj = payload
@@ -749,8 +805,7 @@ fn execute_ops(
                 )?;
                 if truthy(&cond) {
                     let then_ops = cond_obj
-                        .get("then_ops")
-                        .ok_or("If missing then_ops".to_owned())?;
+                        .get("then_ops").ok_or("If missing then_ops".to_owned())?;
                     return execute_ops(then_ops, env, procs);
                 }
                 if let Some(elifs) = cond_obj.get("elifs").and_then(|e| e.as_array()) {
@@ -836,31 +891,60 @@ fn execute_ops(
 
 include!(concat!(env!("OUT_DIR"), "/embedded.rs"));
 
-extern "C" {
-    static _stack_top: usize;
-}
-
+// rust_kmain is the entry point called from the assembly bootstrap (boot.S)
+// once the CPU is in 64-bit long mode with paging enabled.
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
-    unsafe {
-        core::arch::asm!("mov rsp, {0}", in(reg) _stack_top, options(nostack));
-    }
-    kmain();
-}
+pub extern "C" fn kmain() -> ! {
+    // Running in 64-bit long mode at this point (boot.S switched modes).
+    vga::vga_clear();
+    serial::init();
+    serial::write_str("kmain: entered 64-bit long mode\n");
+    vga::vga_write_str("LPPO bare metal runtime (kernel) v5.3\n");
+    serial::write_str("LPPO bare metal runtime (kernel) v5.3\n");
+    vga::vga_write_str("LPPO bare metal runtime (kernel) v5.3\n");
+    serial::write_str("LPPO bare metal runtime (kernel) v5.3\n");
 
-fn kmain() -> ! {
-    vga_clear();
-    vga_write_str("LPPO bare metal runtime v5.3\n");
-    vga_write_str("----------------------------------------\n");
+    serial::write_str("kernel: running in 64-bit long mode\n");
+    vga::vga_write_str("kernel: running in 64-bit long mode\n");
+
+    // Parse the Multiboot2 boot info (best-effort; RBX holds the boot-info ptr
+    // when booted by a multiboot2 bootloader such as GRUB).
+    let regions = boot_memory_regions();
+
+    // Initialise the physical memory manager.
+    pmm::init();
+
+    // Reserve the kernel image and the early heap so the frame allocator
+    // never hands them out. The kernel is loaded at 1 MiB; _end marks its end.
+    extern "C" {
+        static _end: usize;
+    }
+    let kernel_end = unsafe { _end as u64 };
+    pmm::reserve(0x100000, kernel_end);
+    pmm::reserve(HEAP_START as u64, HEAP_START as u64 + HEAP_SIZE as u64);
+
+    // Reserve any non-available (reserved/ACPI/NVS/bad) regions from the map.
+    for r in regions.iter() {
+        if r.r#type != MULTIBOOT_MEMORY_AVAILABLE {
+            pmm::reserve(r.addr, r.addr.wrapping_add(r.len));
+        }
+    }
+
+    // GDT and IDT are set up by boot.S; (re)initialise them here for clarity.
+    // Both are idempotent.
+    gdt::init();
+    idt::init();
+
+    serial::write_str("kernel: GDT, IDT initialised\n");
+    vga::vga_write_str("kernel: GDT, IDT initialised\n");
 
     let data: Value = match serde_json::from_slice(BYTECODE) {
         Ok(d) => d,
         Err(_) => {
-            vga_write_str("failed to parse LPPO bytecode (invalid JSON)\n");
+            vga::vga_write_str("failed to parse LPPO bytecode (invalid JSON)\n");
+            serial::write_str("failed to parse LPPO bytecode\n");
             loop {
-                unsafe {
-                    core::arch::asm!("hlt");
-                }
+                unsafe { core::arch::asm!("hlt"); }
             }
         }
     };
@@ -868,11 +952,10 @@ fn kmain() -> ! {
     let root = match data.as_object() {
         Some(r) => r,
         None => {
-            vga_write_str("bytecode must be a JSON object\n");
+            vga::vga_write_str("bytecode must be a JSON object\n");
+            serial::write_str("bytecode must be a JSON object\n");
             loop {
-                unsafe {
-                    core::arch::asm!("hlt");
-                }
+                unsafe { core::arch::asm!("hlt"); }
             }
         }
     };
@@ -898,34 +981,50 @@ fn kmain() -> ! {
     let main_proc = match procs.get("main") {
         Some(p) => p,
         None => {
-            vga_write_str("no 'main' procedure in bytecode\n");
+            vga::vga_write_str("no 'main' procedure in bytecode\n");
+            serial::write_str("no 'main' procedure\n");
             loop {
-                unsafe {
-                    core::arch::asm!("hlt");
-                }
+                unsafe { core::arch::asm!("hlt"); }
             }
         }
     };
 
+    serial::write_str("kernel: running LPPO main\n");
+    vga::vga_write_str("kernel: running LPPO main\n");
+
     let mut env: BTreeMap<String, LppoValue> = BTreeMap::new();
     match execute_ops(&main_proc.operations, &mut env, &procs) {
         Ok(ControlFlow::None) => {
-            vga_write_str("\n[program finished]\n");
+            vga::vga_write_str("\n[program finished]\n");
+            serial::write_str("\n[program finished]\n");
         }
         Ok(ControlFlow::Return(Some(v))) => {
-            vga_write_str("\n[return: ");
+            vga::vga_write_str("\n[return: ");
             vga_write_value(&v);
-            vga_write_str("]\n");
+            vga::vga_write_str("]\n");
+            serial::write_str("\n[return: ");
+            serial_write_value(&v);
+            serial::write_str("]\n");
         }
         Ok(ControlFlow::Return(None)) => {
-            vga_write_str("\n[return]\n");
+            vga::vga_write_str("\n[return]\n");
+            serial::write_str("\n[return]\n");
         }
-        Ok(ControlFlow::Break) => vga_write_str("\n[break]\n"),
-        Ok(ControlFlow::Continue) => vga_write_str("\n[continue]\n"),
+        Ok(ControlFlow::Break) => {
+            vga::vga_write_str("\n[break]\n");
+            serial::write_str("\n[break]\n");
+        }
+        Ok(ControlFlow::Continue) => {
+            vga::vga_write_str("\n[continue]\n");
+            serial::write_str("\n[continue]\n");
+        }
         Err(e) => {
-            vga_write_str("\n[runtime error: ");
-            vga_write_str(&e);
-            vga_write_str("]\n");
+            vga::vga_write_str("\n[runtime error: ");
+            vga::vga_write_str(&e);
+            vga::vga_write_str("]\n");
+            serial::write_str("\n[runtime error: ");
+            serial::write_str(&e);
+            serial::write_str("]\n");
         }
     }
 

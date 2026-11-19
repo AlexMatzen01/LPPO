@@ -7,3 +7,10 @@ edition = "2021"
 # serde_json compiled without std, using alloc only so it works on bare metal
 # targets (e.g. x86_64-unknown-none).
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+
+# Bare metal has no std unwinding support; abort on panic.
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"

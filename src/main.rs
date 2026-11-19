@@ -13,6 +13,8 @@ use project::{
 
 use lppo::pkg::cli::PkgSubcommand;
 
+
+
 fn lppo_version_major() -> u64 {
     option_env!("LPPO_VERSION_MAJOR")
         .unwrap_or("0")
@@ -420,6 +422,89 @@ fn run() -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
 
+        Some("run") => {
+            // Run mode: execute a .lppo source file via the bytecode interpreter.
+            let src = args_iter.next().ok_or("missing source path for `lppo run`")?;
+            let path_ref = Path::new(&src);
+            if !path_ref.exists() {
+                return Err(format!("source file not found: {src}").into());
+            }
+            let source = fs::read_to_string(path_ref)?;
+            let root = path_ref.parent().unwrap_or_else(|| Path::new("."));
+            let executor = lppo::build_executor_with_root(&source, root)
+                .map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
+            if !executor.has_procedure("main") {
+                return Err(Box::new(lppo::LppoError::unknown_procedure("main".into())));
+            }
+            executor
+                .run("main")
+                .map_err(|err| -> Box<dyn Error> { Box::new(err) })?;
+            return Ok(());
+        }
+
+        Some("build") => {
+            // AOT build mode: transpile .lppo to C, then compile with the system cc.
+            let mut out: Option<String> = None;
+            let mut emit_llvm = false;
+            let mut emit_object = false;
+            let mut opt_level: u8 = 2;
+            let mut src: Option<String> = None;
+            while let Some(arg) = args_iter.next() {
+                match arg.as_str() {
+                    "-o" => out = Some(args_iter.next().ok_or("missing value for -o")?),
+                    "--emit-c" | "--emit-llvm" => emit_llvm = true,
+                    "--emit-object" => emit_object = true,
+                    "-O" => {
+                        opt_level = args_iter
+                            .next()
+                            .ok_or("missing value for -O")?
+                            .parse::<u8>()
+                            .map_err(|_| "invalid -O value".to_string())?;
+                    }
+                    other if src.is_none() => src = Some(other.to_string()),
+                    other => return Err(format!("unknown build option: {other}").into()),
+                }
+            }
+            let src = src.ok_or("missing source path for `lppo build`")?;
+            eprintln!("[build] reading source: {src}");
+            let source = fs::read_to_string(&src)?;
+            let root = Path::new(&src).parent().unwrap_or_else(|| Path::new("."));
+            let procedures = lppo::compile_to_procedures(&source, root)
+                .map_err(|e| -> Box<dyn Error> { Box::new(e) })?;
+            eprintln!("[build] compiled {} procedures", procedures.len());
+
+            let config = lppo::codegen_c::TargetConfig {
+                triple: "x86_64-unknown-linux-gnu".to_string(),
+                cpu: "x86-64".to_string(),
+                features: "".to_string(),
+                opt_level: lppo::codegen_c::OptimizationLevel::from_u8(opt_level)
+                    .map_err(|e| -> Box<dyn Error> {
+                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
+                    })?,
+            };
+
+            if emit_llvm {
+                eprintln!("[build] emitting C source");
+                let c_src = lppo::codegen_c::compile_to_c_source(&procedures)?;
+                let out_path = out.unwrap_or_else(|| format!("{}.c", src));
+                fs::write(&out_path, &c_src)?;
+                println!("Wrote C source: {out_path}");
+                return Ok(());
+            }
+
+            if emit_object {
+                let out_path = out.unwrap_or_else(|| format!("{}.o", src));
+                lppo::codegen_c::compile_to_object(&procedures, &config, Path::new(&out_path))?;
+                println!("Wrote object file: {out_path}");
+                return Ok(());
+            }
+
+            let out_path = out.ok_or("missing output path for `lppo build` (use -o)")?;
+            lppo::codegen_c::compile_to_executable(&procedures, &config, Path::new(&out_path))?;
+            println!("Wrote native executable: {out_path}");
+            return Ok(());
+        }
+
         Some(first) => {
             // Run mode: treat the first argument as a source path.
             let path_ref = Path::new(first);
@@ -578,8 +663,31 @@ fn run_project(
                     "--linker" => options.linker = Some(args_iter.next().ok_or("missing value for --linker")?),
                     "--link-arg" => options.link_args.push(args_iter.next().ok_or("missing value for --link-arg")?),
                     "--entry" => entry = Some(args_iter.next().ok_or("missing value for --entry")?),
-                    "--output" => {
+                    "--output" | "-o" => {
                         output = Some(args_iter.next().ok_or("missing value for --output")?)
+                    }
+                    "--bundle" => options.bundle = true,
+                    "--native" => {
+                        options.force_native = true;
+                        options.bundle = false;
+                    }
+                    "--emit-c" => {
+                        options.emit_c = Some(args_iter.next().ok_or("missing value for --emit-c")?)
+                    }
+                    "-O" => {
+                        let level = args_iter
+                            .next()
+                            .ok_or("missing value for -O")?
+                            .parse::<u8>()
+                            .map_err(|_| "invalid -O value")?;
+                        options.opt_level = Some(level);
+                    }
+                    other if other.starts_with("-O") => {
+                        options.opt_level = Some(
+                            other[2..]
+                                .parse::<u8>()
+                                .map_err(|_| "invalid -O value")?,
+                        );
                     }
                     other => return Err(format!("unknown build option: {other}").into()),
                 }
