@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.1.10-alpha.1 - 2026-11-19 (alpha)
+
+Release v0.1.10-alpha.1
+
+### Added
+- C transpiler backend (`src/codegen_c/`): bytecode is lowered to portable C and
+  compiled with the system `cc` into a native ELF executable.
+- `lppo project build` now produces native executables through the C backend by
+  default; `--bundle` restores the interpreter-bundle layout, `--emit-c <path>`
+  writes the generated C, and `-O <0-3>` selects the optimization level.
+- `[build] native` and `[build] opt_level` manifest settings.
+- `lppo build ... --emit-c` alias for `--emit-llvm`.
+- `lppo-rt` gained TUI helpers, string-keyed maps, array-backed SIMD helpers,
+  simulated pointer/volatile memory, `inline_asm`, array input parsing, and
+  multi-attribute ANSI colors.
+
 ## 0.1.9-alpha.3 - 2026-11-16 (alpha)
 
 Release v0.1.9-alpha.3

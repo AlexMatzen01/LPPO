@@ -1,6 +1,6 @@
 # LPPO - A Learning-Focused Programming Language
 
-**Version:** 0.1.9-alpha.3 (alpha)
+**Version:** 0.1.10-alpha.1 (alpha)
 
 ## Overview
 
@@ -279,15 +279,54 @@ The following options are accepted by `lppo project build`, `--compile-out`,
 |--------|-------------|
 | `--release` | Build a release-mode bundle |
 | `--entry <file>` | Entry source file (default: manifest `build.entry`) |
-| `--output <path>` | Output executable path (default: manifest `build.output`) |
+| `--output <path>`, `-o <path>` | Output executable path (default: manifest `build.output`) |
 | `--strip` | Strip unreachable/dead procedures from the bytecode payload |
 | `--obfuscate` | XOR-obfuscate the bytecode payload so plaintext strings are not stored verbatim in the output binary |
 | `--linker <path>` | Linker to use (applied to bare-metal/native builds via `RUSTFLAGS`) |
 | `--link-arg <arg>` | Additional argument forwarded to the linker (repeatable) |
+| `--bundle` | Embed the interpreter bundle instead of transpiling to C (legacy layout) |
+| `--native` | Force the native C transpiler build (the default) |
+| `--emit-c <path>` | Write the generated C source instead of an executable |
+| `-O <0-3>` | Optimization level passed to the system C compiler (default `0`, `2` with `--release`) |
 
 `--strip` and `--obfuscate` can also be set as defaults in `lppo.toml` under
 `[build]` (`strip = true`, `obfuscate = true`, `link_args = [...]`); CLI flags
 override the manifest.
+
+### Native builds (C transpiler)
+
+`lppo project build` lowers the compiled bytecode to portable C and hands it to
+the system C compiler (`cc`), producing a native ELF executable that links
+against the `lppo-rt` runtime archive:
+
+```bash
+# Native executable in target/<name>
+lppo project build --release
+
+# Inspect or ship the generated C
+lppo project build --emit-c build/app.c
+
+# Keep the interpreter-bundle layout instead
+lppo project build --bundle
+```
+
+`lppo project build` also works in a folder without a `lppo.toml`: it uses
+`src/main.lppo`, `main.lppo`, or the first `.lppo` file it finds as the entry.
+
+The runtime archive is located from `LPPO_RT_LIB`, the executable directory, or
+`target/{debug,release}/liblppo_rt.a`. Build it once with
+`cargo build -p lppo-rt`.
+
+Manifest defaults for the native path:
+
+```toml
+[build]
+native = true     # set to false to default to the interpreter bundle
+opt_level = 2     # 0-3, forwarded to cc as -O<n>
+```
+
+`lppo build <file.lppo>` is the single-file equivalent; the interpreter
+(`lppo run`) is unchanged.
 
 Examples:
 
