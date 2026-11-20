@@ -1,6 +1,6 @@
 # LPPO — Legible Programming Platform eXtensions
 
-**Version:** 0.1.10-alpha.4 (alpha)
+**Version:** 0.1.11-alpha.4 (alpha)
 
 LPPO is a statically typed systems programming language with zero-cost abstractions, explicit memory/ownership, and first-class concurrency. It compiles to portable bytecode executed by an embedded interpreter, transpiles to C for native executables, and targets bare-metal x86_64 kernels.
 
