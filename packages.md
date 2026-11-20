@@ -1,87 +1,16 @@
-# LPPO Package System
+# LPPO Packages
 
-LPPO uses a repository-driven package system. Instead of hardcoding package
-paths in a central registry, you declare repositories in `~/.LPPO/repositories.json`,
-and each package carries its own `package.json` manifest.
+LPPO ships with a package manager (`lppo pkg`) that resolves, installs, builds, and links LPPO packages. Packages are Rust crates exposing an LPPO-facing FFI interface, registered in a repository index and installed into a local package store.
 
-## Directory Layout
+## Package layout
 
-```
-~/.LPPO/                  # Global LPPO package data
-  repositories.json       # Declared package repositories
-  packages.json           # Generated index of available packages
-  installed.json          # Tracked installed packages
-  lppo_modules/           # Installed package source code & builds
-    <package-name>/       # Each installed package lives here
-      Cargo.toml
-      src/
-      package.json        # The package manifest (copied from source)
-      target/             # Build artifacts
-```
+A package is a directory containing:
 
-<project>/
-  .lppo/                  # Project-local package data (when inside an LPPO project)
-    lppo_modules/         # Project-local installed packages
+- `package.json` — package manifest (identifier, version, dependencies, build config)
+- `Cargo.toml` — Rust crate manifest (build system: cargo)
+- LPPO-facing native functions compiled into a dynamic/static library
 
-## `repositories.json`
-
-Declares where LPPO looks for packages. Each entry has:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Unique repository identifier |
-| `url` | string | Git URL or filesystem path |
-| `type` | `"git"` or `"path"` | Repository kind |
-| `description` | string | Human-readable description |
-
-Example:
-
-```json
-{
-  "schema_version": 1,
-  "repositories": [
-    {
-      "name": "lppo-official",
-      "url": "https://github.com/lppo-lang/packages",
-      "type": "git",
-      "description": "Official LPPO package repository"
-    },
-    {
-      "name": "local",
-      "url": "/home/alex/Documents/lppo-packages",
-      "type": "path",
-      "description": "Local package directory"
-    }
-  ]
-}
-```
-
-Manage repositories with:
-
-```sh
-lppo pkg repo list
-lppo pkg repo add <name> <url> <git|path>
-lppo pkg repo remove <name>
-```
-
-## `package.json` (package manifest)
-
-Every LPPO package must include a `package.json` at its root. It declares:
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `identifier` | string | Yes | Unique package name (used as import key) |
-| `display_name` | string | Yes | Human-readable display name |
-| `version` | string | Yes | SemVer version (e.g. `1.0.0`) |
-| `author` | string | Yes | Name and email |
-| `description` | string | No | Short description |
-| `license` | string | No | SPDX license identifier |
-| `repository` | string | No | Source repository URL |
-| `lppo_version` | string | No | Minimum LPPO version (e.g. `>=5.0.0`) |
-| `dependencies` | object | No | Map of package identifier -> version req |
-| `build` | object | No | Build configuration |
-
-Example:
+## package.json manifest
 
 ```json
 {
@@ -90,12 +19,15 @@ Example:
     "identifier": "mypackage",
     "display_name": "My Package",
     "version": "1.0.0",
-    "author": "Your Name <you@example.com>",
-    "description": "A short description of your package",
+    "author": "Name <email>",
+    "description": "A useful LPPO package",
     "license": "MIT",
-    "repository": "https://github.com/yourname/mypackage",
+    "repository": "https://github.com/user/mypackage",
     "lppo_version": ">=5.0.0",
-    "dependencies": {},
+    "dependencies": {
+      "otherpkg": "^1.0.0"
+    },
+    "ports": [],
     "build": {
       "system": "cargo",
       "manifest": "Cargo.toml",
@@ -106,41 +38,132 @@ Example:
 }
 ```
 
-## How Packages Are Resolved
+Fields:
+- `identifier` — unique package ID used as the import/install key
+- `version` — SemVer version string
+- `dependencies` — package identifier → version requirement (e.g. `^1.0.0`, `>=1.2.3`)
+- `build.release` — build in release mode (default `true`)
 
-1. `lppo pkg install <identifier>` reads `~/.LPPO/repositories.json`.
-2. For each repository, LPPO checks whether a package with that `identifier`
-   exists (by reading its `package.json`).
-3. The package source is cloned/copied into `~/.LPPO/lppo_modules/<identifier>/`.
-4. An entry is written to `~/.LPPO/packages.json` recording the install path.
-5. The package is built with Cargo and tracked in `~/.LPPO/installed.json`.
+## Repositories
 
-For project-local installs (`lppo project pkg install`), packages go into
-`<project>/.lppo/lppo_modules/` instead.
+Repositories declare where LPPO finds packages. Stored in `~/.LPPO/repositories.json` (or project-local `.lppo/repositories.json`).
 
-## Creating a Package
+```json
+{
+  "schema_version": 1,
+  "repositories": [
+    { "name": "official", "url": "https://github.com/lppo/packages.git", "type": "git", "description": "Official LPPO packages" }
+  ]
+}
+```
 
-1. Initialize a Cargo project:
+Repository types: `git` or `path`.
 
-   ```sh
-   cargo new mypackage
-   cd mypackage
-   ```
+## CLI reference
 
-2. Add `package.json` at the project root (see example above).
+`lppo pkg <subcommand> [args]`
 
-3. Make sure your `Cargo.toml` produces a `cdylib` or `rlib` that LPPO can load.
+| Subcommand | Description |
+|------------|-------------|
+| `search <query>` | Search available packages |
+| `install <package>` | Install a package (and regenerate the index) |
+| `remove <name>` | Remove an installed package |
+| `list` | List installed packages |
+| `info <name>` | Show package details (installed or available) |
+| `build <name>` | Build a package from source |
+| `update [name]` | Update a package (or all) |
+| `repo list` | List configured repositories |
+| `repo add <name> <url> <git\|path>` | Add a repository |
+| `repo remove <name>` | Remove a repository |
 
-4. Publish the package to a Git repository or filesystem path.
+### Examples
 
-5. Add the repository to your LPPO config:
+```sh
+# Add the official repository
+lppo pkg repo add official https://github.com/lppo/packages.git git
 
-   ```sh
-   lppo pkg repo add myrepo https://github.com/you/mypackages.git git
-   ```
+# Search for a package
+lppo pkg search crypto
 
-6. Install and use:
+# Install a package
+lppo pkg install sha256
 
-   ```sh
-   lppo pkg install mypackage
-   ```
+# List installed packages
+lppo pkg list
+
+# View package info
+lppo pkg info sha256
+
+# Remove a package
+lppo pkg remove sha256
+```
+
+## Importing packages in LPPO source
+
+Packages exposing native functions resolve against the installed package database. Use `use <package>;` to bring a package's interface into scope (the first path segment is checked against installed packages; on-disk file resolution is skipped for installed packages).
+
+```lppo
+use sha256;
+
+pub proc main() -> Void {
+    out sha256("hello world");
+}
+```
+
+## Native package interface
+
+Native packages declare exported functions with LPPO-facing types:
+
+| LPPO type | FFI representation |
+|-----------|-------------------|
+| `Int64` | `i64` |
+| `Bool` | `i1` (zero-extended to `i64` in FFI) |
+| `Str` | `*mut i8` (null-terminated, heap-allocated) |
+| `Void` | `()` |
+
+Up to two string parameters are supported when `string_args` is true; they occupy the first two argument slots using the `NativeFnString` calling convention.
+
+## Package store
+
+- Global: `~/.LPPO/`
+  - `packages.json` — package library index
+  - `installed.json` — local installation database
+  - `repositories.json` — configured repositories
+  - `bin/lppo` — the LPPO binary (auto-installed on first run)
+- Project-local: `<project>/.lppo/`
+  - `repositories.json` — copied from global on `lppo project init`
+
+Schema versions: package library `1`, installed database `1`.
+
+## Version requirements
+
+Version requirements follow SemVer ranges:
+- `*` or empty — any version
+- `=1.2.3` or `1.2.3` — exact
+- `^1.2.3` — `>=1.2.3, <2.0.0` (major locked when major > 0)
+- `~1.2.3` — `>=1.2.3, <1.3.0`
+- `>=1.2.3` / `>1.2.3` / `<=1.2.3` / `<1.2.3` — comparison
+
+## Project integration
+
+`lppo.toml` manifest:
+
+```toml
+[project]
+name = "myapp"
+version = "0.1.0"
+edition = "2021"
+
+[build]
+entry = "src/main.lppo"
+output = "target/{name}"
+strip = false
+obfuscate = false
+native = true
+opt_level = 2
+
+[dependencies]
+path = ["../somepkg"]
+```
+
+`lppo project init <name>` scaffolds a new project with `lppo.toml`, `src/main.lppo`, `.gitignore`, `.lppo/` (with `repositories.json`), and a git repository.

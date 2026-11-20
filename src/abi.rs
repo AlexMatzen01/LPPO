@@ -17,6 +17,7 @@
 //!   - Arr<T>  -> %lppo.array = { i8*, i64 } passed by pointer
 //!   - Void    -> void
 
+use std::os::raw::c_char;
 use std::os::raw::c_int;
 
 /// Tag values passed as the first argument to `lppo_rt_print_value` so the
@@ -68,6 +69,26 @@ extern "C" {
     pub fn lppo_rt_dealloc(addr: i64) -> ();
 }
 
+#[link_name = "lppo_rt_cleanup"]
+extern "C" {
+    pub fn lppo_rt_cleanup() -> ();
+}
+
+#[link_name = "lppo_rt_clock_ns"]
+extern "C" {
+    pub fn lppo_rt_clock_ns() -> i64;
+}
+
+#[link_name = "lppo_rt_time_ns"]
+extern "C" {
+    pub fn lppo_rt_time_ns() -> i64;
+}
+
+#[link_name = "lppo_rt_array_set_tag"]
+extern "C" {
+    pub fn lppo_rt_array_set_tag(arr: *mut i8, idx: i64, tag: i64, val: i64) -> *mut i8;
+}
+
 #[link_name = "lppo_rt_array_make"]
 extern "C" {
     pub fn lppo_rt_array_make(len: i64) -> *mut i8;
@@ -80,7 +101,7 @@ extern "C" {
 
 #[link_name = "lppo_rt_array_set"]
 extern "C" {
-    pub fn lppo_rt_array_set(arr: *mut i8, idx: i64, val: i64) -> ();
+    pub fn lppo_rt_array_set(arr: *mut i8, idx: i64, val: i64) -> *mut i8;
 }
 
 #[link_name = "lppo_rt_array_push"]
@@ -116,6 +137,31 @@ extern "C" {
 #[link_name = "lppo_rt_pow"]
 extern "C" {
     pub fn lppo_rt_pow(base: i64, exp: i64) -> i64;
+}
+
+#[link_name = "lppo_rt_range"]
+extern "C" {
+    pub fn lppo_rt_range(start: i64, end: i64, inclusive: i64) -> *mut i8;
+}
+
+#[link_name = "lppo_rt_fn_make"]
+extern "C" {
+    pub fn lppo_rt_fn_make(index: i64, capture_count: i64) -> *mut i8;
+}
+
+#[link_name = "lppo_rt_fn_set_capture"]
+extern "C" {
+    pub fn lppo_rt_fn_set_capture(f: *mut i8, idx: i64, tag: i64, value: i64) -> ();
+}
+
+#[link_name = "lppo_rt_fn_index"]
+extern "C" {
+    pub fn lppo_rt_fn_index(f: *mut i8) -> i64;
+}
+
+#[link_name = "lppo_rt_fn_capture"]
+extern "C" {
+    pub fn lppo_rt_fn_capture(f: *mut i8, idx: i64) -> i64;
 }
 
 #[link_name = "lppo_rt_sqrt"]
@@ -246,3 +292,13 @@ extern "C" {
 /// Entry point signature expected by the runtime: `main` takes no args and
 /// returns i32. Generated `main` follows this.
 pub type MainFn = extern "C" fn() -> c_int;
+
+/// Native package calling convention carrying C string arguments.
+///
+/// The default native ABI is `extern "C" fn(i64 x8) -> i64` (all args and the
+/// return are i64; string args are passed by FNV-hashed id). A native function
+/// declared with `string_args` opts into this convention instead: the first
+/// `n_string_params` arguments are `*const c_char` (null-terminated, owned by
+/// the caller), followed by the remaining i64 args. Return is i64.
+pub type NativeFnString =
+    extern "C" fn(*const c_char, *const c_char, i64, i64, i64, i64, i64, i64) -> i64;

@@ -342,6 +342,12 @@ pub struct PackageFunction {
     /// Symbol name in the native library.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub symbol: Option<String>,
+    /// When true, string (`Str`) parameters are passed as `*const c_char`
+    /// instead of being FNV-hashed into an i64. The native symbol must use
+    /// the `NativeFnString` calling convention. Up to two string parameters
+    /// are supported (they occupy the first two argument slots).
+    #[serde(default)]
+    pub string_args: bool,
 }
 
 /// LPPO type annotation used in package interfaces.

@@ -1963,7 +1963,29 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self) -> LppoResult<Expr> {
-        self.parse_or()
+        self.parse_range()
+    }
+
+    /// Parse a range expression `start..end` (exclusive) or `start..=end`
+    /// (inclusive). Range binds looser than additive/multiplicative operators.
+    fn parse_range(&mut self) -> LppoResult<Expr> {
+        let mut node = self.parse_or()?;
+        while self.lookahead == Token::DoubleDot {
+            self.advance()?;
+            let inclusive = if self.lookahead == Token::Equals {
+                self.advance()?;
+                true
+            } else {
+                false
+            };
+            let rhs = self.parse_or()?;
+            node = Expr::Range {
+                start: Box::new(node),
+                end: Box::new(rhs),
+                inclusive,
+            };
+        }
+        Ok(node)
     }
 
     fn parse_or(&mut self) -> LppoResult<Expr> {

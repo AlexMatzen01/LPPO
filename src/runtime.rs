@@ -2,11 +2,11 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 // Global registry for background task handles scheduled by async pauses.
 static BACKGROUND_HANDLES: Lazy<Mutex<Vec<JoinHandle<()>>>> = Lazy::new(|| Mutex::new(Vec::new()));
@@ -307,6 +307,12 @@ pub enum Operation {
     },
     /// Deallocate memory: Dealloc(var)
     Dealloc(String),
+    /// Indexed assignment: arr[i] = expr (clone-and-replace semantics).
+    IndexedAssignment {
+        target: String,
+        index: Expr,
+        value: Expr,
+    },
     /// Call another procedure by name with argument expressions.
     Call(String, Vec<Expr>),
     /// Let binding: set a local variable to the value of an expression.
@@ -2783,6 +2789,30 @@ pub(crate) fn eval_expr(
                             ));
                         }
                     }
+                    // --- Clock / time built-ins ---
+                    "clock_ns" => {
+                        if arg_vals.len() != 0 {
+                            return Err(LppoError::type_error(
+                                "clock_ns requires 0 arguments".into(),
+                            ));
+                        }
+                        static CLOCK_START: OnceLock<Instant> = OnceLock::new();
+                        let start = CLOCK_START.get_or_init(Instant::now);
+                        return Ok(Value::Int(start.elapsed().as_nanos() as i64));
+                    }
+                    "time_ns" => {
+                        if arg_vals.len() != 0 {
+                            return Err(LppoError::type_error(
+                                "time_ns requires 0 arguments".into(),
+                            ));
+                        }
+                        return Ok(Value::Int(
+                            SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .map(|d| d.as_nanos() as i64)
+                                .unwrap_or(0),
+                        ));
+                    }
                     // --- Direct memory addressing and pointers ---
                     "addr_of" => {
                         if arg_vals.len() != 1 {
@@ -3780,6 +3810,44 @@ impl Executor {
                     }
                     // Remove the variable from the environment
                     env.remove(var);
+                }
+                Operation::IndexedAssignment {
+                    target,
+                    index,
+                    value,
+                } => {
+                    // Clone-and-replace semantics: arr[i] = expr rebinds `target`
+                    // to a new array with index `i` replaced by `value`.
+                    let idx_val = eval_expr(index, env, &self.procedures, self.ring0)?;
+                    let val = eval_expr(value, env, &self.procedures, self.ring0)?;
+                    let idx = match idx_val {
+                        Value::Int(i) => i,
+                        _ => {
+                            return Err(LppoError::type_error(
+                                "indexed assignment index must be an integer".into(),
+                            ))
+                        }
+                    };
+                    let arr = match env.get(target) {
+                        Some(Value::Array(arr)) => arr.clone(),
+                        Some(_) => {
+                            return Err(LppoError::type_error(format!(
+                                "indexed assignment target '{target}' is not an array"
+                            )))
+                        }
+                        None => {
+                            return Err(LppoError::unknown_variable(target.clone()));
+                        }
+                    };
+                    if idx < 0 || idx as usize >= arr.len() {
+                        return Err(LppoError::type_error(format!(
+                            "indexed assignment index {idx} out of bounds (len {})",
+                            arr.len()
+                        )));
+                    }
+                    let mut new_arr = arr;
+                    new_arr[idx as usize] = val;
+                    env.insert(target.clone(), Value::Array(new_arr));
                 }
                 Operation::Nop => {
                     // No operation - do nothing

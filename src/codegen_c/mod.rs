@@ -29,6 +29,20 @@ use crate::ast::TypeAnnotation;
 use crate::runtime::{ProcedureBody};
 use std::collections::HashMap;
 
+/// A lambda lifted to a standalone static C function during closure conversion.
+///
+/// `index` is its unique id (emitted as `lppo_closure_<index>`), `params` are
+/// the closure's parameter names, `body` is the closure body expression, and
+/// `captures` are the free variables (in order) taken from the enclosing scope
+/// and passed as leading `int64_t` arguments.
+#[derive(Clone)]
+pub struct ClosureInfo {
+    pub index: i64,
+    pub params: Vec<String>,
+    pub captures: Vec<String>,
+    pub body: crate::ast::Expr,
+}
+
 /// Top-level entry: compile all procedures into C source code string.
 pub fn compile_program_to_c(
     procedures: &HashMap<String, ProcedureBody>,
@@ -90,6 +104,59 @@ fn generate_ir_text(
         .map(|(name, body)| (name.clone(), body.return_type.clone().unwrap_or(TypeAnnotation::Void)))
         .collect();
 
+    // ------------------------------------------------------------------
+    // Closure conversion: collect every `Expr::Closure` across the whole
+    // program, assign each a stable index, codegen each procedure body
+    // (recording closures as they are discovered), then emit lifted closure
+    // functions *before* the procedures that call them.
+    // ------------------------------------------------------------------
+    let mut closures: Vec<ClosureInfo> = Vec::new();
+    let mut closure_counter: i64 = 0;
+    let mut proc_codes: Vec<(String, String)> = Vec::new();
+
+    for (name, body) in procedures {
+        let c_name = if name == "main" {
+            "lppo_user_main".to_string()
+        } else {
+            c_fn_name(name)
+        };
+        let code = compile_procedure_ir(
+            &c_name,
+            body,
+            &string_indices,
+            &proc_return_types,
+            &mut closures,
+            &mut closure_counter,
+        )?;
+        proc_codes.push((c_name, code));
+    }
+
+    // Emit lifted closure functions (file scope, before procedures that call them).
+    // Use a while loop because emitting a closure body can discover nested
+    // closures that are appended to `closures` and must also be emitted.
+    // Forward declarations for lifted closures (they may reference each other),
+    // then their definitions.
+    for cl in &closures {
+        out.push_str(&format!(
+            "static int64_t lppo_closure_{}({});\n",
+            cl.index,
+            closure_param_decls(cl)
+        ));
+    }
+    let mut i = 0;
+    while i < closures.len() {
+        let cl = closures[i].clone();
+        out.push_str(&emit_closure_function(
+            &cl,
+            &string_indices,
+            &proc_return_types,
+            &mut closures,
+            &mut closure_counter,
+        )?);
+        i += 1;
+    }
+    out.push_str("\n");
+
     // Forward declarations so procedures can be called in any order.
     for (name, body) in procedures {
         let c_name = if name == "main" {
@@ -115,18 +182,8 @@ fn generate_ir_text(
     out.push_str("\n");
 
     // Emit each procedure body as a C function.
-    for (name, body) in procedures {
-        let c_name = if name == "main" {
-            "lppo_user_main".to_string()
-        } else {
-            c_fn_name(name)
-        };
-        out.push_str(&compile_procedure_ir(
-            &c_name,
-            body,
-            &string_indices,
-            &proc_return_types,
-        )?);
+    for (c_name, code) in proc_codes {
+        out.push_str(&code);
         out.push_str("\n");
     }
 
@@ -270,6 +327,7 @@ fn collect_strings_in_expr(expr: &crate::ast::Expr, pool: &mut Vec<String>) {
             collect_strings_in_expr(start, pool);
             collect_strings_in_expr(end, pool);
         }
+        Expr::Closure { body, .. } => collect_strings_in_expr(body, pool),
         Expr::StructInit { fields, .. } => {
             for (_, e) in fields {
                 collect_strings_in_expr(e, pool);
@@ -356,6 +414,63 @@ fn emit_c_helpers(out: &mut String) {
     out.push_str("\n");
 }
 
+/// Parameter declaration list for a lifted closure function: captures first,
+/// then the closure's own parameters.
+fn closure_param_decls(cl: &ClosureInfo) -> String {
+    let caps: Vec<String> = cl
+        .captures
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("int64_t cap{}", i))
+        .collect();
+    let params: Vec<String> = cl
+        .params
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("int64_t p{}", i))
+        .collect();
+    caps.into_iter().chain(params).collect::<Vec<_>>().join(", ")
+}
+
+/// Emit a lifted closure function `static int64_t lppo_closure_<index>(cap0.., p0..) -> int64_t`.
+/// Captures are passed as leading `int64_t` arguments, followed by the closure
+/// parameters. The body is codegen'd with locals mapping capture/param names to
+/// those argument names.
+fn emit_closure_function(    cl: &ClosureInfo,
+    string_indices: &std::collections::HashMap<String, usize>,
+    proc_return_types: &std::collections::HashMap<String, crate::ast::TypeAnnotation>,
+    closures: &mut Vec<ClosureInfo>,
+    closure_counter: &mut i64,
+) -> Result<String, String> {
+    use std::collections::HashMap;
+    let ClosureInfo { index, params, captures, body } = cl;
+    let mut locals: HashMap<String, String> = HashMap::new();
+    let mut var_tags: HashMap<String, i64> = HashMap::new();
+    for (i, name) in captures.iter().enumerate() {
+        let cname = format!("cap{}", i);
+        locals.insert(name.clone(), cname.clone());
+        var_tags.insert(name.clone(), crate::codegen_c::TAG_INT);
+    }
+    for (i, name) in params.iter().enumerate() {
+        let cname = format!("p{}", i);
+        locals.insert(name.clone(), cname.clone());
+        var_tags.insert(name.clone(), crate::codegen_c::TAG_INT);
+    }
+    let param_decls: Vec<String> = captures
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("int64_t cap{}", i))
+        .chain(params.iter().enumerate().map(|(i, _)| format!("int64_t p{}", i)))
+        .collect();
+    let body_code = codegen_expr(body, &locals, &var_tags, string_indices, proc_return_types, closures, closure_counter)?;
+    Ok(format!(
+        "static int64_t lppo_closure_{}({}) {{\n  return {};\n}}\n",
+        index,
+        param_decls.join(", "),
+        body_code
+    ))
+}
+
 /// Declare all runtime built-in functions as C declarations.
 fn declare_builtins_c(out: &mut String) {
     let builtins: &[(&str, &[&str], &str)] = &[
@@ -414,6 +529,9 @@ fn declare_builtins_c(out: &mut String) {
         ("lppo_rt_json_stringify", &["int64_t", "int64_t"], "int64_t"),
         ("lppo_rt_system", &["int64_t"], "int64_t"),
         ("lppo_rt_color", &["int64_t", "int64_t"], "int64_t"),
+        ("lppo_rt_clock_ns", &[], "int64_t"),
+        ("lppo_rt_time_ns", &[], "int64_t"),
+        ("lppo_rt_range", &["int64_t", "int64_t", "int64_t"], "int64_t"),
         ("lppo_rt_read_file", &["int64_t"], "int64_t"),
         ("lppo_rt_write_file", &["int64_t", "int64_t"], "int32_t"),
         ("lppo_rt_append_file", &["int64_t", "int64_t"], "int32_t"),
@@ -458,6 +576,7 @@ fn declare_builtins_c(out: &mut String) {
         ("lppo_rt_set_len", &["int64_t"], "int64_t"),
         ("lppo_rt_set_to_array", &["int64_t"], "int64_t"),
         ("lppo_rt_fn_make", &["int64_t", "int64_t"], "int64_t"),
+        ("lppo_rt_fn_set_capture", &["int64_t", "int64_t", "int64_t", "int64_t"], "void"),
         ("lppo_rt_fn_index", &["int64_t"], "int64_t"),
         ("lppo_rt_fn_capture", &["int64_t", "int64_t"], "int64_t"),
         ("lppo_rt_simd_splat", &["int64_t", "int64_t"], "int64_t"),
@@ -636,6 +755,8 @@ fn builtin_func_name(name: &str) -> &str {
         "tui_reset" => "lppo_rt_tui_reset",
         "tui_progress" => "lppo_rt_tui_progress",
         "tui_size" => "lppo_rt_tui_size",
+        "clock_ns" => "lppo_rt_clock_ns",
+        "time_ns" => "lppo_rt_time_ns",
         "tui_fg" => "lppo_rt_tui_fg",
         "tui_bold" => "lppo_rt_tui_bold",
         "tui_underline" => "lppo_rt_tui_underline",

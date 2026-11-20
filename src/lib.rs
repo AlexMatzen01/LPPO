@@ -296,7 +296,8 @@ fn collect_call_targets(ops: &[Operation], out: &mut Vec<String>) {
             | Operation::Nop
             | Operation::Pause { .. }
             | Operation::Alloc { .. }
-            | Operation::Dealloc(_) => {}
+            | Operation::Dealloc(_)
+            | Operation::IndexedAssignment { .. } => {}
         }
     }
 }

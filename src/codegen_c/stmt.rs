@@ -7,8 +7,9 @@
 use crate::ast::{Expr, TypeAnnotation};
 use crate::codegen_c::expr::{codegen_expr, expr_tag};
 use crate::codegen_c::{
-    builtin_func_name, resolve_callee, TAG_ARRAY, TAG_BOOL, TAG_BYTE, TAG_CHAR, TAG_DYN,
-    TAG_ENUM, TAG_FLOAT, TAG_INT, TAG_JSON, TAG_SET, TAG_STR, TAG_STRUCT, TAG_TUPLE, TAG_MAP,
+    builtin_func_name, resolve_callee, ClosureInfo, TAG_ARRAY, TAG_BOOL, TAG_BYTE, TAG_CHAR,
+    TAG_DYN, TAG_ENUM, TAG_FLOAT, TAG_INT, TAG_JSON, TAG_SET, TAG_STR, TAG_STRUCT,
+    TAG_MAP,
 };
 use crate::runtime::Operation;
 use std::collections::HashMap;
@@ -25,6 +26,10 @@ pub struct Ctx<'a> {
     pub return_type: &'a str,
     /// Array variables whose elements are strings.
     pub str_arrays: HashMap<String, bool>,
+    /// Discovered closures (index, params, captures, body) during this procedure.
+    pub closures: &'a mut Vec<ClosureInfo>,
+    /// Next closure index to assign (shared across all procedures).
+    pub closure_counter: &'a mut i64,
 }
 
 impl<'a> Ctx<'a> {
@@ -33,13 +38,15 @@ impl<'a> Ctx<'a> {
         format!("{}{}", prefix, self.label_counter)
     }
 
-    fn expr(&self, expr: &Expr) -> Result<String, String> {
+    fn expr(&mut self, expr: &Expr) -> Result<String, String> {
         codegen_expr(
             expr,
             &self.locals,
             &self.var_tags,
             self.string_indices,
             self.proc_return_types,
+            self.closures,
+            self.closure_counter,
         )
     }
 }
@@ -213,6 +220,19 @@ pub fn codegen_operation(
             if let Some(cname) = ctx.locals.get(var).cloned() {
                 out.push_str(&format!("  lppo_rt_dealloc({});\n", cname));
             }
+            Ok(())
+        }
+
+        Operation::IndexedAssignment { target, index, value } => {
+            let t = ctx.locals.get(target).cloned().unwrap_or_else(|| target.clone());
+            let i = ctx.expr(index)?;
+            let v = ctx.expr(value)?;
+            let vt = expr_tag(value, &ctx.var_tags, &ctx.proc_return_types);
+            out.push_str(&format!(
+                "  {{ int64_t _t = {t}; int64_t _i = lppo_norm_idx({i}, lppo_rt_array_len(_t)); \
+                 lppo_rt_array_set_tag(_t, _i, {vt}, {v}); }}\n",
+                t = t, i = i, vt = vt, v = v
+            ));
             Ok(())
         }
 

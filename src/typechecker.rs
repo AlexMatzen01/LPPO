@@ -978,6 +978,9 @@ pub fn typecheck_program_with_context(program: &Program, context: &PackageContex
         vec![],
         TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64)),
     );
+    // Clock / time built-ins.
+    ctx.add_procedure("clock_ns".to_string(), vec![], TypeAnnotation::Int64);
+    ctx.add_procedure("time_ns".to_string(), vec![], TypeAnnotation::Int64);
 
     // Ring-0 (kernel privilege) built-ins. Only available when the source file
     // declares `ring 0;` as its first directive. These interact with ring-0
@@ -1427,6 +1430,17 @@ fn typecheck_statement(
             index,
             value,
         } => {
+            // Indexed assignment target must be a variable so the runtime can
+            // rebind it (clone-and-replace semantics).
+            if !matches!(target.as_ref(), crate::ast::Expr::Var(_)) {
+                return Err(LppoError::TypeError {
+                    message: "indexed assignment target must be a variable".to_string(),
+                    expected: Some("variable".to_string()),
+                    found: Some(format!("{:?}", target)),
+                    location: None,
+                    suggestion: None,
+                });
+            }
             let target_type = typecheck_expr(target, ctx)?;
             let index_type = typecheck_expr(index, ctx)?;
             let value_type = typecheck_expr(value, ctx)?;
@@ -1615,6 +1629,8 @@ fn typecheck_expr(expr: &Expr, ctx: &mut TypeContext) -> LppoResult<TypeAnnotati
             }
             Ok(TypeAnnotation::Arr(Box::new(first_type)))
         }
+
+        Expr::Range { .. } => Ok(TypeAnnotation::Arr(Box::new(TypeAnnotation::Int64))),
 
         Expr::Index { target, index } => {
             if let TypeAnnotation::Tuple(items) = typecheck_expr(target, ctx)?.normalized() {
@@ -1849,16 +1865,34 @@ fn typecheck_expr(expr: &Expr, ctx: &mut TypeContext) -> LppoResult<TypeAnnotati
                     return Ok(TypeAnnotation::Void);
                 }
             };
-            let (param_types, return_type) = ctx
-                .get_procedure(&proc_name)
-                .ok_or_else(|| LppoError::UnknownProcedure {
-                    name: proc_name.clone(),
-                    location: None,
-                    suggestion: Some(
-                        "check that the procedure is defined and spelled correctly".to_string(),
-                    ),
-                })?
-                .clone();
+            // Resolve the callee: either a user procedure or a closure variable
+            // of type Fn(...).
+            let (param_types, return_type) =
+                if let Some(sig) = ctx.get_procedure(&proc_name) {
+                    sig.clone()
+                } else if let Some(var_typ) = ctx.get_variable(&proc_name) {
+                    match var_typ.normalized() {
+                        TypeAnnotation::Fn { params, ret } => (params.clone(), *ret.clone()),
+                        _ => {
+                            return Err(LppoError::UnknownProcedure {
+                                name: proc_name.clone(),
+                                location: None,
+                                suggestion: Some(
+                                    "check that the procedure is defined and spelled correctly"
+                                        .to_string(),
+                                ),
+                            })
+                        }
+                    }
+                } else {
+                    return Err(LppoError::UnknownProcedure {
+                        name: proc_name.clone(),
+                        location: None,
+                        suggestion: Some(
+                            "check that the procedure is defined and spelled correctly".to_string(),
+                        ),
+                    });
+                };
 
             if args.len() != param_types.len() {
                 return Err(LppoError::TypeError {

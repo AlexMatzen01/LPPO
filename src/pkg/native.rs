@@ -9,6 +9,7 @@
 //!   * Dispatches calls to package functions at runtime via `libloading`
 //!     FFI against the package's compiled `cdylib`.
 
+use crate::abi::NativeFnString;
 use crate::error::{LppoError, LppoResult};
 use crate::pkg::installed::InstalledTracker;
 use crate::pkg::library::{load_package_interface, PackageContext};
@@ -17,6 +18,8 @@ use crate::ast::TypeAnnotation;
 use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::ffi::c_char;
+use std::os::raw::c_int;
 use std::sync::Mutex;
 
 /// Thread-local package context used by native FFI dispatch.
@@ -103,6 +106,9 @@ pub struct NativeFunction {
     pub symbol: String,
     /// Absolute path to the package's cdylib artifact.
     pub library_path: Option<std::path::PathBuf>,
+    /// When true, `Str` parameters are passed as `*const c_char` using the
+    /// `NativeFnString` convention instead of being FNV-hashed into an i64.
+    pub string_args: bool,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -187,6 +193,7 @@ impl NativeRegistry {
                     return_type: to_lppo_type(&func.return_type),
                     symbol: func.symbol.clone().unwrap_or_else(|| func.name.clone()),
                     library_path: library_path.clone(),
+                    string_args: func.string_args,
                 });
             }
             eprintln!("[native] registered {} functions from package {name}", iface.functions.len());
@@ -283,23 +290,104 @@ pub fn call_native_with(
             )
         })?;
 
-        let symbol: libloading::Symbol<'_, NativeFn> = lib.get(func.symbol.as_bytes()).map_err(|e| {
-            LppoError::source_retrieval_failed(
-                name.to_string(),
-                format!("failed to load symbol '{}' from '{}': {e}", func.symbol, library_path.display()),
-            )
-        })?;
-
-        // Collect arguments, padding missing ones with 0.
-        let mut a = [0i64; MAX_NATIVE_ARGS];
-        for (i, arg) in args.iter().enumerate() {
-            if i < MAX_NATIVE_ARGS {
-                a[i] = value_to_i64(arg);
+        if func.string_args {
+            // String-args convention: string parameters are passed as
+            // `*const c_char` in the first slots, remaining args as i64.
+            // Up to two string parameters are supported.
+            let str_count = func
+                .params
+                .iter()
+                .take(MAX_NATIVE_ARGS)
+                .filter(|p| matches!(p, TypeAnnotation::Str))
+                .count();
+            if str_count > 2 {
+                return Err(LppoError::type_error(format!(
+                    "native function '{name}' has {str_count} string parameters; \
+                     string_args supports at most two"
+                )));
             }
-        }
+            if args.len() > MAX_NATIVE_ARGS {
+                return Err(LppoError::type_error(format!(
+                    "native function '{name}' takes at most {MAX_NATIVE_ARGS} arguments"
+                )));
+            }
 
-        let result = symbol(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
-        Ok(i64_to_value(&func.return_type, result))
+            // Build CStrings for string args (owned for the duration of the call).
+            let mut cstrings: Vec<std::ffi::CString> = Vec::new();
+            let mut str_ptrs: [*const c_char; 2] = [std::ptr::null(), std::ptr::null()];
+            let mut str_i = 0usize;
+            let mut ints = [0i64; MAX_NATIVE_ARGS];
+            let mut int_i = 0usize;
+            for (i, arg) in args.iter().enumerate() {
+                if i >= MAX_NATIVE_ARGS {
+                    break;
+                }
+                if matches!(arg, crate::runtime::Value::Str(_))
+                    && str_i < str_count
+                    && str_i < 2
+                {
+                    let cs = std::ffi::CString::new(
+                        match arg {
+                            crate::runtime::Value::Str(s) => s.as_str(),
+                            _ => "",
+                        },
+                    )
+                    .map_err(|e| {
+                        LppoError::type_error(format!(
+                            "native function '{name}' argument {i} contains NUL: {e}"
+                        ))
+                    })?;
+                    str_ptrs[str_i] = cs.as_ptr();
+                    cstrings.push(cs);
+                    str_i += 1;
+                } else {
+                    ints[int_i] = value_to_i64(arg);
+                    int_i += 1;
+                }
+            }
+
+            let symbol: libloading::Symbol<'_, NativeFnString> =
+                lib.get(func.symbol.as_bytes()).map_err(|e| {
+                    LppoError::source_retrieval_failed(
+                        name.to_string(),
+                        format!(
+                            "failed to load symbol '{}' from '{}': {e}",
+                            func.symbol,
+                            library_path.display()
+                        ),
+                    )
+                })?;
+
+            let result = symbol(
+                str_ptrs[0],
+                str_ptrs[1],
+                ints[0],
+                ints[1],
+                ints[2],
+                ints[3],
+                ints[4],
+                ints[5],
+            );
+            Ok(i64_to_value(&func.return_type, result))
+        } else {
+            let symbol: libloading::Symbol<'_, NativeFn> = lib.get(func.symbol.as_bytes()).map_err(|e| {
+                LppoError::source_retrieval_failed(
+                    name.to_string(),
+                    format!("failed to load symbol '{}' from '{}': {e}", func.symbol, library_path.display()),
+                )
+            })?;
+
+            // Collect arguments, padding missing ones with 0.
+            let mut a = [0i64; MAX_NATIVE_ARGS];
+            for (i, arg) in args.iter().enumerate() {
+                if i < MAX_NATIVE_ARGS {
+                    a[i] = value_to_i64(arg);
+                }
+            }
+
+            let result = symbol(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+            Ok(i64_to_value(&func.return_type, result))
+        }
     }
 }
 
@@ -368,6 +456,7 @@ mod tests {
             return_type: TypeAnnotation::Int64,
             symbol: "foo".to_string(),
             library_path: None,
+            string_args: false,
         });
         assert!(reg.get("foo").is_some());
         assert!(reg.get("bar").is_none());
@@ -396,6 +485,7 @@ mod tests {
             return_type: TypeAnnotation::Int64,
             symbol: "arity2".to_string(),
             library_path: None,
+            string_args: false,
         });
         let reg_ref = reg;
         let func = reg_ref.get("arity2").unwrap();

@@ -192,8 +192,10 @@ fn print_help() {
     println!("    --version, -V  Print version information");
     println!();
     println!("COMMANDS:");
-    println!("    build <source.lppo> [-o <out>] [-O <0-3>] [--emit-c] [--emit-object]");
-    println!("                                  Transpile source to a native executable via C");
+    println!("    build <source.lppo> [-o <out>] [-O <0-3>] [-Os] [-Oz]");
+    println!("                    [--ffunction-sections] [--fdata-sections]");
+    println!("                    [--gc-sections] [--strip] [--static]");
+    println!("                    [--release]    Transpile source to a native executable via C");
     println!("    --compile <out> <source.lppo>   Compile source to a bundled executable");
     println!("    --compile-out <out> <source.lppo>  Alias for compile (alias)");
     println!("    --compile-bare-metal <out> <source.lppo>  Compile to a bare-metal x86_64 executable");
@@ -449,23 +451,45 @@ fn run() -> Result<(), Box<dyn Error>> {
             let mut out: Option<String> = None;
             let mut emit_llvm = false;
             let mut emit_object = false;
-            let mut opt_level: u8 = 2;
+            let mut opt_level: Option<lppo::codegen_c::OptimizationLevel> = None;
+            let mut release_mode = false;
             let mut src: Option<String> = None;
+            let mut function_sections = false;
+            let mut data_sections = false;
+            let mut gc_sections = false;
+            let mut strip = false;
+            let mut static_link = false;
             while let Some(arg) = args_iter.next() {
                 match arg.as_str() {
                     "-o" => out = Some(args_iter.next().ok_or("missing value for -o")?),
                     "--emit-c" | "--emit-llvm" => emit_llvm = true,
                     "--emit-object" => emit_object = true,
                     "-O" => {
-                        opt_level = args_iter
-                            .next()
-                            .ok_or("missing value for -O")?
-                            .parse::<u8>()
-                            .map_err(|_| "invalid -O value".to_string())?;
+                        opt_level = Some(
+                            args_iter
+                                .next()
+                                .ok_or("missing value for -O")?
+                                .parse::<u8>()
+                                .map_err(|_| "invalid -O value".to_string())
+                                .and_then(|n| lppo::codegen_c::OptimizationLevel::from_u8(n))
+                                .map_err(|e| e.to_string())?,
+                        );
                     }
+                    "-Os" => opt_level = Some(lppo::codegen_c::OptimizationLevel::Os),
+                    "-Oz" => opt_level = Some(lppo::codegen_c::OptimizationLevel::Oz),
+                    "--release" => release_mode = true,
+                    "--ffunction-sections" => function_sections = true,
+                    "--fdata-sections" => data_sections = true,
+                    "--gc-sections" | "-Wl,--gc-sections" => gc_sections = true,
+                    "--strip" => strip = true,
+                    "--static" => static_link = true,
                     other if src.is_none() => src = Some(other.to_string()),
                     other => return Err(format!("unknown build option: {other}").into()),
                 }
+            }
+            if release_mode {
+                opt_level.get_or_insert(lppo::codegen_c::OptimizationLevel::O2);
+                strip = true;
             }
             let src = src.ok_or("missing source path for `lppo build`")?;
             eprintln!("[build] reading source: {src}");
@@ -479,10 +503,14 @@ fn run() -> Result<(), Box<dyn Error>> {
                 triple: "x86_64-unknown-linux-gnu".to_string(),
                 cpu: "x86-64".to_string(),
                 features: "".to_string(),
-                opt_level: lppo::codegen_c::OptimizationLevel::from_u8(opt_level)
-                    .map_err(|e| -> Box<dyn Error> {
-                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidInput, e))
-                    })?,
+                opt_level: opt_level.unwrap_or_default(),
+                function_sections,
+                data_sections,
+                gc_sections,
+                strip,
+                static_link,
+                no_unwind_tables: false,
+                no_exceptions: false,
             };
 
             if emit_llvm {
@@ -691,6 +719,12 @@ fn run_project(
                                 .map_err(|_| "invalid -O value")?,
                         );
                     }
+                    "-Os" => options.os_opt = true,
+                    "-Oz" => options.oz_opt = true,
+                    "--ffunction-sections" => options.function_sections = true,
+                    "--fdata-sections" => options.data_sections = true,
+                    "--gc-sections" | "-Wl,--gc-sections" => options.gc_sections = true,
+                    "--static" => options.static_link = true,
                     other => return Err(format!("unknown build option: {other}").into()),
                 }
             }

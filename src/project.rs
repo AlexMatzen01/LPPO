@@ -60,6 +60,24 @@ pub struct BuildSection {
     /// Optimization level (0-3) for the C transpiler.
     #[serde(default)]
     pub opt_level: Option<u8>,
+    /// Optimize for code size (`-Os`).
+    #[serde(default)]
+    pub os_opt: bool,
+    /// Optimize aggressively for code size (`-Oz`).
+    #[serde(default)]
+    pub oz_opt: bool,
+    /// `-ffunction-sections`: one ELF section per function.
+    #[serde(default)]
+    pub function_sections: bool,
+    /// `-fdata-sections`: one ELF section per global/static.
+    #[serde(default)]
+    pub data_sections: bool,
+    /// `-Wl,--gc-sections`: drop unreferenced sections at link time.
+    #[serde(default)]
+    pub gc_sections: bool,
+    /// `-static`: fully static link (dynamic is the default).
+    #[serde(default)]
+    pub static_link: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -101,9 +119,21 @@ pub struct BuildOptions {
     pub force_native: bool,
     /// Write the generated C source to this path instead of an executable.
     pub emit_c: Option<String>,
-    /// Optimization level for the C transpiler (0-3). Takes precedence over
-    /// the manifest setting.
-    pub opt_level: Option<u8>,
+/// Optimization level for the C transpiler (0-3). Takes precedence over
+/// the manifest setting.
+pub opt_level: Option<u8>,
+/// Optimize for code size (`-Os`).
+pub os_opt: bool,
+/// Optimize aggressively for code size (`-Oz`).
+pub oz_opt: bool,
+/// `-ffunction-sections`: one ELF section per function.
+pub function_sections: bool,
+/// `-fdata-sections`: one ELF section per global/static.
+pub data_sections: bool,
+/// `-Wl,--gc-sections`: drop unreferenced sections at link time.
+pub gc_sections: bool,
+/// `-static`: fully static link (dynamic is the default).
+pub static_link: bool,
 }
 
 /// An LPPO project rooted at a directory containing `lppo.toml`.
@@ -432,16 +462,32 @@ pub fn cmd_build(options: BuildOptions, entry: Option<&str>, output: Option<&str
     }
 
     // Native path: lower the resolved program to C and invoke the system compiler.
-    let opt_level = options
+    let manifest_opt = project
+        .manifest
+        .build
         .opt_level
-        .or(project.manifest.build.opt_level)
-        .unwrap_or(if options.release { 2 } else { 0 });
-    let opt = lppo::codegen_c::OptimizationLevel::from_u8(opt_level)
-        .map_err(LppoError::type_error)?;
+        .or(options.opt_level);
+    let opt_level = if options.os_opt {
+        lppo::codegen_c::OptimizationLevel::Os
+    } else if options.oz_opt {
+        lppo::codegen_c::OptimizationLevel::Oz
+    } else {
+        match manifest_opt.or(if options.release { Some(2) } else { Some(0) }) {
+            Some(n) => lppo::codegen_c::OptimizationLevel::from_u8(n)
+                .map_err(LppoError::type_error)?,
+            None => lppo::codegen_c::OptimizationLevel::default(),
+        }
+    };
 
     let procedures = lppo::compile_to_procedures(&source, &root)?;
     let config = lppo::codegen_c::TargetConfig {
-        opt_level: opt,
+        opt_level,
+        function_sections: options.function_sections
+            || project.manifest.build.function_sections,
+        data_sections: options.data_sections || project.manifest.build.data_sections,
+        gc_sections: options.gc_sections || project.manifest.build.gc_sections,
+        strip: options.strip,
+        static_link: options.static_link || project.manifest.build.static_link,
         ..Default::default()
     };
 

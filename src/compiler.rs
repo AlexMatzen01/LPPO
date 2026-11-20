@@ -273,13 +273,22 @@ fn compile_statement(
             Operation::Let(target, value)
         }
         Statement::IndexedAssignment {
-            target: _,
-            index: _,
-            value: _,
+            target,
+            index,
+            value,
         } => {
-            // Indexed assignment: arr[i] = expr
-            // For now, treat as no-op since arrays are immutable in simplified runtime
-            Operation::Nop
+            // Indexed assignment: arr[i] = expr (clone-and-replace semantics).
+            // The target must be a variable expression; non-variable targets
+            // are rejected at runtime with a clear error.
+            let target_name = match target.as_ref() {
+                crate::ast::Expr::Var(name) => name.clone(),
+                _ => String::new(),
+            };
+            Operation::IndexedAssignment {
+                target: target_name,
+                index: *index,
+                value,
+            }
         }
         Statement::Pause {
             prompt,

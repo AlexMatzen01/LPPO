@@ -21,6 +21,7 @@ use std::fs;
 use std::io::Write;
 use std::os::raw::c_int;
 use std::sync::{Mutex, OnceLock};
+use std::time::{SystemTime, UNIX_EPOCH, Instant};
 
 // ---------------------------------------------------------------------------
 // String allocation helpers
@@ -124,9 +125,32 @@ pub extern "C" fn lppo_rt_input(tag: i64, prompt: *mut i8) -> i64 {
 }
 
 // ---------------------------------------------------------------------------
-// Memory
+// Memory (heap allocation registry)
 // ---------------------------------------------------------------------------
 
+/// A heap block handed out by `lppo_rt_alloc`. The raw pointer is wrapped in a
+/// newtype so the registry can be `Send`/`Sync` for use in a `OnceLock<Mutex<_>>`.
+#[derive(Debug, Clone)]
+struct HeapBlock(*mut u8, usize);
+
+unsafe impl Send for HeapBlock {}
+unsafe impl Sync for HeapBlock {}
+
+static ALLOCS: OnceLock<Mutex<HashMap<i64, HeapBlock>>> = OnceLock::new();
+
+fn allocs() -> &'static Mutex<HashMap<i64, HeapBlock>> {
+    ALLOCS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+static NEXT_ALLOC_ADDR: OnceLock<Mutex<i64>> = OnceLock::new();
+
+fn next_alloc_addr() -> &'static Mutex<i64> {
+    NEXT_ALLOC_ADDR.get_or_init(|| Mutex::new(4096))
+}
+
+/// Allocate `size` zeroed bytes on the heap and register the block so it can
+/// be freed by `lppo_rt_dealloc` / `lppo_rt_cleanup`. Returns the heap
+/// address (or 0 on failure).
 #[no_mangle]
 pub extern "C" fn lppo_rt_alloc(size: i64) -> i64 {
     if size <= 0 {
@@ -134,15 +158,67 @@ pub extern "C" fn lppo_rt_alloc(size: i64) -> i64 {
     }
     let mut buf = Vec::with_capacity(size as usize);
     buf.resize(size as usize, 0);
-    let ptr = buf.as_mut_ptr();
-    std::mem::forget(buf); // leak intentionally
-    ptr as i64
+    let cap = buf.capacity();
+    let ptr = buf.as_mut_ptr() as *mut u8;
+    std::mem::forget(buf);
+
+    let addr = {
+        let mut next = next_alloc_addr().lock().unwrap();
+        let addr = *next;
+        *next += 1;
+        addr
+    };
+    allocs().lock().unwrap().insert(addr, HeapBlock(ptr, cap));
+    addr as i64
 }
 
+/// Free a previously allocated block by address. Returns 0.
 #[no_mangle]
-pub extern "C" fn lppo_rt_dealloc(_addr: i64) {
-    // No-op: allocations are leaked intentionally in this runtime.
-    // A future version may implement proper heap tracking.
+pub extern "C" fn lppo_rt_dealloc(addr: i64) {
+    if addr == 0 {
+        return;
+    }
+    if let Some(HeapBlock(ptr, cap)) = allocs().lock().unwrap().remove(&addr) {
+        if !ptr.is_null() {
+            // Recover ownership of the leaked Vec and drop it to free memory.
+            drop(unsafe { Vec::from_raw_parts(ptr, 0, cap) });
+        }
+    }
+}
+
+/// Free every allocation tracked by the registry and clear it. Intended to be
+/// called once at process exit (e.g. from `main` after the user program runs)
+/// to avoid unbounded growth in long-running / repeated runs.
+#[no_mangle]
+pub extern "C" fn lppo_rt_cleanup() {
+    let entries: Vec<HeapBlock> = {
+        let mut map = allocs().lock().unwrap();
+        let v: Vec<_> = map.values().cloned().collect();
+        map.clear();
+        v
+    };
+    for HeapBlock(ptr, cap) in entries {
+        if !ptr.is_null() {
+            drop(unsafe { Vec::from_raw_parts(ptr, 0, cap) });
+        }
+    }
+}
+
+/// Monotonic nanoseconds since process start (for benchmarks).
+#[no_mangle]
+pub extern "C" fn lppo_rt_clock_ns() -> i64 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    let start = START.get_or_init(Instant::now);
+    start.elapsed().as_nanos() as i64
+}
+
+/// Nanoseconds since the UNIX epoch (wall clock).
+#[no_mangle]
+pub extern "C" fn lppo_rt_time_ns() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as i64)
+        .unwrap_or(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -921,6 +997,36 @@ pub extern "C" fn lppo_rt_fn_capture(f: *mut i8, idx: i64) -> i64 {
         .unwrap_or(0)
 }
 
+/// Set capture `idx` (tag, value) on closure `f`. Updates both the object
+/// items and the `fn_captures` registry so `lppo_rt_fn_capture` reads back
+/// the new value.
+#[no_mangle]
+pub extern "C" fn lppo_rt_fn_set_capture(f: *mut i8, idx: i64, tag: i64, value: i64) {
+    if f.is_null() || idx < 0 {
+        return;
+    }
+    let index = lppo_rt_fn_index(f);
+    unsafe {
+        // Object layout: item 0 = index, items 1.. = capture tag/value pairs.
+        // Capture idx: tag at item idx*2+1, value at item idx*2+2.
+        std::ptr::write(obj_items(f).add((idx as usize * 2 + 1) as usize), tag);
+        std::ptr::write(obj_items(f).add((idx as usize * 2 + 2) as usize), value);
+    }
+    let mut caps = fn_captures().lock().unwrap();
+    if let Some(c) = caps.get_mut(index as usize) {
+        let tag_idx = idx as usize * 2;
+        let val_idx = tag_idx + 1;
+        if val_idx < c.len() {
+            c[tag_idx] = tag;
+            c[val_idx] = value;
+        } else {
+            c.resize(val_idx + 1, 0);
+            c[tag_idx] = tag;
+            c[val_idx] = value;
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Arithmetic built-ins
 // ---------------------------------------------------------------------------
@@ -1237,6 +1343,22 @@ pub extern "C" fn lppo_rt_either(a: i64, b: i64) -> *mut i8 {
     lppo_rt_array_set(arr, 0, a.wrapping_add(b));
     lppo_rt_array_set(arr, 1, a.wrapping_sub(b));
     return arr;
+}
+
+/// Build an integer array covering `[start, end)` (exclusive) or
+/// `[start, end]` (inclusive). Returns a boxed array pointer (0 on empty).
+#[no_mangle]
+pub extern "C" fn lppo_rt_range(start: i64, end: i64, inclusive: i64) -> *mut i8 {
+    let len = if inclusive != 0 {
+        if end < start { 0 } else { (end - start + 1) as usize }
+    } else {
+        if end <= start { 0 } else { (end - start) as usize }
+    };
+    let arr = lppo_rt_array_make(len as i64);
+    for i in 0..len {
+        lppo_rt_array_set(arr, i as i64, start + i as i64);
+    }
+    arr
 }
 
 #[allow(dead_code)]

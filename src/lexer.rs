@@ -1091,7 +1091,14 @@ impl<'a> Lexer<'a> {
                 }
             }
             b',' => Token::Comma,
-            b'.' => Token::Dot,
+            b'.' => {
+                if self.peek() == Some(b'.') {
+                    self.bump();
+                    Token::DoubleDot
+                } else {
+                    Token::Dot
+                }
+            }
             b'?' => Token::Question,
             b':' => {
                 if self.peek() == Some(b':') {

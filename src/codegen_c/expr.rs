@@ -13,8 +13,8 @@
 
 use crate::ast::{BinaryOp, Expr, TypeAnnotation, UnaryOp};
 use crate::codegen_c::{
-    builtin_func_name, TAG_ARRAY, TAG_BOOL, TAG_BYTE, TAG_CHAR, TAG_ENUM, TAG_FLOAT, TAG_FN,
-    TAG_DYN, TAG_INT, TAG_JSON, TAG_MAP, TAG_SET, TAG_STR, TAG_STRUCT, TAG_TUPLE,
+    builtin_func_name, ClosureInfo, TAG_ARRAY, TAG_BOOL, TAG_BYTE, TAG_CHAR, TAG_ENUM, TAG_FLOAT,
+    TAG_FN, TAG_DYN, TAG_INT, TAG_JSON, TAG_MAP, TAG_SET, TAG_STR, TAG_STRUCT,
 };
 use std::collections::HashMap;
 
@@ -25,11 +25,13 @@ pub fn codegen_expr(
     var_tags: &HashMap<String, i64>,
     string_indices: &HashMap<String, usize>,
     proc_return_types: &HashMap<String, TypeAnnotation>,
+    closures: &mut Vec<ClosureInfo>,
+    closure_counter: &mut i64,
 ) -> Result<String, String> {
     match expr {
         Expr::Int(i) => Ok(format!("(int64_t){}{}", i, if *i == i64::MIN { "" } else { "LL" })),
         Expr::Return(value) => match value {
-            Some(v) => codegen_expr(v, locals, var_tags, string_indices, proc_return_types),
+            Some(v) => codegen_expr(v, locals, var_tags, string_indices, proc_return_types, closures, closure_counter),
             None => Ok("(int64_t)0".to_string()),
         },
         Expr::Char(c) => Ok(format!("(int64_t){}", *c as i64)),
@@ -44,6 +46,8 @@ pub fn codegen_expr(
                     var_tags,
                     string_indices,
                     proc_return_types,
+                    closures,
+                    closure_counter,
                 )?);
             }
             Ok(format!("lppo_tuple({})", parts.join(", ")))
@@ -66,6 +70,8 @@ pub fn codegen_expr(
                     var_tags,
                     string_indices,
                     proc_return_types,
+                    closures,
+                    closure_counter,
                 )?);
             }
             Ok(format!("lppo_enum({})", parts.join(", ")))
@@ -81,8 +87,8 @@ pub fn codegen_expr(
         Expr::Var(name) => lookup_local(name, locals),
         Expr::QualifiedVar(qn) => lookup_local(&qn_string(qn), locals),
         Expr::BinaryOp { left, op, right } => {
-            let l = codegen_expr(left, locals, var_tags, string_indices, proc_return_types)?;
-            let r = codegen_expr(right, locals, var_tags, string_indices, proc_return_types)?;
+            let l = codegen_expr(left, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
+            let r = codegen_expr(right, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
             if *op == BinaryOp::Pow {
                 return Ok(format!("lppo_rt_pow({}, {})", l, r));
             }
@@ -149,7 +155,7 @@ pub fn codegen_expr(
             Ok(format!("({} {} {})", l, opc, r))
         }
         Expr::UnaryOp { op, operand } => {
-            let v = codegen_expr(operand, locals, var_tags, string_indices, proc_return_types)?;
+            let v = codegen_expr(operand, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
             match op {
                 UnaryOp::Neg => Ok(format!("(-{})", v)),
                 UnaryOp::Not => Ok(format!("(({}) ? 0 : 1)", v)),
@@ -169,13 +175,15 @@ pub fn codegen_expr(
                     var_tags,
                     string_indices,
                     proc_return_types,
+                    closures,
+                    closure_counter,
                 )?);
             }
             Ok(format!("lppo_arr({})", parts.join(", ")))
         }
         Expr::Index { target, index } => {
-            let t = codegen_expr(target, locals, var_tags, string_indices, proc_return_types)?;
-            let i = codegen_expr(index, locals, var_tags, string_indices, proc_return_types)?;
+            let t = codegen_expr(target, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
+            let i = codegen_expr(index, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
             Ok(format!(
                 "lppo_rt_array_get({}, lppo_norm_idx({}, lppo_rt_array_len({})))",
                 t, i, t
@@ -186,7 +194,7 @@ pub fn codegen_expr(
             method,
             args,
         } => {
-            let t = codegen_expr(target, locals, var_tags, string_indices, proc_return_types)?;
+            let t = codegen_expr(target, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
             let mut arg_vals = Vec::new();
             for arg in args {
                 arg_vals.push(codegen_expr(
@@ -195,6 +203,8 @@ pub fn codegen_expr(
                     var_tags,
                     string_indices,
                     proc_return_types,
+                    closures,
+                    closure_counter,
                 )?);
             }
             match method.as_str() {
@@ -218,14 +228,14 @@ pub fn codegen_expr(
             }
         }
         Expr::Ref { target, .. } | Expr::Borrow { target, .. } => {
-            codegen_expr(target, locals, var_tags, string_indices, proc_return_types)
+            codegen_expr(target, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)
         }
         Expr::Deref(inner) => {
             // References are value-like in this runtime, so deref is identity.
-            codegen_expr(inner, locals, var_tags, string_indices, proc_return_types)
+            codegen_expr(inner, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)
         }
         Expr::FieldAccess { target, field } => {
-            let t = codegen_expr(target, locals, var_tags, string_indices, proc_return_types)?;
+            let t = codegen_expr(target, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
             Ok(format!(
                 "lppo_rt_struct_get({}, (int64_t)(intptr_t)\"{}\" )",
                 t,
@@ -241,7 +251,7 @@ pub fn codegen_expr(
             }
         )),
         Expr::Cast { expr, to_type } => {
-            let v = codegen_expr(expr, locals, var_tags, string_indices, proc_return_types)?;
+            let v = codegen_expr(expr, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
             match to_type {
                 TypeAnnotation::Bool => Ok(format!("((({}) != 0) ? 1 : 0)", v)),
                 TypeAnnotation::Int64 => Ok(format!("((int64_t)({}))", v)),
@@ -254,7 +264,76 @@ pub fn codegen_expr(
             }
         }
         Expr::Call { func, args } => {
-            let (call_name, is_user) = resolve_callee(func, proc_return_types)?;
+            // Direct invocation of a closure literal: (|params| body)(args).
+            // Emitted as a bare call to the lifted static closure function.
+            if let Expr::Closure { params, body, .. } = &**func {
+                let index = *closure_counter;
+                *closure_counter += 1;
+                let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+                let captures = collect_captures(body, &param_names, locals);
+                closures.push(ClosureInfo {
+                    index,
+                    params: param_names.clone(),
+                    captures: captures.clone(),
+                    body: body.as_ref().clone(),
+                });
+                let mut call_args: Vec<String> = Vec::new();
+                for name in &captures {
+                    let cname = locals.get(name).cloned().unwrap_or_else(|| format!("v_{}", name));
+                    call_args.push(cname);
+                }
+                for arg in args {
+                    call_args.push(codegen_expr(
+                        arg,
+                        locals,
+                        var_tags,
+                        string_indices,
+                        proc_return_types,
+                        closures,
+                        closure_counter,
+                    )?);
+                }
+                return Ok(format!("lppo_closure_{}({})", index, call_args.join(", ")));
+            }
+            // Indirect call through a closure variable (not a closure literal,
+            // not a known user procedure, not a builtin).  Fall through to
+            // indirect dispatch below.
+            let raw_for_indirect = match &**func {
+                Expr::Var(n) => n.clone(),
+                _ => String::new(),
+            };
+            let is_closure_var = !raw_for_indirect.is_empty()
+                && !proc_return_types.contains_key(&raw_for_indirect)
+                && builtin_func_name(&raw_for_indirect) == raw_for_indirect;
+            if is_closure_var {
+                return codegen_indirect_call(
+                    func,
+                    args,
+                    locals,
+                    var_tags,
+                    string_indices,
+                    proc_return_types,
+                    closures,
+                    closure_counter,
+                );
+            }
+            let (call_name, is_user) = match resolve_callee(func, proc_return_types) {
+                Ok(r) => r,
+                // func is not a Var/QualifiedVar: must be an indirect closure
+                // call through an arbitrary expression.
+                Err(_) => {
+                    return codegen_indirect_call(
+                        func,
+                        args,
+                        locals,
+                        var_tags,
+                        string_indices,
+                        proc_return_types,
+                        closures,
+                        closure_counter,
+                    );
+                }
+            };
             let raw = match &**func {
                 Expr::Var(n) => n.clone(),
                 Expr::QualifiedVar(qn) => qn_string(qn),
@@ -268,6 +347,8 @@ pub fn codegen_expr(
                     var_tags,
                     string_indices,
                     proc_return_types,
+                    closures,
+                    closure_counter,
                 )?);
             }
 
@@ -340,7 +421,36 @@ pub fn codegen_expr(
             }
             Ok(format!("{}({})", call_name, arg_str))
         }
-        Expr::Closure { .. } => Err("closures not yet supported in C codegen".to_string()),
+        Expr::Closure { params, body, .. } => {
+            // Closure value: create an FN object and set its captures by value.
+            // Emitted as a GNU statement expression returning the object ptr.
+            let index = *closure_counter;
+            *closure_counter += 1;
+            let param_names: Vec<String> = params.iter().map(|p| p.name.clone()).collect();
+            let captures = collect_captures(body, &param_names, locals);
+            closures.push(ClosureInfo {
+                index,
+                params: param_names.clone(),
+                captures: captures.clone(),
+                body: body.as_ref().clone(),
+            });
+            let mut out = String::from("({ ");
+            out.push_str(&format!(
+                "int64_t _fn = lppo_rt_fn_make({}, {}); ",
+                index,
+                captures.len()
+            ));
+            for (i, name) in captures.iter().enumerate() {
+                let cname = locals.get(name).cloned().unwrap_or_else(|| format!("v_{}", name));
+                let tag = var_tags.get(name).copied().unwrap_or(TAG_INT);
+                out.push_str(&format!(
+                    "lppo_rt_fn_set_capture(_fn, {}, {}, {}); ",
+                    i, tag, cname
+                ));
+            }
+            out.push_str("_fn; })");
+            Ok(out)
+        }
         Expr::StructInit { name, fields } => {
             let mut parts = vec![
                 format!("(int64_t)(intptr_t)\"{}\"", escape_c(name)),
@@ -355,20 +465,28 @@ pub fn codegen_expr(
                     var_tags,
                     string_indices,
                     proc_return_types,
+                    closures,
+                    closure_counter,
                 )?);
             }
             Ok(format!("lppo_struct({})", parts.join(", ")))
         }
-        Expr::Range { .. } => Err("range expressions not yet supported in C codegen".to_string()),
+        Expr::Range { start, end, inclusive } => {
+            let s = codegen_expr(start, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
+            let e = codegen_expr(end, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)?;
+            let inc = if *inclusive { 1 } else { 0 };
+            Ok(format!("lppo_rt_range({}, {}, {})", s, e, inc))
+        }
         Expr::MatchExpr { .. } => {
-            Err("match expressions not yet supported in C codegen".to_string())
+            Err("match expressions as nested expressions not yet supported in C codegen"
+                .to_string())
         }
         Expr::Await(inner) | Expr::Join(inner) => {
-            codegen_expr(inner, locals, var_tags, string_indices, proc_return_types)
+            codegen_expr(inner, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)
         }
         Expr::Async { body } | Expr::Spawn { body } => {
             // v1: async/spawn blocks run inline and yield their value.
-            codegen_expr(body, locals, var_tags, string_indices, proc_return_types)
+            codegen_expr(body, locals, var_tags, string_indices, proc_return_types, closures, closure_counter)
         }
         Expr::Handle { .. } => Err("effect handling not yet supported in C codegen".to_string()),
     }
@@ -457,6 +575,7 @@ pub fn expr_tag(expr: &Expr, var_tags: &HashMap<String, i64>, proc_return_types:
         Expr::Tuple(_) => TAG_DYN,
         Expr::EnumVariant { .. } => TAG_ENUM,
         Expr::StructInit { .. } => TAG_STRUCT,
+        Expr::Closure { .. } => TAG_FN,
         Expr::Array(_) => TAG_ARRAY,
         Expr::Str(_) => TAG_STR,
         Expr::Var(name) => var_tags.get(name).copied().unwrap_or(TAG_INT),
@@ -534,6 +653,186 @@ fn call_tag(func: &Expr, var_tags: &HashMap<String, i64>, proc_return_types: &Ha
         "set_contains" => TAG_BOOL,
         _ => var_tags.get(&raw).copied().unwrap_or(TAG_INT),
     }
+}
+
+/// Collect the names of all variables referenced by `expr`, descending into
+/// nested expressions (including nested closure bodies). Nested closure
+/// *parameters* are not `Expr::Var` nodes, so they are not mistaken for outer
+/// captures.
+fn free_vars(expr: &Expr) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    match expr {
+        Expr::Var(name) => out.push(name.clone()),
+        Expr::QualifiedVar(_) => {}
+        Expr::BinaryOp { left, right, .. } => {
+            out.extend(free_vars(left));
+            out.extend(free_vars(right));
+        }
+        Expr::UnaryOp { operand, .. } => out.extend(free_vars(operand)),
+        Expr::Array(elements) => {
+            for e in elements {
+                out.extend(free_vars(e));
+            }
+        }
+        Expr::Index { target, index } => {
+            out.extend(free_vars(target));
+            out.extend(free_vars(index));
+        }
+        Expr::MethodCall { target, args, .. } => {
+            out.extend(free_vars(target));
+            for a in args {
+                out.extend(free_vars(a));
+            }
+        }
+        Expr::FieldAccess { target, .. } => out.extend(free_vars(target)),
+        Expr::Call { func, args } => {
+            out.extend(free_vars(func));
+            for a in args {
+                out.extend(free_vars(a));
+            }
+        }
+        Expr::Closure { body, .. } => out.extend(free_vars(body)),
+        Expr::StructInit { fields, .. } => {
+            for (_, e) in fields {
+                out.extend(free_vars(e));
+            }
+        }
+        Expr::Range { start, end, .. } => {
+            out.extend(free_vars(start));
+            out.extend(free_vars(end));
+        }
+        Expr::MatchExpr { expr, arms } => {
+            out.extend(free_vars(expr));
+            for arm in arms {
+                match &arm.body {
+                    crate::ast::MatchArmBody::Expr(e) => out.extend(free_vars(e)),
+                    crate::ast::MatchArmBody::Emit(es) => {
+                        for e in es {
+                            out.extend(free_vars(e));
+                        }
+                    }
+                }
+            }
+        }
+        Expr::Tuple(items) => {
+            for e in items {
+                out.extend(free_vars(e));
+            }
+        }
+        Expr::EnumVariant { args, .. } => {
+            for a in args {
+                out.extend(free_vars(a));
+            }
+        }
+        Expr::Cast { expr, .. } => out.extend(free_vars(expr)),
+        Expr::Ref { target, .. } | Expr::Borrow { target, .. } => out.extend(free_vars(target)),
+        Expr::Deref(inner) => out.extend(free_vars(inner)),
+        Expr::Await(inner) | Expr::Join(inner) | Expr::Async { body: inner } | Expr::Spawn { body: inner } => {
+            out.extend(free_vars(inner));
+        }
+        Expr::Return(v) => {
+            if let Some(v) = v {
+                out.extend(free_vars(v));
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
+/// Free variables of `body` (excluding the closure's own `params`) that are
+/// bound in the enclosing `locals`, in first-appearance order, deduplicated.
+/// These become the closure's capture parameters.
+fn collect_captures(
+    body: &Expr,
+    param_names: &[String],
+    locals: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for name in free_vars(body) {
+        if locals.contains_key(&name) && !param_names.contains(&name) && seen.insert(name.clone()) {
+            out.push(name);
+        }
+    }
+    out
+}
+
+/// Codegen an indirect call through a closure value held in a variable or
+/// produced by an arbitrary expression.  Dispatches on `lppo_rt_fn_index` and
+/// calls the matching lifted `lppo_closure_N` with captures read via
+/// `lppo_rt_fn_capture`.
+fn codegen_indirect_call(
+    func: &Expr,
+    args: &[Expr],
+    locals: &HashMap<String, String>,
+    var_tags: &HashMap<String, i64>,
+    string_indices: &HashMap<String, usize>,
+    proc_return_types: &HashMap<String, TypeAnnotation>,
+    closures: &mut Vec<ClosureInfo>,
+    closure_counter: &mut i64,
+) -> Result<String, String> {
+    // Codegen the function expression to obtain the FN object pointer (i64).
+    let func_val = codegen_expr(
+        func,
+        locals,
+        var_tags,
+        string_indices,
+        proc_return_types,
+        closures,
+        closure_counter,
+    )?;
+
+    // Codegen all call arguments.
+    let mut arg_vals = Vec::new();
+    for arg in args {
+        arg_vals.push(codegen_expr(
+            arg,
+            locals,
+            var_tags,
+            string_indices,
+            proc_return_types,
+            closures,
+            closure_counter,
+        )?);
+    }
+
+    // Build the indirect dispatch as a GNU statement expression.
+    let mut out = String::from("({ ");
+    out.push_str(&format!("int64_t _f = {}; ", func_val));
+    out.push_str("int64_t _idx = lppo_rt_fn_index(_f); ");
+    out.push_str("int64_t _r; ");
+
+    if closures.is_empty() {
+        out.push_str("lppo_rt_panic(1); _r = 0; ");
+    } else {
+        for cl in closures.iter() {
+            out.push_str(&format!("if (_idx == {}) {{ ", cl.index));
+            for i in 0..cl.captures.len() {
+                out.push_str(&format!(
+                    "int64_t cap{} = lppo_rt_fn_capture(_f, {}); ",
+                    i, i
+                ));
+            }
+            let mut call_args: Vec<String> = Vec::new();
+            for i in 0..cl.captures.len() {
+                call_args.push(format!("cap{}", i));
+            }
+            for arg_val in &arg_vals {
+                call_args.push(arg_val.clone());
+            }
+            out.push_str(&format!(
+                "_r = lppo_closure_{}({}); ",
+                cl.index,
+                call_args.join(", ")
+            ));
+            out.push_str("} ");
+        }
+        out.push_str("else { lppo_rt_panic(1); _r = 0; } ");
+    }
+    out.push_str("_r; })");
+
+    Ok(out)
 }
 
 /// Escape a string for inclusion in a generated C string literal.

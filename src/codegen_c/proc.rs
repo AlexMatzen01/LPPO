@@ -1,7 +1,9 @@
 //! Procedure body -> C function codegen.
 
 use crate::ast::TypeAnnotation;
-use crate::codegen_c::stmt::{c_ident, codegen_operation, Ctx};
+use crate::codegen_c::{
+    stmt::{c_ident, codegen_operation, Ctx}, ClosureInfo,
+};
 use crate::runtime::Operation;
 use std::collections::{HashMap, HashSet};
 
@@ -11,6 +13,8 @@ pub fn compile_procedure_ir(
     body: &crate::runtime::ProcedureBody,
     string_indices: &HashMap<String, usize>,
     proc_return_types: &HashMap<String, TypeAnnotation>,
+    closures: &mut Vec<ClosureInfo>,
+    closure_counter: &mut i64,
 ) -> Result<String, String> {
     let ret_type = match body.return_type {
         Some(TypeAnnotation::Void) | None => "void",
@@ -63,6 +67,8 @@ pub fn compile_procedure_ir(
         proc_return_types,
         return_type: ret_type,
         str_arrays: HashMap::new(),
+        closures,
+        closure_counter,
     };
 
     for op in &body.operations {
